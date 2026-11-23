@@ -18,13 +18,14 @@ import { FIELDS } from "../fields";
 import { NAME_FONTS, type TemplateDef } from "../lib/model";
 import { getTemplate } from "../lib/registry";
 import { buildCustomTemplate, parseCustomDef } from "../lib/custom";
-import { downloadBlob } from "../lib/pdf";
+import { buildPillowPdf, downloadBlob } from "../lib/pdf";
+import { papercraftSampleUrl } from "../papercraft-sample";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 
-export type ProductId = "poster" | "figurine" | "tshirt";
+export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt";
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 
 export interface ShopProject {
@@ -77,6 +78,13 @@ export const PRODUCT_META: Record<
     cta: "Create My Poster",
     see: "See My Poster",
   },
+  papercraft: {
+    title: "3D Papercraft Custom",
+    tagline: "Papercraft 3D",
+    description: "Karya si kecil berubah jadi kit kertas 3D siap gunting, lipat, dan lem — warnanya persis, namanya juga!",
+    cta: "Buat Papercraft-ku",
+    see: "Lihat Papercraft-ku",
+  },
   figurine: {
     title: "Custom 3D Figurine",
     tagline: "Figurine 3D Custom",
@@ -96,6 +104,7 @@ export const PRODUCT_META: Record<
 const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
   products: [
     { id: "poster", basePrice: 49000, priceLabel: "fixed" },
+    { id: "papercraft", basePrice: 49000, priceLabel: "fixed" },
     { id: "figurine", basePrice: 120000, priceLabel: "from" },
     { id: "tshirt", basePrice: 79000, priceLabel: "from" },
   ],
@@ -260,6 +269,50 @@ export function TshirtPreview({
   );
 }
 
+/** A real owner-supplied product photo alongside the artwork actually being ordered.
+ * The photo always depicts the example dinosaur, not a false render of the
+ * customer's custom character. The artwork below is dynamic and exact. */
+export function PapercraftPreview({
+  project, name, large = false,
+}: { project: ShopProject; name: string; large?: boolean }) {
+  const template = templateForSnapshot(project);
+  return (
+    <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
+      <div className="overflow-hidden rounded-2xl bg-[#F0E8DD] ring-1 ring-[var(--border)]">
+        <img
+          src={papercraftSampleUrl}
+          alt="Foto contoh kit papercraft kertas 3D: gambar dinosaurus warna hijau-biru, lembar gunting-lipat, dan hasil rakitan berdiri"
+          loading="lazy"
+          className="aspect-[1600/1325] w-full object-cover"
+        />
+      </div>
+      <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white p-2.5 ring-1 ring-[var(--border)]">
+        <div className="w-20 shrink-0 overflow-hidden rounded-xl bg-white">
+          <ArtworkSvg
+            template={template}
+            colors={project.colors}
+            strokes={project.strokes}
+            name={name}
+            message={project.message}
+            nameFont={project.nameFont}
+            nameColor={project.nameColor}
+            nameAlign={project.nameAlign}
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="font-display text-xs font-extrabold text-olive-deep">Desain punyamu</p>
+          <p className="text-xs font-semibold leading-snug text-[var(--dim)]">
+            Warna, karakter, dan nama dari gambar yang sudah kamu warnai dipakai pada pesananmu.
+          </p>
+        </div>
+      </div>
+      <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">
+        Foto dinosaurus hanya contoh bentuk kit. Setiap pesanan dicetak sesuai karya anak sendiri.
+      </p>
+    </div>
+  );
+}
+
 function ProductPreview({
   product,
   project,
@@ -274,6 +327,7 @@ function ProductPreview({
   large?: boolean;
 }) {
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
+  if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
   if (product === "figurine") return <FigurinePreview project={project} height={large ? 320 : 210} />;
   return <TshirtPreview project={project} name={name} fabric={fabric} large={large} />;
 }
@@ -378,8 +432,8 @@ export function Masterpiece({
         </p>
       </section>
 
-      {/* Tiga pilihan produk */}
-      <section className="mt-6 grid gap-4 md:grid-cols-3" aria-label="Pilih bentuk kreasimu">
+      {/* Empat pilihan produk */}
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Pilih bentuk kreasimu">
         {(Object.keys(PRODUCT_META) as ProductId[]).map((id) => {
           const meta = PRODUCT_META[id];
           return (
@@ -395,6 +449,11 @@ export function Masterpiece({
               <h3 className="mt-3 font-display text-xl font-semibold">{meta.title}</h3>
               <p className="mt-1 font-semibold leading-relaxed text-[var(--dim)]">{meta.description}</p>
               <p className="mt-2 font-display text-lg font-semibold text-olive-deep">{priceLine(cfg, id)}</p>
+              {id === "papercraft" && (
+                <p className="mt-1 text-xs font-bold text-olive-deep">
+                  Harga tetap Rp49.000 · kit lembar cetak untuk dirakit · gunting dan lem tidak termasuk.
+                </p>
+              )}
               {id === "figurine" && (
                 <p className="mt-1 text-xs font-bold text-[var(--dim)]">
                   Setiap pesanan melewati Design Review oleh tim kami sebelum diproduksi.
@@ -494,6 +553,8 @@ export function Customize({
                 ? "Nama tampil di bawah karya pada poster, dengan gaya huruf & warna dari Studio Mewarnai."
                 : selection.product === "figurine"
                   ? "Nama tercetak pada alas figurine, dengan gaya huruf & warna dari Studio Mewarnai."
+                  : selection.product === "papercraft"
+                    ? "Nama anak tercetak pada penyangga papercraft, sementara karakter dan warnanya mengikuti karya yang sudah diwarnai."
                   : "Bila diisi, nama anak dicetak di bawah desain pada kaos."}
             </p>
           </div>
@@ -563,6 +624,18 @@ export function Customize({
             </div>
           )}
 
+          {selection.product === "papercraft" && (
+            <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
+              <p className="font-display font-extrabold">Kit Papercraft 3D · Rp49.000</p>
+              <p className="mt-1">
+                Tim mencetak lembar depan-belakang karakter dan strip pembentuk volume dari warna,
+                coretan, serta nama hasil kreasimu. Kit dikirim untuk digunting, dilipat dan direkatkan sendiri.
+                Gunting dan lem tidak disertakan. Contoh foto dinosaurus hanya referensi bentuk produk.
+                Harga tetap, ongkos kirim terpisah.
+              </p>
+            </div>
+          )}
+
           {selection.product === "poster" && (
             <p className="mt-4 rounded-2xl bg-sky-soft px-4 py-3 text-sm font-semibold leading-relaxed ring-1 ring-[var(--border)]">
               Poster dicetak dari file karya anakmu dan dipasang pada bingkai, siap digantung di kamarnya.
@@ -573,7 +646,7 @@ export function Customize({
           <dl className="mt-5 space-y-1.5 border-t-2 border-dashed border-[var(--border)] pt-4 text-sm font-semibold">
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Harga produk</dt>
-              <dd className="font-display">{selection.product === "poster" ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
+              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Ongkos kirim</dt>
@@ -1385,6 +1458,25 @@ export function OrderTracking() {
 
 /* ----------------------------- Admin orders ----------------------------- */
 
+/** Download a print-ready papercraft kit from the immutable order snapshot.
+ * This is an admin-only workflow, reached through the admin order dashboard.
+ * No production file is generated before payment is verified. */
+function downloadPapercraftKit(order: OrderOut) {
+  if (order.productType !== "papercraft" || order.paymentStatus !== "paid") return;
+  const template = templateForSnapshot({ templateId: order.templateId, customDef: order.customDef });
+  const blob = buildPillowPdf({
+    template,
+    colors: order.colors,
+    strokes: order.strokes,
+    name: order.childName,
+    message: order.message,
+    nameColor: order.nameColor,
+    brandName: "Bun & Fleur Kids",
+    inkSave: false,
+  }, { paper: "A4", production: true, qcStatus: "periksa-potongan-dan-warna" });
+  downloadBlob(blob, `papercraft-3d-${order.code}.pdf`);
+}
+
 function AdminOrderCard({ order }: { order: OrderOut }) {
   const queryClient = useQueryClient();
   const [paymentStatus, setPaymentStatus] = useState<OrderOut["paymentStatus"]>(order.paymentStatus);
@@ -1481,6 +1573,20 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
               </dd>
             </div>
           </dl>
+          {order.productType === "papercraft" && (
+            <div className="mt-3 rounded-2xl bg-[#EDF2E6] p-3 ring-1 ring-[var(--border)]">
+              <p className="font-display text-sm font-bold text-olive-deep">Berkas Produksi Papercraft 3D</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">
+                Pola A4 depan-belakang, strip perekat, penyangga nama, dan petunjuk rakit dihasilkan
+                dari warna dan desain pesanan yang tersimpan. Periksa cetak dan potongan sebelum dikirim.
+              </p>
+              <button type="button" disabled={order.paymentStatus !== "paid"}
+                onClick={() => downloadPapercraftKit(order)}
+                className="mt-2 rounded-full bg-olive px-4 py-2.5 font-display text-xs font-bold text-white disabled:opacity-50">
+                {order.paymentStatus === "paid" ? "Unduh PDF Produksi Papercraft" : "PDF Produksi Terkunci sampai Lunas"}
+              </button>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Verifikasi pembayaran QRIS">
             <span className="font-display text-xs font-bold text-[var(--dim)]">Verifikasi QRIS:</span>
             {(order.payState === "awaiting" || order.payState === "waiting_verification" || order.payState === "unmatched") && (
