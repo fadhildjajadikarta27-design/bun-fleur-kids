@@ -66,7 +66,7 @@ export function ensureMigrations(): Promise<void> {
   // A serverless request must not run DDL: multiple Vercel cold starts
   // can block each other and exhaust the function's 300-second duration.
   // Apply future migrations via a coordinated database release step.
-  if (process.env.VERCEL_ENV === "production") {
+  if (process.env.VERCEL_ENV === "production" || process.env.BFK_SKIP_MIGRATIONS === "1") {
     return Promise.resolve();
   }
   if (!migrationsPromise) {
