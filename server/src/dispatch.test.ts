@@ -47,7 +47,7 @@ describe("Affiliate input validation", () => {
       consent: true,
     });
     expect(result.status).toBe(400);
-    expect(JSON.stringify(result.body)).toContain("WhatsApp");
+    expect(JSON.stringify(result.body)).toContain("Nomor HP");
   });
 
   test("affiliate self-registration requires a 4-digit PIN", async () => {
