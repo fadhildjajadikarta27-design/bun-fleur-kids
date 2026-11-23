@@ -537,6 +537,25 @@ export function AffiliateDashboard({
       goLogin();
     },
   });
+  const [editingCoupon, setEditingCoupon] = useState(false);
+  const [couponDraft, setCouponDraft] = useState("");
+  const [couponMessage, setCouponMessage] = useState("");
+  const changeCoupon = useMutation({
+    mutationFn: async () => await api.affiliateUpdateCoupon({
+      sessionToken: token,
+      couponCode: couponDraft.trim().toUpperCase(),
+    }),
+    onError: (e) => setCouponMessage(e instanceof Error ? e.message : "Kode kupon tidak dapat diubah."),
+    onSuccess: async (res) => {
+      setCouponDraft(res.affiliate.couponCode);
+      setCouponMessage("Kode kupon berhasil diperbarui. Bagikan tautan referral terbaru.");
+      setEditingCoupon(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["affiliateMe"] }),
+        queryClient.invalidateQueries({ queryKey: ["adminAffiliates"] }),
+      ]);
+    },
+  });
   const [payoutAmount, setPayoutAmount] = useState("");
   const [bankName, setBankName] = useState("");
   const [accountName, setAccountName] = useState("");
@@ -634,9 +653,51 @@ export function AffiliateDashboard({
             <p className="text-sm font-semibold text-[var(--dim)]">
               Pelanggan dapat diskon {a.discountPct}% · komisi kamu {a.commissionPct}% dari subtotal bersih
             </p>
-            <div className="mt-2">
-              <CopyButton text={a.couponCode} label="Copy Coupon" />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <CopyButton text={a.couponCode} label="Salin Kode Kupon" />
+              {!editingCoupon && (
+                <button type="button"
+                  onClick={() => { setCouponDraft(a.couponCode); setCouponMessage(""); setEditingCoupon(true); }}
+                  className="rounded-full bg-[var(--surface-alt)] px-4 py-2 font-display text-xs font-bold ring-1 ring-[var(--border)]">
+                  Ubah Kode Kupon
+                </button>
+              )}
             </div>
+            {editingCoupon && (
+              <form className="mt-3 space-y-2 rounded-2xl bg-[var(--bg)] p-4 ring-1 ring-[var(--border)]"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setCouponMessage("");
+                  if (!/^[A-Z0-9_-]{3,24}$/.test(couponDraft.trim().toUpperCase())) {
+                    setCouponMessage("Kode harus 3–24 karakter: huruf, angka, - atau _.");
+                    return;
+                  }
+                  changeCoupon.mutate();
+                }}>
+                <label htmlFor="aff-custom-coupon" className="font-display text-sm font-bold">Kode kupon pilihanmu</label>
+                <input id="aff-custom-coupon" type="text" autoCapitalize="characters"
+                  value={couponDraft} maxLength={24}
+                  onChange={(e) => setCouponDraft(e.target.value.toUpperCase())}
+                  className="w-full rounded-xl bg-white px-4 py-3 font-display font-bold uppercase ring-1 ring-[var(--border)]"
+                  placeholder="Contoh: BUNFADHIL" />
+                <p className="text-xs font-semibold text-[var(--dim)]">
+                  Harus unik. Kode lama dan link referral lama tidak berlaku untuk order berikutnya.
+                  Riwayat pesanan dan komisi sebelumnya tetap tersimpan.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" disabled={changeCoupon.isPending || couponDraft.trim().toUpperCase() === a.couponCode}
+                    className="rounded-full bg-olive px-4 py-2 font-display text-xs font-bold text-white disabled:opacity-50">
+                    {changeCoupon.isPending ? "Menyimpan…" : "Simpan Kode"}
+                  </button>
+                  <button type="button" disabled={changeCoupon.isPending}
+                    onClick={() => { setEditingCoupon(false); setCouponMessage(""); }}
+                    className="rounded-full bg-white px-4 py-2 font-display text-xs font-bold ring-1 ring-[var(--border)]">
+                    Batal
+                  </button>
+                </div>
+              </form>
+            )}
+            {couponMessage && <p className="mt-2 text-xs font-bold text-olive-deep" role="status">{couponMessage}</p>}
           </div>
           <div className="rounded-3xl bg-white p-4 ring-1 ring-black/5">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--dim)]">Tautan referral kamu</p>

@@ -227,6 +227,9 @@ export const FIELDS: FieldsShape<typeof Actions> = {
     "tiktok": {
       "maxLength": 80
     },
+    "couponCode": {
+      "maxLength": 24
+    },
     "pin": {},
     "consent": {},
     "website": {
@@ -367,6 +370,16 @@ export const FIELDS: FieldsShape<typeof Actions> = {
     "sessionToken": {
       "maxLength": 80,
       "minLength": 8
+    }
+  },
+  "affiliateUpdateCoupon": {
+    "sessionToken": {
+      "maxLength": 80,
+      "minLength": 8
+    },
+    "couponCode": {
+      "maxLength": 24,
+      "minLength": 3
     }
   },
   "affiliateMe": {
