@@ -24,7 +24,7 @@
   "packageManager": "bun@1.3.10",
   "private": true,
   "scripts": {
-    "build": "vite build",
+    "build": "bun run typecheck && vite build",
     "dev:api": "bun scripts/dev-server.mjs",
     "gen:fields": "bun scripts/gen-fields.mjs",
     "typecheck": "bun x tsc --noEmit -p client/tsconfig.json && bun x tsc --noEmit -p server/tsconfig.json"
