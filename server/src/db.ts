@@ -38,7 +38,7 @@ export function getDb(): Db {
           "(in production: the Supabase transaction-pooler URL, port 6543).",
       );
     }
-    client = postgres(url, { prepare: false, max: 1 });
+    client = postgres(url, { prepare: false, max: 1, connect_timeout: 10, idle_timeout: 30 });
     dbInstance = drizzle(client, { schema });
   }
   return dbInstance;
@@ -85,6 +85,9 @@ async function applyMigrations(): Promise<void> {
   // Keeping each batch atomic also prevents a failed migration from leaving
   // half-created tables without a corresponding ledger record.
   await client.begin(async (tx) => {
+    // Abort lock waits and slow migration statements rather than tying up
+    // a Vercel function for its full 300-second runtime limit.
+    await tx.unsafe("SET LOCAL statement_timeout = '30000ms'");
     await tx.unsafe("SELECT pg_advisory_xact_lock(726528302401)");
     await tx.unsafe(
       "CREATE TABLE IF NOT EXISTS __port_migrations (name text PRIMARY KEY, applied_at bigint NOT NULL)",
