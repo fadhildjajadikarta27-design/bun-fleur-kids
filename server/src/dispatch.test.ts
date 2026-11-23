@@ -79,6 +79,36 @@ describe("Affiliate input validation", () => {
     expect(res.status).toBe(400);
   });
 
+  test("custom coupon rejects invalid characters before accessing database", async () => {
+    const result = await dispatchAction("affiliateUpdateCoupon", {
+      sessionToken: "not-a-real-session",
+      couponCode: "PROMO KAMU!",
+    });
+    expect(result.status).toBe(400);
+    expect(JSON.stringify(result.body)).toContain("Kode");
+  });
+
+  test("custom coupon cannot be shorter than three characters", async () => {
+    const result = await dispatchAction("affiliateUpdateCoupon", {
+      sessionToken: "not-a-real-session",
+      couponCode: "AB",
+    });
+    expect(result.status).toBe(400);
+  });
+
+  test("sign-up custom coupon rejects spaces and special characters", async () => {
+    const result = await dispatchAction("affiliateApply", {
+      fullName: "Mitra Sample",
+      email: "mitra@example.org",
+      whatsapp: "081234567890",
+      consent: true,
+      pin: "5073",
+      couponCode: "KODE PROMO",
+    });
+    expect(result.status).toBe(400);
+    expect(JSON.stringify(result.body)).toContain("kupon");
+  });
+
   test("unknown actions continue to return 404", async () => {
     const result = await dispatchAction("actionDoesNotExist", {});
     expect(result.status).toBe(404);
