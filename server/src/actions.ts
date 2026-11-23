@@ -1187,6 +1187,10 @@ export const Actions = {
       ),
       instagram: z.string().trim().max(80).default(""),
       tiktok: z.string().trim().max(80).default(""),
+      couponCode: z.string().trim().max(24).default("").refine(
+        (code) => code === "" || /^[A-Za-z0-9_-]{3,24}$/.test(code),
+        "Kode kupon harus 3–24 karakter, hanya huruf, angka, - atau _.",
+      ),
       pin: z.string().regex(/^\d{4}$/, "PIN harus tepat 4 digit angka."),
       consent: z.literal(true, "Setujui syarat program affiliate untuk melanjutkan."),
       // Hidden field reduces basic bot signups, but is not equivalent to server-side rate limiting.
@@ -1202,6 +1206,7 @@ export const Actions = {
       const email = args.email.trim().toLowerCase();
       const whatsapp = normalizeWa(args.whatsapp);
       const intlWa = whatsapp.startsWith("0") ? `62${whatsapp.slice(1)}` : whatsapp;
+      const customCoupon = args.couponCode.trim().toUpperCase();
 
       const known = await db.select({ id: schema.affiliates.id })
         .from(schema.affiliates)
@@ -1214,6 +1219,13 @@ export const Actions = {
       if (known.length) {
         throw new Error("Nomor HP atau email sudah terdaftar. Silakan masuk dengan nomor HP dan PIN, atau hubungi admin.");
       }
+      if (customCoupon) {
+        const clash = await db.select({ id: schema.affiliates.id })
+          .from(schema.affiliates)
+          .where(eq(schema.affiliates.couponCode, customCoupon))
+          .limit(1);
+        if (clash.length) throw new Error("Kode kupon tersebut sudah digunakan. Coba kode lain.");
+      }
       const pinHash = await hashPin(args.pin);
       const now = new Date();
       // Database has a unique index for normalized phone numbers to prevent
@@ -1224,7 +1236,7 @@ export const Actions = {
         whatsapp,
         instagram: args.instagram.trim().replace(/^@/, ""),
         tiktok: args.tiktok.trim().replace(/^@/, ""),
-        couponCode: `BFK${randomToken(8).toUpperCase()}`,
+        couponCode: customCoupon || `BFK${randomToken(8).toUpperCase()}`,
         discountPct: 10,
         commissionPct: 30,
         pinHash,
@@ -1236,7 +1248,7 @@ export const Actions = {
       }).onConflictDoNothing().returning();
       const affiliate = inserted[0];
       if (!affiliate) {
-        throw new Error("Nomor HP atau email sudah digunakan. Silakan masuk atau hubungi admin.");
+        throw new Error("Nomor HP, email, atau kode kupon sudah digunakan. Coba kode lain atau login.");
       }
       await audit(db, affiliate.id, "affiliate.self_registered",
         "Akun didaftarkan mandiri dengan nomor HP dan PIN; tanpa OTP/konfirmasi WhatsApp.");
@@ -1940,6 +1952,41 @@ export const Actions = {
         .set({ revokedAt: new Date() })
         .where(eq(schema.affiliateSessions.token, args.sessionToken));
       return { ok: true };
+    },
+  }),
+
+  affiliateUpdateCoupon: defineAction({
+    description:
+      "Affiliate: change own referral coupon to a unique, custom 3–24 character code. Requires a valid affiliate session; existing order/commission attribution remains linked to affiliate ID.",
+    request: z.object({
+      sessionToken: z.string().min(8).max(80),
+      couponCode: z.string().trim().min(3).max(24).regex(
+        /^[A-Za-z0-9_-]+$/,
+        "Kode hanya boleh berisi huruf, angka, strip (-), dan garis bawah (_).",
+      ),
+    }),
+    response: z.object({ affiliate: affiliatePublicOut }),
+    async handler(ctx, args) {
+      const db = ctx.db<typeof schema>();
+      const affiliate = await requireAffiliateSession(db, args.sessionToken);
+      if (affiliate.status !== "active") throw new Error("Hanya akun aktif yang bisa mengubah kode kupon.");
+      const code = args.couponCode.trim().toUpperCase();
+      if (code === affiliate.couponCode) {
+        return { affiliate: toAffiliatePublic(affiliate) };
+      }
+      const clash = await db.select({ id: schema.affiliates.id })
+        .from(schema.affiliates)
+        .where(eq(schema.affiliates.couponCode, code)).limit(1);
+      if (clash.length) throw new Error("Kode kupon sudah digunakan affiliate lain. Pilih kode berbeda.");
+      const updated = await db.update(schema.affiliates)
+        .set({ couponCode: code, updatedAt: new Date() })
+        .where(eq(schema.affiliates.id, affiliate.id))
+        .returning();
+      if (!updated[0]) throw new Error("Kode kupon tidak berhasil disimpan.");
+      await audit(db, affiliate.id, "affiliate.coupon_changed",
+        `Affiliate mengubah kode kupon: ${affiliate.couponCode} → ${code}.`);
+      ctx.invalidateQueries();
+      return { affiliate: toAffiliatePublic(updated[0]) };
     },
   }),
 
