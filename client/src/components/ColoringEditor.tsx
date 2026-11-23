@@ -3,6 +3,7 @@
 // artwork, undo/redo, zoom & pan, and the personalized name plaque.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clampArtPan, clampArtZoom, pointToArt, scribbleGoal, zoomArtAt } from "../lib/editor-touch";
 import {
 INK,
 NAME_FONTS,
@@ -306,6 +307,8 @@ const crayonNoise = new CrayonNoise();
 interface RegionGeom {
   paths: Path2D[];
   samples: [number, number][];
+  /** Original 11-unit sampling density gives a size estimate for tiny parts. */
+  coarseCount: number;
 }
 
 function buildRegionGeom(template: TemplateDef): { map: Map<string, RegionGeom>; ctx: CanvasRenderingContext2D | null } {
@@ -314,16 +317,22 @@ function buildRegionGeom(template: TemplateDef): { map: Map<string, RegionGeom>;
   const g = canvas.getContext("2d");
   if (!g) return { map, ctx: null };
   const [vw, vh] = template.viewBox;
-  const spacing = 11;
   for (const r of template.regions) {
     const paths = r.els.map((el) => new Path2D(elToPath(el)));
-    const samples: [number, number][] = [];
-    for (let x = spacing / 2; x < vw; x += spacing) {
-      for (let y = spacing / 2; y < vh; y += spacing) {
-        if (paths.some((p) => g.isPointInPath(p, x, y))) samples.push([x, y]);
+    const sampleGrid = (spacing: number): [number, number][] => {
+      const points: [number, number][] = [];
+      for (let x = spacing / 2; x < vw; x += spacing) {
+        for (let y = spacing / 2; y < vh; y += spacing) {
+          if (paths.some((p) => g.isPointInPath(p, x, y))) points.push([x, y]);
+        }
       }
-    }
-    map.set(r.id, { paths, samples });
+      return points;
+    };
+    // Tiny features can have zero hits on the coarse grid. Refine those
+    // grids so the coverage test remains usable even for eyes, feet and spikes.
+    const coarse = sampleGrid(11);
+    const samples = coarse.length < 90 ? sampleGrid(5) : coarse;
+    map.set(r.id, { paths, samples, coarseCount: coarse.length });
   }
   return { map, ctx: g };
 }
@@ -341,6 +350,7 @@ interface ScribbleState {
   regionId: string;
   points: [number, number][];
   covered: Set<number>;
+  goal: ReturnType<typeof scribbleGoal>;
   length: number;
   lastT: number;
   lastX: number;
@@ -374,6 +384,9 @@ export function ColoringEditor({
   const [brushSize, setBrushSize] = useState(14);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  // Update this synchronously in pointer/wheel events to avoid stale values
+  // during rapid pinching and trackpad wheel bursts.
+  const viewRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
   const [confirmReset, setConfirmReset] = useState(false);
   const [soundOn, setSoundOn] = useState<boolean>(loadSoundPref);
   const [liveScribble, setLiveScribble] = useState<{ regionId: string; points: [number, number][] } | null>(null);
@@ -387,7 +400,7 @@ export function ColoringEditor({
   const scribbleRef = useRef<ScribbleState | null>(null);
   const panningRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
-  const pinchRef = useRef<{ d: number; zoom: number } | null>(null);
+  const pinchRef = useRef<{ d: number; zoom: number; anchor: { x: number; y: number } } | null>(null);
   const [liveStroke, setLiveStroke] = useState<Stroke | null>(null);
 
   const params = scribbleParams(template.ageBand);
@@ -416,14 +429,45 @@ export function ColoringEditor({
     forceTick((n) => n + 1);
   };
 
+  const applyView = useCallback((next: { zoom: number; pan: { x: number; y: number } }) => {
+    viewRef.current = next;
+    setZoom(next.zoom);
+    setPan(next.pan);
+  }, []);
+
+  const zoomAt = (nextZoom: number, clientX?: number, clientY?: number) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const next = zoomArtAt(viewRef.current, nextZoom,
+      clientX ?? rect.left + rect.width / 2,
+      clientY ?? rect.top + rect.height / 2, rect, template.viewBox);
+    applyView(next);
+  };
+
+  // React's onWheel may be treated as passive by the browser; a native,
+  // non-passive handler is needed to prevent the document from scrolling.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 350 : 1);
+      const nextZoom = viewRef.current.zoom * Math.exp(-delta * 0.0015);
+      const rect = el.getBoundingClientRect();
+      applyView(zoomArtAt(viewRef.current, nextZoom,
+        event.clientX, event.clientY, rect, template.viewBox));
+    };
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [applyView, template.viewBox]);
+
   const toSvgCoords = (clientX: number, clientY: number): [number, number] => {
     const el = wrapRef.current;
     if (!el) return [0, 0];
-    const rect = el.getBoundingClientRect();
-    const [vw, vh] = template.viewBox;
-    const px = (clientX - rect.left) / rect.width;
-    const py = (clientY - rect.top) / rect.height;
-    return [(px * vw - pan.x) / zoom, (py * vh - pan.y) / zoom];
+    const p = pointToArt(clientX, clientY, el.getBoundingClientRect(),
+      viewRef.current, template.viewBox);
+    return [p.x, p.y];
   };
 
   const handleRegionTap = (regionId: string) => {
@@ -437,21 +481,44 @@ export function ColoringEditor({
 
   const hitRegion = (x: number, y: number): string | null => {
     if (!geom.ctx) return null;
-    for (const r of template.regions) {
+    // SVG regions are painted in this order: later ones are visually on top.
+    // Hit-test in reverse so small details don't select the body behind them.
+    const frontToBack = [...template.regions].reverse();
+    const exact = frontToBack.find((r) =>
+      geom.map.get(r.id)?.paths.some((path) => geom.ctx!.isPointInPath(path, x, y)));
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return exact?.id ?? null;
+    const tolerance = Math.min(34, 16 * (template.viewBox[0] / Math.max(1, rect.width)) / viewRef.current.zoom);
+    let nearest: { id: string; distance: number } | null = null;
+    // A finger covers more than a mouse pointer. Nearby tiny parts get a
+    // forgiving touch target without painting other large regions at random.
+    for (const r of frontToBack) {
       const g = geom.map.get(r.id);
-      if (g && g.paths.some((p) => geom.ctx!.isPointInPath(p, x, y))) return r.id;
+      if (!g || g.coarseCount >= 90) continue;
+      for (const [sx, sy] of g.samples) {
+        const d = Math.hypot(sx - x, sy - y);
+        if (d <= tolerance && (!nearest || d < nearest.distance)) {
+          nearest = { id: r.id, distance: d };
+        }
+      }
     }
-    return null;
+    if (!exact) return nearest?.id ?? null;
+    const exactGeom = geom.map.get(exact.id);
+    if (exactGeom && exactGeom.coarseCount < 90) return exact.id;
+    return nearest && nearest.distance <= tolerance * 0.58 ? nearest.id : exact.id;
   };
 
   const startScribble = (clientX: number, clientY: number) => {
     const [x, y] = toSvgCoords(clientX, clientY);
     const regionId = hitRegion(x, y);
     if (!regionId) return;
+    const g = geom.map.get(regionId);
+    const goal = scribbleGoal(params.threshold, g?.coarseCount ?? 0);
     scribbleRef.current = {
       regionId,
       points: [[x, y]],
       covered: new Set<number>(),
+      goal,
       length: 0,
       lastT: performance.now(),
       lastX: clientX,
@@ -459,7 +526,7 @@ export function ColoringEditor({
     };
     setLiveScribble({ regionId, points: [[x, y]] });
     setCoveragePct(0);
-    setScribbleHint("");
+    setScribbleHint(goal.small ? "Detail kecil — cukup gosok sebentar!" : "");
   };
 
   const moveScribble = (clientX: number, clientY: number) => {
@@ -468,7 +535,7 @@ export function ColoringEditor({
     const [x, y] = toSvgCoords(clientX, clientY);
     const last = s.points[s.points.length - 1]!;
     const d = Math.hypot(x - last[0], y - last[1]);
-    if (d < 2.5) return;
+    if (d < (s.goal.small ? 0.7 : 2.5)) return;
     const now = performance.now();
     const dt = Math.max(1, now - s.lastT);
     const speed = Math.hypot(clientX - s.lastX, clientY - s.lastY) / dt; // px per ms
@@ -485,7 +552,7 @@ export function ColoringEditor({
         const [sx, sy] = g.samples[i]!;
         if (distToSegment(sx, sy, last[0], last[1], x, y) <= params.radius) s.covered.add(i);
       }
-      setCoveragePct(g.samples.length ? Math.round((s.covered.size / g.samples.length) * 100) : 0);
+      setCoveragePct(g.samples.length ? Math.round((s.covered.size / g.samples.length) * 100) : 100);
     }
     setLiveScribble({ regionId: s.regionId, points: s.points });
   };
@@ -498,16 +565,20 @@ export function ColoringEditor({
     crayonNoise.stop();
     if (!s) return;
     const g = geom.map.get(s.regionId);
-    const coverage = g && g.samples.length ? s.covered.size / g.samples.length : 0;
+    // The fallback only applies after a real dragging gesture that
+    // actually began inside an extremely thin fillable SVG region.
+    const coverage = g && g.samples.length ? s.covered.size / g.samples.length : g ? 1 : 0;
     // A tap (almost no travel) or a stationary press can never complete
     // a region: both the travel distance and the covered share must
     // pass their marks.
-    if (s.length >= 45 && coverage >= params.threshold) {
+    if (s.length >= s.goal.minDistance && coverage >= s.goal.threshold) {
       pushHistory();
       onChange({ ...colors, [s.regionId]: color }, strokes);
       setScribbleHint("");
     } else if (s.points.length > 1) {
-      setScribbleHint("Hampir! Gosok bidangnya lebih banyak lagi sampai penuh ya.");
+      setScribbleHint(s.goal.small
+        ? "Sedikit lagi! Coret pendek pada detail kecil ini."
+        : "Hampir! Gosok bidangnya lebih banyak lagi sampai penuh ya.");
     }
   };
 
