@@ -41,6 +41,8 @@ import {
   type ProductId,
   type ShopSelection,
 } from "./components/Shop";
+import { puzzlePhotoUrl } from "./puzzle-photo";
+import { placematPhotoUrl } from "./placemat-photo";
 import {
   AffiliateAdmin,
   AffiliateDashboard,
@@ -461,7 +463,7 @@ function Home({
           <p className="mt-4 max-w-md text-lg leading-relaxed text-[var(--dim)]">
             Si kecil bebas memilih karakter, mewarnai, dan menambahkan namanya — selalu
             gratis. Setelah selesai, wujudkan kreasinya menjadi papercraft 3D, poster, figurine 3D,
-            kaos custom, atau aksesori celengan personal yang dikirim langsung ke rumah.
+            kaos custom, celengan, puzzle, atau alas makan personal yang dikirim ke rumah.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <button
@@ -532,7 +534,7 @@ function Home({
           {[
             { n: "01", title: "Pilih Karakter", body: "200 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun." },
             { n: "02", title: "Warnai & Custom Nama", body: "Ketuk untuk mengisi warna, gambar bebas dengan kuas, lalu tulis nama dan pesan si kecil dengan gaya huruf favoritnya." },
-            { n: "03", title: "Pilih Bentuk Kreasi", body: "Papercraft 3D, poster, figurine, kaos, atau aksesori celengan custom Rp29.000 — semuanya mengikuti warna karya anakmu." },
+            { n: "03", title: "Pilih Bentuk Kreasi", body: "Papercraft 3D, poster, figurine, kaos, atau celengan Rp29.000, puzzle Rp59.000, atau alas makan Rp69.000 — semuanya mengikuti karya anakmu." },
             { n: "04", title: "Kami Cetak & Kirim", body: "Pesan dari halaman karya, selesaikan pembayaran lewat konfirmasi tim kami, dan kami produksi lalu kirim langsung ke rumah." },
           ].map((s) => (
             <article key={s.n} className="relative">
@@ -662,55 +664,78 @@ function Home({
             </div>
           </article>
         </div>
-        <section className="mt-7 grid items-center gap-6 rounded-[2.25rem] bg-[#EDF2E6] p-5 ring-1 ring-olive/20 sm:p-8 lg:grid-cols-2"
-          aria-label="Accessories Celengan Bun & Fleur Kids">
-          <div className="rounded-[1.5rem] bg-white p-3 shadow-sm ring-1 ring-[var(--border)]">
-            <CelenganPreview project={demoProject} name="Adam" large />
-          </div>
-          <div>
-            <span className="inline-block rounded-full bg-olive px-4 py-1.5 font-display text-xs font-bold text-white">
-              ACCESSORIES · NEW
-            </span>
-            <h3 className="mt-3 font-display text-3xl font-extrabold text-olive-deep">Celengan Custom Si Kecil</h3>
-            <p className="mt-3 text-base font-semibold leading-relaxed text-[var(--dim)]">
-              Karya pertama mereka, kini bisa jadi celengan yang lucu dan fungsional. Gambar,
-              warna, dan nama anak dicetak di bagian depan tabung, dengan identitas Bun & Fleur Kids
-              di bagian belakang. Contoh foto menampilkan karakter dinosaurus.
-            </p>
-            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(29000)}</p>
-            <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Harga tetap per celengan · ongkir dihitung terpisah</p>
-            <button type="button" onClick={() => startTemplate("pb-dino")}
-              className="mt-5 w-full rounded-full bg-tang px-6 py-3 font-display text-base font-bold text-white transition hover:brightness-95 sm:w-auto">
-              Warnai &amp; Buat Celengan
-            </button>
-          </div>
-        </section>
-        <section className="mt-5 grid items-center gap-6 rounded-[2.25rem] bg-[#EFF5FC] p-5 ring-1 ring-sky/20 sm:p-8 lg:grid-cols-2"
-          aria-label="Accessories custom premium">
-          <div className="rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-[var(--border)]">
-            <div className="mx-auto w-60 max-w-full overflow-hidden rounded-3xl bg-[#F7F4E9] p-3">
-              <ArtworkSvg template={dino} colors={demo} strokes={[]} name="Adam" nameFont="baloo"
-                nameColor="#E4572E" nameAlign="center" />
+        <section className="mt-9" aria-label="Aksesori custom dari hasil mewarnai">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="font-display text-xs font-bold uppercase tracking-[0.17em] text-olive-deep">Bun & Fleur Kids Accessories</p>
+              <h3 className="mt-2 font-display text-3xl font-extrabold text-ink">Karya Kecil, Jadi Teman Sehari-hari.</h3>
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-[var(--dim)]">
+                Pilih aksesori yang kamu suka. Warna, karakter, dan nama pada pesanan mengikuti karya
+                anak, sedangkan foto di bawah memperlihatkan contoh dengan karakter dinosaurus.
+              </p>
             </div>
-            <p className="mt-3 text-center font-display text-xs font-bold text-sky-deep">
-              Ilustrasi karya yang dipersonalisasi · foto produk menunggu integrasi
-            </p>
           </div>
-          <div>
-            <span className="inline-block rounded-full bg-sky-deep px-4 py-1.5 font-display text-xs font-bold text-white">
-              ACCESSORIES · PILIHAN BARU
-            </span>
-            <h3 className="mt-3 font-display text-3xl font-extrabold text-olive-deep">Aksesori Custom Premium</h3>
-            <p className="mt-3 text-base font-semibold leading-relaxed text-[var(--dim)]">
-              Desain aksesori lain dari gambar yang sudah diwarnai. Warna, karakter, dan nama anak
-              disesuaikan dari karya pribadi, seperti pada produk custom lainnya.
-            </p>
-            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(59000)}</p>
-            <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Harga per produk · ongkir terpisah</p>
-            <button type="button" onClick={() => startTemplate("pb-dino")}
-              className="mt-5 w-full rounded-full bg-olive px-6 py-3 font-display text-base font-bold text-white transition hover:brightness-95 sm:w-auto">
-              Warnai untuk Aksesori
-            </button>
+          <div className="mt-6 grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <article className="flex flex-col overflow-hidden rounded-[2rem] bg-white ring-1 ring-[var(--border)]">
+              <div className="bg-[#EDF2E6] p-4">
+                <CelenganPreview project={demoProject} name="Adam" />
+              </div>
+              <div className="flex flex-1 flex-col p-5">
+                <p className="font-display text-xs font-bold uppercase tracking-wide text-olive-deep">Accessories</p>
+                <h4 className="mt-1 font-display text-2xl font-extrabold">Celengan Custom</h4>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--dim)]">
+                  Celengan tabung dengan karya dan nama anak. Slot uang di bagian tutup.
+                </p>
+                <p className="mt-4 font-display text-2xl font-extrabold text-olive-deep">{formatIDR(29000)}</p>
+                <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Belum termasuk ongkir</p>
+                <button type="button" onClick={() => startTemplate("pb-dino")}
+                  className="mt-auto min-h-11 w-full rounded-full bg-olive px-5 py-2.5 font-display text-sm font-bold text-white transition hover:bg-olive-deep">
+                  Warnai &amp; Buat Celengan
+                </button>
+              </div>
+            </article>
+            <article className="flex flex-col overflow-hidden rounded-[2rem] bg-white ring-1 ring-[var(--border)]">
+              <div className="relative overflow-hidden bg-[#EFF5FC] p-4">
+                <img src={puzzlePhotoUrl} alt="Foto contoh Puzzle Custom Bun & Fleur Kids dinosaurus dan nama Adam"
+                  loading="lazy" className="aspect-square w-full rounded-2xl object-cover" />
+                <span className="absolute left-7 top-7 rounded-full bg-tang px-3 py-1 font-display text-xs font-bold text-white">Baru</span>
+              </div>
+              <div className="flex flex-1 flex-col p-5">
+                <p className="font-display text-xs font-bold uppercase tracking-wide text-olive-deep">Accessories</p>
+                <h4 className="mt-1 font-display text-2xl font-extrabold">Puzzle Custom</h4>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--dim)]">
+                  Puzzle kepingan bergambar karya anak, dengan warna dan namanya sendiri.
+                  Untuk bermain bersama dan belajar menyusun.
+                </p>
+                <p className="mt-4 font-display text-2xl font-extrabold text-olive-deep">{formatIDR(59000)}</p>
+                <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Belum termasuk ongkir</p>
+                <button type="button" onClick={() => startTemplate("pb-dino")}
+                  className="mt-auto min-h-11 w-full rounded-full bg-tang px-5 py-2.5 font-display text-sm font-bold text-white transition hover:brightness-95">
+                  Warnai &amp; Buat Puzzle
+                </button>
+              </div>
+            </article>
+            <article className="flex flex-col overflow-hidden rounded-[2rem] bg-white ring-1 ring-[var(--border)]">
+              <div className="relative overflow-hidden bg-[#FFF3E6] p-4">
+                <img src={placematPhotoUrl} alt="Foto contoh Alas Makan Custom Bun & Fleur Kids dengan dinosaurus berwarna dan nama Adam"
+                  loading="lazy" className="aspect-square w-full rounded-2xl object-cover" />
+                <span className="absolute left-7 top-7 rounded-full bg-sky-deep px-3 py-1 font-display text-xs font-bold text-white">Baru</span>
+              </div>
+              <div className="flex flex-1 flex-col p-5">
+                <p className="font-display text-xs font-bold uppercase tracking-wide text-olive-deep">Accessories</p>
+                <h4 className="mt-1 font-display text-2xl font-extrabold">Alas Makan Custom</h4>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--dim)]">
+                  Alas makan personal dengan ilustrasi hasil mewarnai dan nama anak.
+                  Detail bahan dan ukuran dikonfirmasi sebelum produksi.
+                </p>
+                <p className="mt-4 font-display text-2xl font-extrabold text-olive-deep">{formatIDR(69000)}</p>
+                <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Belum termasuk ongkir</p>
+                <button type="button" onClick={() => startTemplate("pb-dino")}
+                  className="mt-auto min-h-11 w-full rounded-full bg-olive px-5 py-2.5 font-display text-sm font-bold text-white transition hover:bg-olive-deep">
+                  Warnai &amp; Buat Alas Makan
+                </button>
+              </div>
+            </article>
           </div>
         </section>
         <p className="mt-4 text-sm font-semibold text-[var(--dim)]">
@@ -2395,7 +2420,7 @@ function Parents({ brandName }: { brandName: string }) {
           </div>
           <div>
             <h3 className="font-display text-base font-semibold">Produk fisiknya</h3>
-            <p className="mt-1 leading-relaxed text-[var(--dim)]">Enam produk fisik bisa dipesan dari karya anak: Poster berbingkai (Rp49.000), Papercraft 3D custom (Rp49.000), Figurine 3D custom (mulai Rp120.000), Kaos custom (mulai Rp79.000), aksesori Celengan Custom (Rp29.000), serta Aksesori Custom Premium (Rp59.000). Pola DIY gratis tetap tersedia di Studio Cetak. Kami tidak menampilkan janji waktu produksi yang belum bisa kami tepati — estimasi diberikan tim saat mengkonfirmasi pesananmu via WhatsApp.</p>
+            <p className="mt-1 leading-relaxed text-[var(--dim)]">Tujuh produk fisik bisa dipesan dari karya anak: Poster berbingkai (Rp49.000), Papercraft 3D custom (Rp49.000), Figurine 3D custom (mulai Rp120.000), Kaos custom (mulai Rp79.000), Celengan Custom (Rp29.000), Puzzle Custom (Rp59.000), serta Alas Makan Custom (Rp69.000). Pola DIY gratis tetap tersedia di Studio Cetak. Kami tidak menampilkan janji waktu produksi yang belum bisa kami tepati — estimasi diberikan tim saat mengkonfirmasi pesananmu via WhatsApp.</p>
           </div>
           <div>
             <h3 className="font-display text-base font-semibold">Bahan & batasan, sejujurnya</h3>
@@ -2413,7 +2438,7 @@ function Parents({ brandName }: { brandName: string }) {
         <h3 className="mt-6 font-display text-base font-semibold">Sering ditanyakan</h3>
         <div className="mt-2 space-y-2">
           {[
-            { q: "Apakah produknya saya cetak sendiri?", a: "Tidak. Poster, Papercraft 3D custom, Figurine 3D, Kaos, dan Celengan Custom dipesan sebagai produk fisik yang diproduksi dan dikirim oleh tim kami. Pola DIY gratis di Studio Cetak tetap bisa diunduh untuk dirakit sendiri." },
+            { q: "Apakah produknya saya cetak sendiri?", a: "Tidak. Poster, Papercraft 3D custom, Figurine 3D, Kaos, Celengan Custom, Puzzle Custom, dan Alas Makan Custom dipesan sebagai produk fisik yang diproduksi dan dikirim oleh tim kami. Pola DIY gratis di Studio Cetak tetap bisa diunduh untuk dirakit sendiri." },
             { q: "Bisakah warna anak saya berubah di hasil jadi?", a: "Tidak. Editor, pratinjau 3D, dan file cetak membaca peta warna tersimpan yang sama, jadi bagian yang diwarnai biru di layar tetap biru di kertas." },
             { q: "Bagaimana cara membayar pesanannya?", a: "Lewat QRIS statis resmi BUN AND FLEUR, PAKAIAN (NMID ID1026626210169) di halaman pembayaran pesananmu. Setiap pesanan punya kode unik Rp1–999 dari server, jadi total yang kamu transfer selalu khas (mis. Rp49.137) dan tidak berubah walau halaman dimuat ulang. Setelah transfer, tekan tombol “Saya Sudah Transfer” — pesanan masuk status Menunggu Verifikasi, BUKAN langsung lunas. Tim kami mencocokkan transfer masuk secara manual; hanya setelah cocok statusnya menjadi Terverifikasi/Lunas dan produksi dimulai. File poster resolusi produksi terkunci sampai status itu tercapai." },
             { q: "Berapa lama produksinya?", a: "Kami tidak menampilkan perkiraan yang belum bisa kami tepati. Estimasi produksi & pengiriman diberikan tim kami via WhatsApp saat mengkonfirmasi pesananmu, sebelum kamu membayar." },
