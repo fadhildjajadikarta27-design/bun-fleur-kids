@@ -56,7 +56,7 @@ const PUBLIC_ACTIONS = new Set([
   "deleteProject", "generateCharacter", "getTemplateQc", "listTemplateVersions",
   "createOrder", "trackOrder", "validateCoupon", "confirmTransfer",
   "getInvitation", "acceptInvitation", "affiliateLogin", "affiliateRequestPinReset",
-  "resetPinWithToken", "affiliateLogout", "affiliateMe", "affiliateRequestPayout",
+  "resetPinWithToken", "affiliateLogout", "affiliateMe", "affiliateUpdateCoupon", "affiliateRequestPayout",
   "getAffiliateConfig", "affiliateApply",
 ]);
 
