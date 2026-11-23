@@ -685,6 +685,34 @@ function Home({
             </button>
           </div>
         </section>
+        <section className="mt-5 grid items-center gap-6 rounded-[2.25rem] bg-[#EFF5FC] p-5 ring-1 ring-sky/20 sm:p-8 lg:grid-cols-2"
+          aria-label="Accessories custom premium">
+          <div className="rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-[var(--border)]">
+            <div className="mx-auto w-60 max-w-full overflow-hidden rounded-3xl bg-[#F7F4E9] p-3">
+              <ArtworkSvg template={dino} colors={demo} strokes={[]} name="Adam" nameFont="baloo"
+                nameColor="#E4572E" nameAlign="center" />
+            </div>
+            <p className="mt-3 text-center font-display text-xs font-bold text-sky-deep">
+              Ilustrasi karya yang dipersonalisasi · foto produk menunggu integrasi
+            </p>
+          </div>
+          <div>
+            <span className="inline-block rounded-full bg-sky-deep px-4 py-1.5 font-display text-xs font-bold text-white">
+              ACCESSORIES · PILIHAN BARU
+            </span>
+            <h3 className="mt-3 font-display text-3xl font-extrabold text-olive-deep">Aksesori Custom Premium</h3>
+            <p className="mt-3 text-base font-semibold leading-relaxed text-[var(--dim)]">
+              Desain aksesori lain dari gambar yang sudah diwarnai. Warna, karakter, dan nama anak
+              disesuaikan dari karya pribadi, seperti pada produk custom lainnya.
+            </p>
+            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(59000)}</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Harga per produk · ongkir terpisah</p>
+            <button type="button" onClick={() => startTemplate("pb-dino")}
+              className="mt-5 w-full rounded-full bg-olive px-6 py-3 font-display text-base font-bold text-white transition hover:brightness-95 sm:w-auto">
+              Warnai untuk Aksesori
+            </button>
+          </div>
+        </section>
         <p className="mt-4 text-sm font-semibold text-[var(--dim)]">
           Pola DIY gratis tetap tersedia di Studio Cetak. Harga Rp49.000 khusus kit papercraft fisik yang dicetak sesuai karya anak dan dikirim oleh tim kami.
         </p>
@@ -2367,7 +2395,7 @@ function Parents({ brandName }: { brandName: string }) {
           </div>
           <div>
             <h3 className="font-display text-base font-semibold">Produk fisiknya</h3>
-            <p className="mt-1 leading-relaxed text-[var(--dim)]">Lima produk fisik bisa dipesan dari karya anak: Poster berbingkai (Rp49.000), Papercraft 3D custom (Rp49.000), Figurine 3D custom (mulai Rp120.000), Kaos custom (mulai Rp79.000), dan aksesori Celengan Custom (Rp29.000). Pola DIY gratis tetap tersedia di Studio Cetak. Kami tidak menampilkan janji waktu produksi yang belum bisa kami tepati — estimasi diberikan tim saat mengkonfirmasi pesananmu via WhatsApp.</p>
+            <p className="mt-1 leading-relaxed text-[var(--dim)]">Enam produk fisik bisa dipesan dari karya anak: Poster berbingkai (Rp49.000), Papercraft 3D custom (Rp49.000), Figurine 3D custom (mulai Rp120.000), Kaos custom (mulai Rp79.000), aksesori Celengan Custom (Rp29.000), serta Aksesori Custom Premium (Rp59.000). Pola DIY gratis tetap tersedia di Studio Cetak. Kami tidak menampilkan janji waktu produksi yang belum bisa kami tepati — estimasi diberikan tim saat mengkonfirmasi pesananmu via WhatsApp.</p>
           </div>
           <div>
             <h3 className="font-display text-base font-semibold">Bahan & batasan, sejujurnya</h3>
