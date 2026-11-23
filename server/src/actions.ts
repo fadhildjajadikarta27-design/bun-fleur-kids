@@ -1415,6 +1415,9 @@ export const Actions = {
       const changes: string[] = [];
       const patch: Partial<AffiliateRow> = { updatedAt: new Date() };
       if (args.status && args.status !== row.status) {
+        if (args.status === "active" && !row.pinHash) {
+          throw new Error("Akun lama belum memiliki PIN. Gunakan tautan aktivasi lama agar mitra membuat PIN terlebih dahulu.");
+        }
         patch.status = args.status;
         changes.push(`status ${row.status} → ${args.status}`);
       }
@@ -1472,6 +1475,7 @@ export const Actions = {
       const db = ctx.db<typeof schema>();
       const rows = await db.select().from(schema.affiliates).where(eq(schema.affiliates.id, args.affiliateId)).limit(1);
       if (!rows[0]) throw new Error("Afiliasi tidak ditemukan.");
+      if (rows[0].pinHash) throw new Error("Akun ini sudah punya PIN. Untuk mengganti PIN gunakan alur reset PIN, bukan undangan aktivasi.");
       const now = new Date();
       const open = await db
         .select()
@@ -1773,6 +1777,7 @@ export const Actions = {
       const affiliate = affRows[0];
       if (!affiliate) throw new Error("Akun afiliasi untuk undangan ini tidak ditemukan.");
       if (affiliate.status === "suspended") throw new Error("Akun afiliasi ini sedang ditangguhkan.");
+      if (affiliate.pinHash) throw new Error("Akun ini sudah aktif. Gunakan login nomor HP atau minta reset PIN.");
       // Identity confirmation: the email or WhatsApp the admin registered.
       const identity = args.identity.trim();
       const emailMatch = identity.includes("@") && identity.toLowerCase() === affiliate.email;
