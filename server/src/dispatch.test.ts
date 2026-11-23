@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { dispatchAction } from "./dispatch.js";
+import { Actions } from "./actions.js";
 
 describe("3D Papercraft product pricing", () => {
   test("shop catalog includes fixed Rp49.000 papercraft", async () => {
-    const res = await dispatchAction("getShopConfig", {});
-    expect(res.status).toBe(200);
-    const products = (res.body as { products: { id: string; basePrice: number; priceLabel: string }[] }).products;
+    // Call the pure catalog handler directly: the generic dispatch bootstraps
+    // DB, which is intentionally unavailable in unit tests.
+    const res = await Actions.getShopConfig.handler({} as never, {});
+    const products = res.products;
     expect(products.find((p) => p.id === "papercraft")).toEqual({
       id: "papercraft", basePrice: 49000, priceLabel: "fixed",
     });
