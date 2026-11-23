@@ -20,6 +20,7 @@ import { getTemplate } from "../lib/registry";
 import { buildCustomTemplate, parseCustomDef } from "../lib/custom";
 import { buildPillowPdf, downloadBlob } from "../lib/pdf";
 import { papercraftSampleUrl } from "../papercraft-sample";
+import { celenganPhotoUrl } from "../celengan-photo";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
@@ -338,7 +339,7 @@ export function CelenganPreview({
   return (
     <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
       <div className="relative overflow-hidden rounded-2xl bg-[#F1F2E7] ring-1 ring-[var(--border)]">
-        <img src="/celengan-custom.webp" loading="lazy" className="aspect-square w-full object-cover"
+        <img src={celenganPhotoUrl} loading="lazy" className="aspect-square w-full object-cover"
           alt="Contoh desain celengan tabung Bun & Fleur Kids: karakter dinosaurus dengan warna personal, nama anak, dan logo di sisi belakang" />
         <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1.5 font-display text-xs font-bold text-olive-deep shadow-sm">
           Contoh tampilan aksesori
