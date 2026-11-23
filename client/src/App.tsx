@@ -2214,32 +2214,6 @@ function Parents({ brandName }: { brandName: string }) {
         <p className="band-dim mt-2 max-w-2xl leading-relaxed">Cara platform ini bekerja, produk fisiknya, bahan dan batasannya — plus pengelolaan proyek tersimpan. Tanpa akun, tanpa daftar — proyek tersimpan secara privat di aplikasi ini.</p>
       </div>
 
-      <AdminGate>
-      <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pengaturan merek">
-        <h2 className="font-display text-lg font-extrabold">Nama studio</h2>
-        <p className="text-sm font-semibold text-[var(--dim)]">Nama merek muncul di header dan di setiap PDF cetakan.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <label htmlFor="brand-name" className="sr-only">Nama merek</label>
-          <input
-            id="brand-name"
-            {...FIELDS.updateSettings.brandName}
-            value={brand}
-            onChange={(e) => { setBrand(e.target.value); setSaved(false); }}
-            className="min-w-52 flex-1 rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-display font-bold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
-          />
-          <button
-            type="button"
-            disabled={!brand.trim() || saveBrand.isPending}
-            onClick={() => saveBrand.mutate(brand.trim())}
-            className="rounded-full bg-sky-deep px-5 py-2.5 font-display font-semibold text-white disabled:opacity-50"
-          >
-            Simpan nama
-          </button>
-          {saved && <span className="self-center font-display text-sm font-bold text-[#2E7D46]">Tersimpan ✓</span>}
-          {saveBrand.error && <span className="self-center text-sm font-bold text-berry">{saveBrand.error.message}</span>}
-        </div>
-      </section>
-
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Perpustakaan proyek">
         <h2 className="font-display text-lg font-extrabold">Perpustakaan proyek</h2>
         <p className="text-sm font-semibold text-[var(--dim)]">
@@ -2273,6 +2247,32 @@ function Parents({ brandName }: { brandName: string }) {
         </ul>
       </section>
 
+
+      <AdminGate>
+      <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pengaturan merek">
+        <h2 className="font-display text-lg font-extrabold">Nama studio</h2>
+        <p className="text-sm font-semibold text-[var(--dim)]">Nama merek muncul di header dan di setiap PDF cetakan.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <label htmlFor="brand-name" className="sr-only">Nama merek</label>
+          <input
+            id="brand-name"
+            {...FIELDS.updateSettings.brandName}
+            value={brand}
+            onChange={(e) => { setBrand(e.target.value); setSaved(false); }}
+            className="min-w-52 flex-1 rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-display font-bold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
+          />
+          <button
+            type="button"
+            disabled={!brand.trim() || saveBrand.isPending}
+            onClick={() => saveBrand.mutate(brand.trim())}
+            className="rounded-full bg-sky-deep px-5 py-2.5 font-display font-semibold text-white disabled:opacity-50"
+          >
+            Simpan nama
+          </button>
+          {saved && <span className="self-center font-display text-sm font-bold text-[#2E7D46]">Tersimpan ✓</span>}
+          {saveBrand.error && <span className="self-center text-sm font-bold text-berry">{saveBrand.error.message}</span>}
+        </div>
+      </section>
 
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pesanan masuk">
         <h2 className="font-display text-lg font-extrabold">Pesanan masuk (Admin)</h2>
