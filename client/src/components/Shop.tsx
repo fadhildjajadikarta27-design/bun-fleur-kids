@@ -25,7 +25,7 @@ import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 
-export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt" | "celengan";
+export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt" | "celengan" | "accessory59";
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 
 export interface ShopProject {
@@ -78,6 +78,13 @@ export const PRODUCT_META: Record<
     cta: "Create My Poster",
     see: "See My Poster",
   },
+  accessory59: {
+    title: "Aksesori Custom Premium",
+    tagline: "Accessories",
+    description: "Aksesori personal dari hasil mewarnai si kecil — karakter, pilihan warna, serta namanya menjadi desain produk miliknya sendiri.",
+    cta: "Buat Aksesori-ku",
+    see: "Lihat Desain-ku",
+  },
   celengan: {
     title: "Celengan Custom",
     tagline: "Aksesori Celengan",
@@ -113,6 +120,7 @@ const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
     { id: "poster", basePrice: 49000, priceLabel: "fixed" },
     { id: "papercraft", basePrice: 49000, priceLabel: "fixed" },
     { id: "celengan", basePrice: 29000, priceLabel: "fixed" },
+    { id: "accessory59", basePrice: 59000, priceLabel: "fixed" },
     { id: "figurine", basePrice: 120000, priceLabel: "from" },
     { id: "tshirt", basePrice: 79000, priceLabel: "from" },
   ],
@@ -372,6 +380,26 @@ function ProductPreview({
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
   if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
   if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
+  if (product === "accessory59") {
+    return (
+      <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
+        <div className="rounded-3xl bg-[#EEF4E4] p-5 ring-1 ring-[var(--border)]">
+          <div className="mx-auto max-w-[250px] overflow-hidden rounded-3xl bg-white p-3 shadow-sm">
+            <ArtworkSvg template={templateForSnapshot(project)} colors={project.colors}
+              strokes={project.strokes} name={name} message={project.message}
+              nameFont={project.nameFont} nameColor={project.nameColor}
+              nameAlign={project.nameAlign} />
+          </div>
+          <p className="mt-3 text-center font-display text-sm font-bold text-olive-deep">
+            Aksesori custom dari karya yang kamu warnai
+          </p>
+        </div>
+        <p className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">
+          Pratinjau karya dan warna pesanan. Contoh foto produk belum tersedia pada katalog.
+        </p>
+      </div>
+    );
+  }
   if (product === "figurine") return <FigurinePreview project={project} height={large ? 320 : 210} />;
   return <TshirtPreview project={project} name={name} fabric={fabric} large={large} />;
 }
@@ -476,7 +504,7 @@ export function Masterpiece({
         </p>
       </section>
 
-      {/* Lima pilihan produk, termasuk aksesori */}
+      {/* Enam pilihan produk, termasuk dua aksesori */}
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Pilih bentuk kreasimu">
         {(Object.keys(PRODUCT_META) as ProductId[]).map((id) => {
           const meta = PRODUCT_META[id];
@@ -493,6 +521,11 @@ export function Masterpiece({
               <h3 className="mt-3 font-display text-xl font-semibold">{meta.title}</h3>
               <p className="mt-1 font-semibold leading-relaxed text-[var(--dim)]">{meta.description}</p>
               <p className="mt-2 font-display text-lg font-semibold text-olive-deep">{priceLine(cfg, id)}</p>
+              {id === "accessory59" && (
+                <p className="mt-1 text-xs font-bold text-olive-deep">
+                  Accessories · Rp59.000 · personalisasi gambar dan nama · ongkir terpisah.
+                </p>
+              )}
               {id === "celengan" && (
                 <p className="mt-1 text-xs font-bold text-olive-deep">
                   Accessories · Rp29.000 · custom sesuai gambar yang diwarnai · ongkir terpisah.
@@ -606,6 +639,8 @@ export function Customize({
                     ? "Nama anak tercetak pada penyangga papercraft, sementara karakter dan warnanya mengikuti karya yang sudah diwarnai."
                     : selection.product === "celengan"
                       ? "Nama anak dan karakter kreasinya dicetak pada sisi depan celengan. Logo Bun & Fleur Kids pada sisi belakang."
+                      : selection.product === "accessory59"
+                        ? "Nama dan gambar kreasimu ikut dalam desain aksesori custom; spesifikasi cetak akhir disesuaikan produk."
                   : "Bila diisi, nama anak dicetak di bawah desain pada kaos."}
             </p>
           </div>
@@ -675,6 +710,13 @@ export function Customize({
             </div>
           )}
 
+          {selection.product === "accessory59" && (
+            <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
+              <p className="font-display font-extrabold">Aksesori Custom Premium · Rp59.000</p>
+              <p className="mt-1">Karya mewarnai anak dipakai untuk personalisasi aksesori.
+                Harga tetap, ongkir terpisah. Foto dan detail bentuk fisik akan dikonfirmasi sebelum produksi.</p>
+            </div>
+          )}
           {selection.product === "celengan" && (
             <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
               <p className="font-display font-extrabold">Accessories — Celengan Custom · Rp29.000</p>
@@ -707,7 +749,7 @@ export function Customize({
           <dl className="mt-5 space-y-1.5 border-t-2 border-dashed border-[var(--border)] pt-4 text-sm font-semibold">
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Harga produk</dt>
-              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft" || selection.product === "celengan") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
+              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft" || selection.product === "celengan" || selection.product === "accessory59") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Ongkos kirim</dt>
