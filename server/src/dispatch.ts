@@ -72,7 +72,7 @@ async function inferenceComplete<T extends z.ZodType>(
   }
 }
 
-const ctx: Ctx = {
+const ctx: Omit<Ctx, "visitorId" | "isAdmin"> = {
   // getDb() is built with this app's schema (server/src/schema.ts), which
   // is the only schema actions ever request via ctx.db<typeof schema>().
   db: <TSchema extends Record<string, unknown>>() =>
@@ -92,7 +92,7 @@ export interface DispatchResult {
   body: unknown;
 }
 
-export async function dispatchAction(action: string, args: unknown): Promise<DispatchResult> {
+export async function dispatchAction(action: string, args: unknown, visitorId = "local-dev", isAdmin = false): Promise<DispatchResult> {
   const def = actionsMap[action];
   if (!def) {
     return { status: 404, body: { error: `Unknown action: ${action}` } };
@@ -103,7 +103,7 @@ export async function dispatchAction(action: string, args: unknown): Promise<Dis
     return { status: 400, body: { error: parsed.error.message } };
   }
   try {
-    const result = await def.handler(ctx, parsed.data);
+    const result = await def.handler({ ...ctx, visitorId, isAdmin }, parsed.data);
     // Lenient response validation: a mismatch is a server bug worth
     // logging, but the client is better served by the raw value than by
     // turning a cosmetic schema drift into a hard failure.
