@@ -22,6 +22,8 @@ export interface Inference {
 
 /** The context object every action handler receives. */
 export interface Ctx {
+  visitorId: string;
+  isAdmin: boolean;
   db<TSchema extends Record<string, unknown> = Record<string, unknown>>(): PostgresJsDatabase<TSchema>;
   invalidateQueries(): void;
   inference: Inference;
