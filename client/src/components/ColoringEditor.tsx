@@ -3,6 +3,7 @@
 // artwork, undo/redo, zoom & pan, and the personalized name plaque.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clampArtPan, clampArtZoom, pointToArt, scribbleGoal, zoomArtAt } from "../lib/editor-touch";
 import {
 INK,
 NAME_FONTS,
@@ -306,6 +307,8 @@ const crayonNoise = new CrayonNoise();
 interface RegionGeom {
   paths: Path2D[];
   samples: [number, number][];
+  /** Original 11-unit sampling density gives a size estimate for tiny parts. */
+  coarseCount: number;
 }
 
 function buildRegionGeom(template: TemplateDef): { map: Map<string, RegionGeom>; ctx: CanvasRenderingContext2D | null } {
@@ -314,16 +317,22 @@ function buildRegionGeom(template: TemplateDef): { map: Map<string, RegionGeom>;
   const g = canvas.getContext("2d");
   if (!g) return { map, ctx: null };
   const [vw, vh] = template.viewBox;
-  const spacing = 11;
   for (const r of template.regions) {
     const paths = r.els.map((el) => new Path2D(elToPath(el)));
-    const samples: [number, number][] = [];
-    for (let x = spacing / 2; x < vw; x += spacing) {
-      for (let y = spacing / 2; y < vh; y += spacing) {
-        if (paths.some((p) => g.isPointInPath(p, x, y))) samples.push([x, y]);
+    const sampleGrid = (spacing: number): [number, number][] => {
+      const points: [number, number][] = [];
+      for (let x = spacing / 2; x < vw; x += spacing) {
+        for (let y = spacing / 2; y < vh; y += spacing) {
+          if (paths.some((p) => g.isPointInPath(p, x, y))) points.push([x, y]);
+        }
       }
-    }
-    map.set(r.id, { paths, samples });
+      return points;
+    };
+    // Tiny features can have zero hits on the coarse grid. Refine those
+    // grids so the coverage test remains usable even for eyes, feet and spikes.
+    const coarse = sampleGrid(11);
+    const samples = coarse.length < 90 ? sampleGrid(5) : coarse;
+    map.set(r.id, { paths, samples, coarseCount: coarse.length });
   }
   return { map, ctx: g };
 }
@@ -341,6 +350,7 @@ interface ScribbleState {
   regionId: string;
   points: [number, number][];
   covered: Set<number>;
+  goal: ReturnType<typeof scribbleGoal>;
   length: number;
   lastT: number;
   lastX: number;
@@ -374,6 +384,9 @@ export function ColoringEditor({
   const [brushSize, setBrushSize] = useState(14);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  // Update this synchronously in pointer/wheel events to avoid stale values
+  // during rapid pinching and trackpad wheel bursts.
+  const viewRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
   const [confirmReset, setConfirmReset] = useState(false);
   const [soundOn, setSoundOn] = useState<boolean>(loadSoundPref);
   const [liveScribble, setLiveScribble] = useState<{ regionId: string; points: [number, number][] } | null>(null);
@@ -387,7 +400,7 @@ export function ColoringEditor({
   const scribbleRef = useRef<ScribbleState | null>(null);
   const panningRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
-  const pinchRef = useRef<{ d: number; zoom: number } | null>(null);
+  const pinchRef = useRef<{ d: number; zoom: number; anchor: { x: number; y: number } } | null>(null);
   const [liveStroke, setLiveStroke] = useState<Stroke | null>(null);
 
   const params = scribbleParams(template.ageBand);
@@ -416,14 +429,45 @@ export function ColoringEditor({
     forceTick((n) => n + 1);
   };
 
+  const applyView = useCallback((next: { zoom: number; pan: { x: number; y: number } }) => {
+    viewRef.current = next;
+    setZoom(next.zoom);
+    setPan(next.pan);
+  }, []);
+
+  const zoomAt = (nextZoom: number, clientX?: number, clientY?: number) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const next = zoomArtAt(viewRef.current, nextZoom,
+      clientX ?? rect.left + rect.width / 2,
+      clientY ?? rect.top + rect.height / 2, rect, template.viewBox);
+    applyView(next);
+  };
+
+  // React's onWheel may be treated as passive by the browser; a native,
+  // non-passive handler is needed to prevent the document from scrolling.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 350 : 1);
+      const nextZoom = viewRef.current.zoom * Math.exp(-delta * 0.0015);
+      const rect = el.getBoundingClientRect();
+      applyView(zoomArtAt(viewRef.current, nextZoom,
+        event.clientX, event.clientY, rect, template.viewBox));
+    };
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [applyView, template.viewBox]);
+
   const toSvgCoords = (clientX: number, clientY: number): [number, number] => {
     const el = wrapRef.current;
     if (!el) return [0, 0];
-    const rect = el.getBoundingClientRect();
-    const [vw, vh] = template.viewBox;
-    const px = (clientX - rect.left) / rect.width;
-    const py = (clientY - rect.top) / rect.height;
-    return [(px * vw - pan.x) / zoom, (py * vh - pan.y) / zoom];
+    const p = pointToArt(clientX, clientY, el.getBoundingClientRect(),
+      viewRef.current, template.viewBox);
+    return [p.x, p.y];
   };
 
   const handleRegionTap = (regionId: string) => {
@@ -437,21 +481,44 @@ export function ColoringEditor({
 
   const hitRegion = (x: number, y: number): string | null => {
     if (!geom.ctx) return null;
-    for (const r of template.regions) {
+    // SVG regions are painted in this order: later ones are visually on top.
+    // Hit-test in reverse so small details don't select the body behind them.
+    const frontToBack = [...template.regions].reverse();
+    const exact = frontToBack.find((r) =>
+      geom.map.get(r.id)?.paths.some((path) => geom.ctx!.isPointInPath(path, x, y)));
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return exact?.id ?? null;
+    const tolerance = Math.min(34, 16 * (template.viewBox[0] / Math.max(1, rect.width)) / viewRef.current.zoom);
+    let nearest: { id: string; distance: number } | null = null;
+    // A finger covers more than a mouse pointer. Nearby tiny parts get a
+    // forgiving touch target without painting other large regions at random.
+    for (const r of frontToBack) {
       const g = geom.map.get(r.id);
-      if (g && g.paths.some((p) => geom.ctx!.isPointInPath(p, x, y))) return r.id;
+      if (!g || g.coarseCount >= 90) continue;
+      for (const [sx, sy] of g.samples) {
+        const d = Math.hypot(sx - x, sy - y);
+        if (d <= tolerance && (!nearest || d < nearest.distance)) {
+          nearest = { id: r.id, distance: d };
+        }
+      }
     }
-    return null;
+    if (!exact) return nearest?.id ?? null;
+    const exactGeom = geom.map.get(exact.id);
+    if (exactGeom && exactGeom.coarseCount < 90) return exact.id;
+    return nearest && nearest.distance <= tolerance * 0.58 ? nearest.id : exact.id;
   };
 
   const startScribble = (clientX: number, clientY: number) => {
     const [x, y] = toSvgCoords(clientX, clientY);
     const regionId = hitRegion(x, y);
     if (!regionId) return;
+    const g = geom.map.get(regionId);
+    const goal = scribbleGoal(params.threshold, g?.coarseCount ?? 0);
     scribbleRef.current = {
       regionId,
       points: [[x, y]],
       covered: new Set<number>(),
+      goal,
       length: 0,
       lastT: performance.now(),
       lastX: clientX,
@@ -459,7 +526,7 @@ export function ColoringEditor({
     };
     setLiveScribble({ regionId, points: [[x, y]] });
     setCoveragePct(0);
-    setScribbleHint("");
+    setScribbleHint(goal.small ? "Detail kecil — cukup gosok sebentar!" : "");
   };
 
   const moveScribble = (clientX: number, clientY: number) => {
@@ -468,7 +535,7 @@ export function ColoringEditor({
     const [x, y] = toSvgCoords(clientX, clientY);
     const last = s.points[s.points.length - 1]!;
     const d = Math.hypot(x - last[0], y - last[1]);
-    if (d < 2.5) return;
+    if (d < (s.goal.small ? 0.7 : 2.5)) return;
     const now = performance.now();
     const dt = Math.max(1, now - s.lastT);
     const speed = Math.hypot(clientX - s.lastX, clientY - s.lastY) / dt; // px per ms
@@ -485,7 +552,7 @@ export function ColoringEditor({
         const [sx, sy] = g.samples[i]!;
         if (distToSegment(sx, sy, last[0], last[1], x, y) <= params.radius) s.covered.add(i);
       }
-      setCoveragePct(g.samples.length ? Math.round((s.covered.size / g.samples.length) * 100) : 0);
+      setCoveragePct(g.samples.length ? Math.round((s.covered.size / g.samples.length) * 100) : 100);
     }
     setLiveScribble({ regionId: s.regionId, points: s.points });
   };
@@ -498,26 +565,40 @@ export function ColoringEditor({
     crayonNoise.stop();
     if (!s) return;
     const g = geom.map.get(s.regionId);
-    const coverage = g && g.samples.length ? s.covered.size / g.samples.length : 0;
+    // The fallback only applies after a real dragging gesture that
+    // actually began inside an extremely thin fillable SVG region.
+    const coverage = g && g.samples.length ? s.covered.size / g.samples.length : g ? 1 : 0;
     // A tap (almost no travel) or a stationary press can never complete
     // a region: both the travel distance and the covered share must
     // pass their marks.
-    if (s.length >= 45 && coverage >= params.threshold) {
+    if (s.length >= s.goal.minDistance && coverage >= s.goal.threshold) {
       pushHistory();
       onChange({ ...colors, [s.regionId]: color }, strokes);
       setScribbleHint("");
     } else if (s.points.length > 1) {
-      setScribbleHint("Hampir! Gosok bidangnya lebih banyak lagi sampai penuh ya.");
+      setScribbleHint(s.goal.small
+        ? "Sedikit lagi! Coret pendek pada detail kecil ini."
+        : "Hampir! Gosok bidangnya lebih banyak lagi sampai penuh ya.");
     }
   };
 
   /* --------------------------- Pointer flow --------------------------- */
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "touch") e.preventDefault();
+    // Keep events arriving after the finger leaves the visible border.
+    // This stops incomplete strokes and accidental page gestures.
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* already captured */ }
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointersRef.current.size === 2) {
       const [p1, p2] = [...pointersRef.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
-      pinchRef.current = { d: Math.hypot(p1.x - p2.x, p1.y - p2.y), zoom };
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      const el = wrapRef.current;
+      const anchor = el
+        ? pointToArt(mx, my, el.getBoundingClientRect(), viewRef.current, template.viewBox)
+        : { x: template.viewBox[0] / 2, y: template.viewBox[1] / 2 };
+      pinchRef.current = { d: Math.max(10, Math.hypot(p1.x - p2.x, p1.y - p2.y)), zoom: viewRef.current.zoom, anchor };
+      panningRef.current = null;
       drawingRef.current = null;
       setLiveStroke(null);
       scribbleRef.current = null;
@@ -526,8 +607,9 @@ export function ColoringEditor({
       crayonNoise.stop();
       return;
     }
+    if (pointersRef.current.size !== 1) return;
     if (tool === "move") {
-      panningRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+      panningRef.current = { x: e.clientX, y: e.clientY, panX: viewRef.current.pan.x, panY: viewRef.current.pan.y };
       return;
     }
     if (tool === "scribble") {
@@ -559,7 +641,23 @@ export function ColoringEditor({
     if (pointersRef.current.size === 2 && pinchRef.current) {
       const [p1, p2] = [...pointersRef.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
       const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-      if (d > 10) setZoom(Math.min(3, Math.max(1, pinchRef.current.zoom * (d / pinchRef.current.d))));
+      const el = wrapRef.current;
+      if (el && d > 10) {
+        const rect = el.getBoundingClientRect();
+        const [vw, vh] = template.viewBox;
+        const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+        const sx = ((mx - rect.left) / Math.max(rect.width, 1)) * vw;
+        const sy = ((my - rect.top) / Math.max(rect.height, 1)) * vh;
+        const nextZoom = clampArtZoom(pinchRef.current.zoom * d / pinchRef.current.d);
+        const anchor = pinchRef.current.anchor;
+        applyView({
+          zoom: nextZoom,
+          pan: clampArtPan({
+            x: sx - vw / 2 - (anchor.x - vw / 2) * nextZoom,
+            y: sy - vh / 2 - (anchor.y - vh / 2) * nextZoom,
+          }, nextZoom, template.viewBox),
+        });
+      }
       return;
     }
     if (!had) return;
@@ -568,9 +666,13 @@ export function ColoringEditor({
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const [vw, vh] = template.viewBox;
-      setPan({
-        x: panningRef.current.panX + ((e.clientX - panningRef.current.x) / rect.width) * vw,
-        y: panningRef.current.panY + ((e.clientY - panningRef.current.y) / rect.height) * vh,
+      const nextZoom = viewRef.current.zoom;
+      applyView({
+        zoom: nextZoom,
+        pan: clampArtPan({
+          x: panningRef.current.panX + ((e.clientX - panningRef.current.x) / Math.max(rect.width, 1)) * vw,
+          y: panningRef.current.panY + ((e.clientY - panningRef.current.y) / Math.max(rect.height, 1)) * vh,
+        }, nextZoom, template.viewBox),
       });
       return;
     }
@@ -595,9 +697,19 @@ export function ColoringEditor({
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const wasPinching = pinchRef.current !== null;
     pointersRef.current.delete(e.pointerId);
-    pinchRef.current = null;
+    if (pointersRef.current.size < 2) pinchRef.current = null;
     panningRef.current = null;
+    if (wasPinching || e.type === "pointercancel") {
+      scribbleRef.current = null;
+      setLiveScribble(null);
+      drawingRef.current = null;
+      setLiveStroke(null);
+      setCoveragePct(0);
+      crayonNoise.stop();
+      return;
+    }
     if (scribbleRef.current) endScribble();
     if (drawingRef.current) {
       pushHistory();
@@ -626,7 +738,7 @@ export function ColoringEditor({
       type="button"
       aria-pressed={tool === t}
       onClick={() => setTool(t)}
-      className={`flex min-w-16 flex-col items-center gap-0.5 rounded-2xl px-3 py-2 font-display text-xs font-bold ${
+      className={`flex min-h-12 min-w-[72px] shrink-0 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-2xl px-3 py-2 font-display text-xs font-bold ${
         tool === t ? "bg-sky-deep text-white shadow" : "bg-[var(--surface)] text-[var(--text)] ring-1 ring-[var(--border)]"
       }`}
     >
@@ -641,19 +753,18 @@ export function ColoringEditor({
     <div>
       <div
         ref={wrapRef}
-        className="relative touch-none overflow-hidden rounded-3xl bg-white shadow-inner ring-1 ring-[var(--border)]"
+        className="relative w-full select-none touch-none overflow-hidden rounded-3xl bg-white shadow-inner ring-1 ring-[var(--border)]"
+        style={{ aspectRatio: `${template.viewBox[0]} / ${template.viewBox[1]}`, overscrollBehavior: "contain", contain: "layout paint" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onWheel={(e) => {
-          setZoom((z) => Math.min(3, Math.max(1, z - e.deltaY * 0.0015)));
-        }}
       >
         <div
+          className="absolute inset-0 h-full w-full will-change-transform"
           style={{
-            transform: `translate(${pan.x / (template.viewBox[0] / 100)}%, ${pan.y / (template.viewBox[1] / 100)}%) scale(${zoom})`,
-            transformOrigin: "center",
+            transform: `translate3d(${pan.x / (template.viewBox[0] / 100)}%, ${pan.y / (template.viewBox[1] / 100)}%, 0) scale(${zoom})`,
+            transformOrigin: "50% 50%",
           }}
         >
           <ArtworkSvg
@@ -708,9 +819,13 @@ export function ColoringEditor({
           {scribbleHint}
         </p>
       )}
+      <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">
+        Zoom hanya pada gambar: cubit dua jari atau gunakan +/−, lalu pilih Geser untuk memindahkan gambar.
+        Detail kecil cukup digosok pendek sampai terisi.
+      </p>
 
       {/* Tools */}
-      <div className="mt-3 flex flex-wrap items-stretch justify-center gap-2">
+      <div className="mt-3 flex items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-2 sm:flex-wrap sm:justify-center sm:overflow-visible">
         {toolBtn("scribble", "Coret & Isi", (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 17 C6 10 9 20 12 12 C14 7 17 15 21 8" /><path d="M4 21 H20" /></svg>
         ))}
@@ -733,7 +848,7 @@ export function ColoringEditor({
             saveSoundPref(next);
             if (!next) crayonNoise.stop();
           }}
-          className={`flex min-w-16 flex-col items-center gap-0.5 rounded-2xl px-3 py-2 font-display text-xs font-bold ${
+          className={`flex min-h-12 min-w-[72px] shrink-0 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-2xl px-3 py-2 font-display text-xs font-bold ${
             soundOn ? "bg-[var(--surface)] text-[var(--text)] ring-1 ring-[var(--border)]" : "bg-[var(--surface)] text-[var(--dim)] ring-1 ring-[var(--border)]"
           }`}
         >
@@ -752,15 +867,17 @@ export function ColoringEditor({
             Ulangi ↪
           </button>
         </div>
-        <div className="flex items-center gap-1">
-          <button type="button" aria-label="Perkecil" onClick={() => setZoom((z) => Math.max(1, z - 0.25))} className="rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-lg font-bold ring-1 ring-[var(--border)]">−</button>
-          <button type="button" aria-label="Perbesar" onClick={() => setZoom((z) => Math.min(3, z + 0.25))} className="rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-lg font-bold ring-1 ring-[var(--border)]">+</button>
-          <button
-            type="button"
-            aria-label="Atur ulang zoom"
-            onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
-            className="rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)]"
-          >
+        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Zoom kanvas">
+          <button type="button" aria-label="Perkecil gambar" disabled={zoom <= 1}
+            onClick={() => zoomAt(zoom - 0.25)}
+            className="min-h-11 min-w-11 touch-manipulation rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-lg font-bold ring-1 ring-[var(--border)] disabled:opacity-40">−</button>
+          <span className="min-w-12 text-center font-display text-xs font-bold text-[var(--dim)]" aria-live="polite">{Math.round(zoom * 100)}%</span>
+          <button type="button" aria-label="Perbesar gambar" disabled={zoom >= 4}
+            onClick={() => zoomAt(zoom + 0.25)}
+            className="min-h-11 min-w-11 touch-manipulation rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-lg font-bold ring-1 ring-[var(--border)] disabled:opacity-40">+</button>
+          <button type="button" aria-label="Tampilkan keseluruhan gambar"
+            onClick={() => applyView({ zoom: 1, pan: { x: 0, y: 0 } })}
+            className="min-h-11 touch-manipulation rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)]">
             Fit
           </button>
         </div>
@@ -844,7 +961,7 @@ export function ColoringEditor({
           ))}
         </div>
         <p className="mt-2 text-center text-sm font-semibold text-[var(--dim)]">
-          {tool === "scribble" && `Gosok bidang gambar dengan jarimu sampai penuh — kelompok ${params.group} terisi setelah kira-kira ${Math.round(params.threshold * 100)}% bidang tergosok.`}
+          {tool === "scribble" && `Gosok bidang gambar sampai cukup terisi — untuk detail kecil lebih mudah dengan gosokan pendek. Kelompok ${params.group} menggunakan target dasar sekitar ${Math.round(params.threshold * 100)}% untuk bidang besar.`}
           {tool === "brush" && "Gambar dengan jarimu — krayon tetap di dalam garis."}
           {tool === "eraser" && "Ketuk bagian untuk membersihkannya, atau gosok garis krayon untuk menghapusnya."}
           {tool === "move" && "Seret untuk menggerakkan gambar."}
