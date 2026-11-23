@@ -1,0 +1,102 @@
+ALTER TABLE `settings` ADD COLUMN `min_withdrawal` integer DEFAULT 50000 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `settings` ADD COLUMN `invite_expiry_hours` integer DEFAULT 72 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `orders` ADD COLUMN `coupon_code` text DEFAULT '' NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `orders` ADD COLUMN `affiliate_id` integer;
+--> statement-breakpoint
+ALTER TABLE `orders` ADD COLUMN `discount_amount` integer DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `orders` ADD COLUMN `unique_code` integer DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `orders` ADD COLUMN `pay_state` text DEFAULT 'awaiting' NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `orders` ADD COLUMN `payment_confirmed_at` integer;
+--> statement-breakpoint
+CREATE TABLE `affiliates` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`name` text NOT NULL,
+	`email` text NOT NULL,
+	`whatsapp` text DEFAULT '' NOT NULL,
+	`instagram` text DEFAULT '' NOT NULL,
+	`tiktok` text DEFAULT '' NOT NULL,
+	`coupon_code` text NOT NULL,
+	`discount_pct` integer DEFAULT 10 NOT NULL,
+	`commission_pct` integer DEFAULT 30 NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`pin_hash` text DEFAULT '' NOT NULL,
+	`failed_attempts` integer DEFAULT 0 NOT NULL,
+	`locked_until` integer,
+	`kpi_target_orders` integer DEFAULT 0 NOT NULL,
+	`kpi_target_revenue` integer DEFAULT 0 NOT NULL,
+	`pin_reset_requested_at` integer,
+	`reset_token` text DEFAULT '' NOT NULL,
+	`reset_expires_at` integer,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `affiliates_email_unique` ON `affiliates` (`email`);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `affiliates_coupon_code_unique` ON `affiliates` (`coupon_code`);
+--> statement-breakpoint
+CREATE TABLE `affiliate_invitations` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`affiliate_id` integer NOT NULL,
+	`token` text NOT NULL,
+	`expires_at` integer NOT NULL,
+	`used_at` integer,
+	`revoked_at` integer,
+	`created_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `affiliate_invitations_token_unique` ON `affiliate_invitations` (`token`);
+--> statement-breakpoint
+CREATE TABLE `affiliate_sessions` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`affiliate_id` integer NOT NULL,
+	`token` text NOT NULL,
+	`expires_at` integer NOT NULL,
+	`revoked_at` integer,
+	`created_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `affiliate_sessions_token_unique` ON `affiliate_sessions` (`token`);
+--> statement-breakpoint
+CREATE TABLE `commissions` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`order_id` integer NOT NULL,
+	`affiliate_id` integer NOT NULL,
+	`net_subtotal` integer NOT NULL,
+	`commission_pct` integer NOT NULL,
+	`amount` integer NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`payout_id` integer,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `commissions_order_id_unique` ON `commissions` (`order_id`);
+--> statement-breakpoint
+CREATE TABLE `payouts` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`affiliate_id` integer NOT NULL,
+	`amount` integer NOT NULL,
+	`bank_name` text DEFAULT '' NOT NULL,
+	`account_name` text DEFAULT '' NOT NULL,
+	`account_number` text DEFAULT '' NOT NULL,
+	`status` text DEFAULT 'requested' NOT NULL,
+	`note` text DEFAULT '' NOT NULL,
+	`paid_at` integer,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `affiliate_audit` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`affiliate_id` integer,
+	`action` text NOT NULL,
+	`detail` text DEFAULT '' NOT NULL,
+	`created_at` integer NOT NULL
+);

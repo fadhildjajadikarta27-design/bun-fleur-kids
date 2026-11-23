@@ -1,0 +1,8 @@
+{
+  "runtime": "typescript",
+  "platformVersion": 29,
+  "entry": "client/dist/index.html",
+  "name": "Bun & Fleur Kids",
+  "slug": "colorpop-3d",
+  "managedCronJobs": []
+}

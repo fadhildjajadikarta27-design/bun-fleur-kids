@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.space-build/
+.space-build-cvm/
+.bun-cache/
+app.db
+app.db-shm
+app.db-wal
+audits/
+*.muse-github-snapshot-sync.json

@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,600&family=Baloo+2:wght@500;600;700;800&family=Patrick+Hand&family=Caveat:wght@600;700&display=swap');
+@import "tailwindcss";
+@import "tailwindcss-safe-area";
+
+@theme {
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 28px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+  --text-3xl: 30px;
+  --text-3xl--line-height: 36px;
+  --text-4xl: 36px;
+  --text-4xl--line-height: 40px;
+  --text-5xl: 48px;
+  --text-5xl--line-height: 52px;
+
+  /* Sistem tipografi brief: Fredoka (display, rounded & ramah) +
+     Nunito (body, sangat terbaca). Baloo/Patrick/Caveat tetap dimuat
+     hanya untuk pilihan gaya nama anak di papan nama. */
+  --font-display: "Fredoka", "Nunito", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, sans-serif;
+
+  /* Token merek resmi: krem ivory hangat #F8F4EC sebagai basis,
+     olive, biru langit, oranye, cokelat hangat untuk teks. */
+  --color-paper: #f8f4ec;
+  --color-paper-deep: #f1ebdd;
+  --color-ink: #3b2a22;
+  --color-ink-soft: #716257;
+  --color-sky: #77bceb;
+  --color-sky-deep: #2f7fb8;
+  --color-sky-band: #0f4c75;
+  --color-sky-soft: #e7f3fb;
+  --color-butter: #ffc93c;
+  --color-butter-soft: #ffedb0;
+  --color-tang: #f68b3c;
+  --color-tang-deep: #d97e14;
+  --color-sage: #8fce62;
+  --color-sage-soft: #edf2e6;
+  --color-olive: #667c3e;
+  --color-olive-deep: #4e612e;
+  --color-berry: #c23b22;
+}
+
+:root {
+  /* SATU-SATUNYA tema: terang. color-scheme dikunci ke light dan tidak
+     ada override mode gelap di mana pun — pilihan sistem pengguna tidak
+     boleh mengubah situs kembali menjadi cokelat gelap. */
+  color-scheme: light;
+
+  --background: #f8f4ec;
+  --foreground: #3b2a22;
+  --card: #ffffff;
+  --card-foreground: #3b2a22;
+  --popover: #ffffff;
+  --popover-foreground: #3b2a22;
+  --primary: #667c3e;
+  --primary-foreground: #ffffff;
+  --secondary: #e7f3fb;
+  --secondary-foreground: #3b2a22;
+  --accent: #f68b3c;
+  --accent-foreground: #3b2a22;
+  --muted: #f1ebdd;
+  --muted-foreground: #716257;
+  --input: #ffffff;
+  --ring: #667c3e;
+
+  --bg: #f8f4ec;
+  --surface: #ffffff;
+  --surface-alt: #f1ebdd;
+  --text: #3b2a22;
+  --dim: #716257;
+  --border: #e5dccd;
+  --radius: 20px;
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface-alt);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--primary);
+}
+
+/* Phone tap targets: at least 32px tall. */
+@layer base {
+  html,
+  body {
+    min-height: 100%;
+    background-color: #f8f4ec;
+    color: #3b2a22;
+  }
+  body {
+    margin: 0;
+  }
+  button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) {
+    min-height: 2rem;
+  }
+  body {
+    font-family: var(--font-body);
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
+  }
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.anim-pop-in { animation: pop-in 0.35s ease-out both; }
+.anim-floaty { animation: floaty 4.5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-pop-in, .anim-floaty { animation: none; }
+}
+
+/* Aksen kata berwarna logo untuk judul seksi — dipakai hemat, satu kata
+   per judul. */
+.hero-word-olive { color: #667c3e; }
+.hero-word-tang { color: #d97e14; }
+.hero-word-sky { color: #2f7fb8; }
+.hero-word-butter { color: #b97e06; }
+
+/* Panel seksi mengikuti tabel warna brief secara persis: basis krem
+   #F8F4EC, putih #FFFFFF, krem pekat #F1EBDD, sage pucat #EDF2E6, biru
+   pucat #E7F3FB. Satu-satunya panel warna pekat adalah CTA penutup
+   olive (.band-olive). Cokelat #3B2A22 hanya untuk teks, tidak pernah
+   menjadi latar. --band-dim / --band-accent memberi warna sekunder dan
+   aksen yang tetap kontras di tiap panel. */
+.band-olive { background: #667c3e; color: #ffffff; --band-dim: #e6efdb; --band-accent: #ffc93c; }
+.band-sage { background: #edf2e6; color: #3b2a22; --band-dim: #5f6b52; --band-accent: #4e612e; }
+.band-sky { background: #e7f3fb; color: #3b2a22; --band-dim: #33566b; --band-accent: #0f4c75; }
+.band-butter { background: #fdf3d7; color: #3b2a22; --band-dim: #66520f; --band-accent: #4e612e; }
+.band-tang { background: #fdebdc; color: #3b2a22; --band-dim: #7a4a21; --band-accent: #b45a12; }
+.band-dim { color: var(--band-dim, #716257); }
+.band-accent { color: var(--band-accent, #667c3e); }
