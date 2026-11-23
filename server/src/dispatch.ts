@@ -97,12 +97,15 @@ export async function dispatchAction(action: string, args: unknown, visitorId = 
   if (!def) {
     return { status: 404, body: { error: `Unknown action: ${action}` } };
   }
-  await ensureMigrations();
+  // Validate input before touching the database, so invalid form data
+  // receives an actionable 400 even during a database outage.
   const parsed = def.request.safeParse(args ?? {});
   if (!parsed.success) {
-    return { status: 400, body: { error: parsed.error.message } };
+    const issue = parsed.error.issues[0];
+    return { status: 400, body: { error: issue?.message ?? "Data formulir tidak valid." } };
   }
   try {
+    await ensureMigrations();
     const result = await def.handler({ ...ctx, visitorId, isAdmin }, parsed.data);
     // Lenient response validation: a mismatch is a server bug worth
     // logging, but the client is better served by the raw value than by
@@ -113,6 +116,18 @@ export async function dispatchAction(action: string, args: unknown, visitorId = 
     }
     return { status: 200, body: result };
   } catch (err) {
+    // Do not leak database connection details or raw Postgres errors to browsers.
+    // Keep application validation errors as 400; database outages are 503.
+    const code = err !== null && typeof err === "object" && "code" in err
+      ? String(err.code) : "";
+    if (code === "28P01" || (err instanceof Error && /password authentication failed/i.test(err.message))) {
+      console.error("[actions] Postgres authentication rejected (28P01).");
+      return { status: 503, body: { error: "Database belum terhubung. Periksa DATABASE_URL di Vercel dan deploy ulang." } };
+    }
+    if (err instanceof Error && /DATABASE_URL is not set|database connection|Failed to apply migration/i.test(err.message)) {
+      console.error("[actions] Database configuration or migration unavailable:", err.message);
+      return { status: 503, body: { error: "Layanan database sedang bermasalah. Periksa konfigurasi server." } };
+    }
     return { status: 400, body: { error: err instanceof Error ? err.message : String(err) } };
   }
 }

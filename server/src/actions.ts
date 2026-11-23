@@ -1179,7 +1179,11 @@ export const Actions = {
     request: z.object({
       fullName: z.string().trim().min(2, "Nama afiliasi wajib diisi.").max(80),
       email: z.string().trim().email("Format email belum benar.").max(120),
-      whatsapp: z.string().trim().max(20).default(""),
+      whatsapp: z.string().trim().max(24).refine(
+        (value) => /^[+0-9() .-]+$/.test(value) && /\d/g.test(value) &&
+          value.replace(/\D/g, "").length >= 9 && value.replace(/\D/g, "").length <= 15,
+        "Nomor WhatsApp harus berupa 9–15 digit angka (contoh: 081234567890).",
+      ),
       instagram: z.string().trim().max(40).default(""),
       tiktok: z.string().trim().max(40).default(""),
       couponCode: z

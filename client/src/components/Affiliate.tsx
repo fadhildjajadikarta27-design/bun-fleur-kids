@@ -1065,6 +1065,10 @@ export function AffiliateAdmin() {
           setError("");
           if (form.name.trim().length < 2) return setError("Isi nama lengkap afiliasinya dulu.");
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return setError("Format email belum benar.");
+          const whatsapp = form.whatsapp.trim();
+          if (!/^[+0-9() .-]+$/.test(whatsapp) || whatsapp.replace(/\D/g, "").length < 9 || whatsapp.replace(/\D/g, "").length > 15) {
+            return setError("Nomor WhatsApp harus 9–15 digit angka, misalnya 081234567890.");
+          }
           if (form.couponCode.trim().length < 3) return setError("Kode kupon minimal 3 karakter.");
           create.mutate();
         }}
