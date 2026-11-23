@@ -1,0 +1,22 @@
+# Bun & Fleur Kids — Netlify build and API routing.
+# Repo remains usable on Vercel; Netlify serves the same Vite frontend.
+[build]
+  command = "bun run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Only the API endpoint is routed to the Node.js serverless function.
+# This rule must appear before the catch-all SPA fallback.
+[[redirects]]
+  from = "/api/actions"
+  to = "/.netlify/functions/actions"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
