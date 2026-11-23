@@ -72,34 +72,43 @@ export function ensureMigrations(): Promise<void> {
 async function applyMigrations(): Promise<void> {
   getDb();
   if (!client) throw new Error("postgres client not initialized");
-  const sql = client;
-  // applied_at is bigint: Date.now() epoch milliseconds exceed int4.
-  await sql.unsafe(
-    "CREATE TABLE IF NOT EXISTS __port_migrations (name text PRIMARY KEY, applied_at bigint NOT NULL)",
-  );
-  const appliedRows = await sql<{ name: string }[]>`SELECT name FROM __port_migrations`;
-  const applied = new Set(appliedRows.map((r) => r.name));
 
   const dir = migrationsDir();
   const files = readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .sort();
-  for (const file of files) {
-    if (applied.has(file)) continue;
-    const text = readFileSync(join(dir, file), "utf8");
-    const statements = text
-      .split("--> statement-breakpoint")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    try {
-      for (const statement of statements) {
-        await sql.unsafe(statement);
+
+  // Each Vercel function instance has its own in-memory migration promise.
+  // Multiple cold starts can otherwise read the same old migration ledger
+  // and try to create/drop the same tables simultaneously. A transaction-level
+  // advisory lock serializes all instances, including those on different servers.
+  // Keeping each batch atomic also prevents a failed migration from leaving
+  // half-created tables without a corresponding ledger record.
+  await client.begin(async (tx) => {
+    await tx.unsafe("SELECT pg_advisory_xact_lock(726528302401)");
+    await tx.unsafe(
+      "CREATE TABLE IF NOT EXISTS __port_migrations (name text PRIMARY KEY, applied_at bigint NOT NULL)",
+    );
+    const appliedRows = await tx.unsafe("SELECT name FROM __port_migrations");
+    const applied = new Set(appliedRows.map((r) => String(r.name)));
+
+    for (const file of files) {
+      if (applied.has(file)) continue;
+      const text = readFileSync(join(dir, file), "utf8");
+      const statements = text
+        .split("--> statement-breakpoint")
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+      try {
+        for (const statement of statements) {
+          await tx.unsafe(statement);
+        }
+        await tx`INSERT INTO __port_migrations (name, applied_at) VALUES (${file}, ${Date.now()})`;
+      } catch (err) {
+        throw new Error(
+          `Failed to apply migration ${file}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
-      await sql`INSERT INTO __port_migrations (name, applied_at) VALUES (${file}, ${Date.now()})`;
-    } catch (err) {
-      throw new Error(
-        `Failed to apply migration ${file}: ${err instanceof Error ? err.message : String(err)}`,
-      );
     }
-  }
+  });
 }
