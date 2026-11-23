@@ -27,11 +27,22 @@ export type ApiResponse<TClient, K extends keyof TClient> =
   TClient[K] extends (args: never) => Promise<infer R> ? R : never;
 
 async function callAction(action: string, args: unknown): Promise<unknown> {
-  const res = await fetch("/api/actions", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action, args: args ?? {} }),
-  });
+  // Prevent the affiliate form from remaining in "Membuat..." indefinitely
+  // if a serverless instance or its database becomes unresponsive.
+  let res: Response;
+  try {
+    res = await fetch("/api/actions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action, args: args ?? {} }),
+      signal: action === "adminCreateAffiliate" ? AbortSignal.timeout(30_000) : undefined,
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error("Pembuatan afiliasi terlalu lama. Periksa daftar afiliasi sebelum mencoba lagi, agar tidak membuat duplikat.");
+    }
+    throw err;
+  }
   const data: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const message =
