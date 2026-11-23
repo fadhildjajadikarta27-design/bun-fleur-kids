@@ -2169,11 +2169,11 @@ function AffiliateAdminPage() {
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Program afiliasi">
         <h2 className="font-display text-lg font-extrabold">Program Afiliasi (Admin)</h2>
         <p className="text-sm font-semibold text-[var(--dim)]">
-          Undang mitra afiliasi, atur kupon &amp; komisinya (bawaan 30% dari subtotal produk bersih setelah
-          diskon pelanggan — ongkir dan kode unik QRIS tidak pernah dihitung), pantau penjualannya, dan
-          proses permintaan penarikan komisi. Afiliasi mengaktifkan akunnya sendiri lewat tautan undangan
-          sekali pakai (berlaku terbatas) dan membuat PIN 4 digit yang tersimpan terenkripsi — PIN tidak
-          pernah bisa dilihat admin. Komisi tercatat otomatis: menunggu saat pesanan belum lunas,
+          Bagikan satu link pendaftaran umum ke semua KOL. Pendaftar masuk sebagai calon mitra,
+          lalu konfirmasi identitasnya melalui WhatsApp sebelum menyetujui dan mengirimkan
+          tautan aktivasi pribadi (72 jam, sekali pakai). Mitra membuat PIN 4 digit sendiri.
+          Komisi bawaan 30% dihitung dari subtotal bersih setelah diskon; ongkir dan
+          kode unik QRIS tidak masuk perhitungan. Komisi tercatat otomatis: menunggu saat pesanan belum lunas,
           terkonfirmasi saat pembayaran QRIS terverifikasi, siap dicairkan saat pesanan selesai, dan
           dibalikkan bila pesanan direfund.
         </p>
