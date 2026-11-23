@@ -5,9 +5,9 @@
 // completion status, and timestamps. The same row drives the editor, the
 // 3D preview, and the PDF export on the client.
 
-import { defineAction, z, type ActionsModule, type Ctx } from "./sdk";
+import { defineAction, z, type ActionsModule, type Ctx } from "./sdk.js";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
-import * as schema from "./schema";
+import * as schema from "./schema.js";
 
 const strokeSchema = z.object({
   color: z.string().min(1).max(32),
