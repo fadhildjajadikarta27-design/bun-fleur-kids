@@ -5,7 +5,7 @@
 // completion status, and timestamps. The same row drives the editor, the
 // 3D preview, and the PDF export on the client.
 
-import { defineAction, z, type ActionsModule, type Ctx } from "@hatch/space-sdk";
+import { defineAction, z, type ActionsModule, type Ctx } from "./sdk";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import * as schema from "./schema";
 

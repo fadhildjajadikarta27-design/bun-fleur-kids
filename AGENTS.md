@@ -1,23 +1,12 @@
-# Building this web artifact
+# Bun & Fleur Kids — standalone port
 
-This directory is a web artifact — a TypeScript space: a React client in
-`client/`, server actions in `server/src/actions.ts`, the schema in
-`server/src/schema.ts`, and Drizzle SQL migrations in `drizzle/` (see
-`space.json` for its runtime and slug).
+This directory is the standalone (Vercel-ready) port of the Bun & Fleur
+Kids web app, extracted from its original Muse Space runtime. It is NOT
+the live artifact — do not treat it as one.
 
-Build, audit, and ship it only through the web-artifact tools your builder
-instructions describe. Do not hand-edit the built bundle under
-`~/workspace/ts-spaces/<slug>/.space-build/`, and do not `bun run build`:
-neither publishes the artifact.
+- `client/` — Vite + React SPA (root: client/, build output: dist/)
+- `server/src/` — action handlers (actions.ts), drizzle schema, dispatch
+- `api/actions.ts` — the single Vercel Function endpoint (POST /api/actions)
+- `drizzle/` — SQLite/libSQL migrations, applied lazily by server/src/db.ts
 
-If you are not the builder subagent (for example, the main assistant landed
-here), do not build from this directory. List the existing artifacts and
-request a change by describing the edit — that spawns a builder to do the
-work.
-
-## This artifact's data
-
-This artifact's data lives in `~/workspace/ts-spaces/<slug>/app.db`, managed by
-the app. If you are the main agent, follow your own Artifacts instructions for
-reading and changing a web artifact's records. Do not run sqlite or scripts
-against `~/workspace/ts-spaces/<slug>/app.db`.
+See PORTING-NOTES.md for architecture, environment variables, and limits.

@@ -13,9 +13,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { actionFields } from "@hatch/space-sdk/fields" with { type: "macro" };
 import { api, type ApiResponse } from "../api";
-import type { Actions } from "../../../server/src/actions";
+import { FIELDS } from "../fields";
 import { NAME_FONTS, type TemplateDef } from "../lib/model";
 import { getTemplate } from "../lib/registry";
 import { buildCustomTemplate, parseCustomDef } from "../lib/custom";
@@ -23,9 +22,7 @@ import { downloadBlob } from "../lib/pdf";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
-import qrisUrl from "../assets/qris.png";
-
-const FIELDS = actionFields<typeof Actions>();
+import { qrisUrl } from "../assets-inline";
 
 export type ProductId = "poster" | "figurine" | "tshirt";
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];

@@ -1,0 +1,1 @@
+{"buildCommand":"bun run build","framework":"vite","functions":{"api/actions.ts":{"includeFiles":"drizzle/**"}},"outputDirectory":"dist"}

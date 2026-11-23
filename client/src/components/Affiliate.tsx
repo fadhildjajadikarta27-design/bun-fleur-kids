@@ -14,13 +14,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { actionFields } from "@hatch/space-sdk/fields" with { type: "macro" };
 import { api, type ApiResponse } from "../api";
-import type { Actions } from "../../../server/src/actions";
+import { FIELDS } from "../fields";
 import { formatIDR } from "./Shop";
-import logoUrl from "../assets/logo.png";
-
-const FIELDS = actionFields<typeof Actions>();
+import { logoUrl } from "../assets-inline";
 const SESSION_KEY = "bfk-aff-session";
 
 export function loadAffiliateSession(): string {

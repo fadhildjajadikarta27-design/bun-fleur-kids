@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { SafeAreaTopScrim } from "@hatch/space-sdk/client";
-import { actionFields } from "@hatch/space-sdk/fields" with { type: "macro" };
+import { SafeAreaTopScrim } from "./components/SafeAreaTopScrim";
 import { api, type ApiResponse } from "./api";
-import type { Actions } from "../../server/src/actions";
+import { FIELDS } from "./fields";
 import { NAME_COLORS, NAME_FONTS } from "./lib/model";
 import { buildPillowNet } from "./lib/pillow";
 import { AGE_BANDS, COLLECTIONS, DEMO_COLORS, DIFFICULTY_TIERS, EASY_MERGES, TEMPLATES, ageBandOf, collectionOf, difficultyTierOf, getTemplate, simplifyTemplate } from "./lib/registry";
@@ -47,9 +46,7 @@ import {
   AffiliateResetPage,
 } from "./components/Affiliate";
 import { buildPillowPdf, buildStandeePdf, buildToyPdf, downloadBlob } from "./lib/pdf";
-import logoUrl from "./assets/logo.png";
-
-const FIELDS = actionFields<typeof Actions>();
+import { logoUrl } from "./assets-inline";
 
 type ServerProject = ApiResponse<typeof api, "listProjects">["projects"][number];
 
