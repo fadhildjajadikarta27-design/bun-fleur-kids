@@ -1103,8 +1103,12 @@ export function AffiliateAdmin() {
           Pendaftar baru menunggu konfirmasi WhatsApp: {affiliates.data?.affiliates.filter((a) => a.status === "pending" && a.inviteState === "none").length ?? "…"}
         </p>
       </div>
+      <details className="rounded-3xl bg-[var(--surface)] px-4 py-3 ring-1 ring-[var(--border)]">
+        <summary className="cursor-pointer font-display text-sm font-bold text-[var(--dim)]">
+          Pendaftaran manual (opsional — untuk admin)
+        </summary>
       <form
-        className="rounded-3xl bg-[var(--bg)] p-4 ring-1 ring-[var(--border)]"
+        className="mt-3 rounded-3xl bg-[var(--bg)] p-4 ring-1 ring-[var(--border)]"
         aria-label="Undang afiliasi baru"
         onSubmit={(e) => {
           e.preventDefault();
@@ -1170,6 +1174,7 @@ export function AffiliateAdmin() {
           </div>
         )}
       </form>
+      </details>
 
       <div className="flex flex-wrap items-end gap-2 rounded-3xl bg-[var(--bg)] p-4 ring-1 ring-[var(--border)]">
         <div>
