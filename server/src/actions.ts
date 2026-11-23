@@ -84,6 +84,7 @@ function toOut(row: ProjectRow): z.infer<typeof projectOut> {
 // the server. Orders always recompute from these constants — a price
 // sent by the client is never trusted.
 const POSTER_BASE_PRICE = 49000;
+const PAPERCRAFT_BASE_PRICE = 49000;
 const FIGURINE_BASE_PRICE = 120000;
 const TSHIRT_BASE_PRICE = 79000;
 // Fabric colors fixed by the brand (brief §2C) and the configured kids
@@ -105,7 +106,7 @@ const orderOut = z.object({
   nameAlign: z.enum(["left", "center", "right"]),
   colors: z.record(z.string(), z.string()),
   strokes: z.array(strokeSchema),
-  productType: z.enum(["poster", "figurine", "tshirt"]),
+  productType: z.enum(["poster", "papercraft", "figurine", "tshirt"]),
   variant: z.string(),
   productPrice: z.number(),
   couponCode: z.string(),
@@ -703,12 +704,12 @@ export const Actions = {
 
   getShopConfig: defineAction({
     description:
-      "Returns the centralized shop configuration: the three physical products with their base prices in IDR, the t-shirt fabric colors and sizes, and whether an online payment gateway is connected.",
+      "Returns the centralized shop configuration: the four physical products with their base prices in IDR, the t-shirt fabric colors and sizes, and whether an online payment gateway is connected.",
     request: z.object({}),
     response: z.object({
       products: z.array(
         z.object({
-          id: z.enum(["poster", "figurine", "tshirt"]),
+          id: z.enum(["poster", "papercraft", "figurine", "tshirt"]),
           basePrice: z.number(),
           priceLabel: z.enum(["fixed", "from"]),
         }),
@@ -718,7 +719,7 @@ export const Actions = {
       paymentGatewayConnected: z.boolean(),
     }),
     async handler(): Promise<{
-      products: { id: "poster" | "figurine" | "tshirt"; basePrice: number; priceLabel: "fixed" | "from" }[];
+      products: { id: "poster" | "papercraft" | "figurine" | "tshirt"; basePrice: number; priceLabel: "fixed" | "from" }[];
       tshirtColors: string[];
       tshirtSizes: string[];
       paymentGatewayConnected: boolean;
@@ -726,6 +727,7 @@ export const Actions = {
       return {
         products: [
           { id: "poster", basePrice: POSTER_BASE_PRICE, priceLabel: "fixed" },
+          { id: "papercraft", basePrice: PAPERCRAFT_BASE_PRICE, priceLabel: "fixed" },
           { id: "figurine", basePrice: FIGURINE_BASE_PRICE, priceLabel: "from" },
           { id: "tshirt", basePrice: TSHIRT_BASE_PRICE, priceLabel: "from" },
         ],
@@ -744,7 +746,7 @@ export const Actions = {
       "Creates a physical-product order from a saved coloring project. The price is computed on the server from the centralized product configuration (client-sent prices are never trusted), the artwork is snapshotted from the project row, and the order starts as Pending Payment.",
     request: z.object({
       projectId: z.number().int().positive(),
-      productType: z.enum(["poster", "figurine", "tshirt"]),
+      productType: z.enum(["poster", "papercraft", "figurine", "tshirt"]),
       tshirtColor: z.string().max(40).default(""),
       tshirtSize: z.string().max(40).default(""),
       childName: z.string().trim().max(24).default(""),
@@ -789,6 +791,9 @@ export const Actions = {
       if (args.productType === "poster") {
         price = POSTER_BASE_PRICE;
         variant = "Poster berbingkai";
+      } else if (args.productType === "papercraft") {
+        price = PAPERCRAFT_BASE_PRICE;
+        variant = "Kit Papercraft 3D custom — pola gunting, lipat & lem dari karya anak";
       } else if (args.productType === "figurine") {
         price = FIGURINE_BASE_PRICE;
         variant = "Figurine custom — melewati Design Review";
@@ -2081,7 +2086,7 @@ export const Actions = {
         if (series.length > 366) break;
       }
       const productLabel = (t: string) =>
-        t === "poster" ? "Printed Poster" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
+        t === "poster" ? "Printed Poster" : t === "papercraft" ? "3D Papercraft Kit" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
       const orders = comms.slice(0, 50).map((c) => {
         const o = orderById.get(c.orderId);
         return {

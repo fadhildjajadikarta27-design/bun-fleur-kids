@@ -32,6 +32,7 @@ import {
   OrderConfirmation,
   OrderTracking,
   PosterPreview,
+  PapercraftPreview,
   PRODUCT_META,
   TshirtPreview,
   formatIDR,
@@ -458,7 +459,7 @@ function Home({
           </h1>
           <p className="mt-4 max-w-md text-lg leading-relaxed text-[var(--dim)]">
             Si kecil bebas memilih karakter, mewarnai, dan menambahkan namanya — selalu
-            gratis. Setelah selesai, wujudkan kreasinya menjadi poster, figurine 3D, atau
+            gratis. Setelah selesai, wujudkan kreasinya menjadi papercraft 3D, poster, figurine 3D, atau
             kaos custom yang dikirim langsung ke rumah.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -530,7 +531,7 @@ function Home({
           {[
             { n: "01", title: "Pilih Karakter", body: "200 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun." },
             { n: "02", title: "Warnai & Custom Nama", body: "Ketuk untuk mengisi warna, gambar bebas dengan kuas, lalu tulis nama dan pesan si kecil dengan gaya huruf favoritnya." },
-            { n: "03", title: "Pilih Bentuk Kreasi", body: "Poster berbingkai, Figurine 3D premium, atau Kaos custom — semuanya memakai warna dan nama yang sama persis dari karya anakmu." },
+            { n: "03", title: "Pilih Bentuk Kreasi", body: "Papercraft 3D Rp49.000, poster berbingkai, figurine 3D premium, atau kaos custom — semuanya mengikuti warna karya anakmu." },
             { n: "04", title: "Kami Cetak & Kirim", body: "Pesan dari halaman karya, selesaikan pembayaran lewat konfirmasi tim kami, dan kami produksi lalu kirim langsung ke rumah." },
           ].map((s) => (
             <article key={s.n} className="relative">
@@ -544,16 +545,16 @@ function Home({
         </div>
       </section>
 
-      {/* TIGA CARA MEWUJUDKAN KARYA — produk fisik yang bisa dipesan */}
-      <section className="mt-20" aria-label="Tiga bentuk kreasi fisik">
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Tiga Cara Mewujudkan Karya</p>
+      {/* EMPAT CARA MEWUJUDKAN KARYA — produk fisik yang bisa dipesan */}
+      <section className="mt-20" aria-label="Empat bentuk kreasi fisik">
+        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Empat Cara Mewujudkan Karya</p>
         <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Satu Karya, Banyak Cara <span className="hero-word-sky">untuk Jadi Nyata.</span></h2>
         <p className="mt-3 max-w-2xl leading-relaxed text-[var(--dim)]">
-          Mewarnai selalu gratis. Bila ingin wujud fisiknya, pesan salah satu dari tiga produk ini
+          Mewarnai selalu gratis. Bila ingin wujud fisiknya, pesan salah satu dari empat produk ini
           dari halaman karya setelah si kecil selesai mewarnai — harga produk dan ongkir selalu
           ditampilkan terpisah sebelum kamu membayar.
         </p>
-        <div className="mt-8 grid gap-5 md:grid-cols-3">
+        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <article className="overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">
             <div className="bg-sky-soft p-5">
               <PosterPreview project={demoProject} name="Adam" />
@@ -573,6 +574,31 @@ function Home({
                 className="mt-5 rounded-full bg-olive px-6 py-2.5 font-display text-base font-semibold text-white transition hover:bg-olive-deep"
               >
                 Mulai Mewarnai untuk Poster
+              </button>
+            </div>
+          </article>
+          <article className="relative overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-2 ring-olive">
+            <span className="absolute right-4 top-4 z-10 rounded-full bg-tang px-3 py-1 font-display text-xs font-extrabold text-white">Baru · Rp49.000</span>
+            <div className="bg-[#EEF4E4] p-4">
+              <PapercraftPreview project={demoProject} name="Adam" />
+            </div>
+            <div className="p-6">
+              <h3 className="font-display text-2xl font-extrabold">{PRODUCT_META.papercraft.title}</h3>
+              <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META.papercraft.description}</p>
+              <p className="mt-3 font-display text-xl font-extrabold text-olive-deep">{formatIDR(49000)}</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Belum termasuk ongkos kirim</p>
+              <ul className="mt-3 space-y-1.5 text-sm font-semibold text-[var(--dim)]">
+                <li>· Warna dan nama sesuai karya anak</li>
+                <li>· Lembar depan-belakang, strip sambungan &amp; penyangga</li>
+                <li>· Dikirim sebagai kit siap gunting dan lem</li>
+                <li>· Gunting dan lem tidak disertakan</li>
+              </ul>
+              <button
+                type="button"
+                onClick={() => startTemplate("pb-dino")}
+                className="mt-5 w-full rounded-full bg-tang px-5 py-2.5 font-display text-base font-bold text-white transition hover:brightness-95"
+              >
+                Mulai Mewarnai untuk Papercraft
               </button>
             </div>
           </article>
@@ -636,8 +662,7 @@ function Home({
           </article>
         </div>
         <p className="mt-4 text-sm font-semibold text-[var(--dim)]">
-          Papercraft Bantal Kertas tetap ada sebagai aktivitas keluarga: pola rakitannya bisa
-          dipratinjau dan diunduh dari Studio Cetak setelah mewarnai.
+          Pola DIY gratis tetap tersedia di Studio Cetak. Harga Rp49.000 khusus kit papercraft fisik yang dicetak sesuai karya anak dan dikirim oleh tim kami.
         </p>
       </section>
 
@@ -2590,7 +2615,7 @@ export function App() {
 
   // "Jadikan Nyata" / Finish Coloring: tandai karya selesai, pastikan
   // tersimpan (pesanan membaca snapshot dari baris proyek di server),
-  // lalu buka halaman masterpiece dengan tiga pilihan produk.
+  // lalu buka halaman masterpiece dengan empat pilihan produk.
   const handleFinish = async () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const p = { ...projectRef.current, status: "done" as const };
