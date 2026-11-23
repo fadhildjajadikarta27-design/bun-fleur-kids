@@ -86,6 +86,7 @@ function toOut(row: ProjectRow): z.infer<typeof projectOut> {
 const POSTER_BASE_PRICE = 49000;
 const PAPERCRAFT_BASE_PRICE = 49000;
 const CELENGAN_BASE_PRICE = 29000;
+const ACCESSORY_59_BASE_PRICE = 59000;
 const FIGURINE_BASE_PRICE = 120000;
 const TSHIRT_BASE_PRICE = 79000;
 // Fabric colors fixed by the brand (brief §2C) and the configured kids
@@ -107,7 +108,7 @@ const orderOut = z.object({
   nameAlign: z.enum(["left", "center", "right"]),
   colors: z.record(z.string(), z.string()),
   strokes: z.array(strokeSchema),
-  productType: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan"]),
+  productType: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59"]),
   variant: z.string(),
   productPrice: z.number(),
   couponCode: z.string(),
@@ -705,12 +706,12 @@ export const Actions = {
 
   getShopConfig: defineAction({
     description:
-      "Returns the centralized shop configuration: the five physical products with their base prices in IDR, the t-shirt fabric colors and sizes, and whether an online payment gateway is connected.",
+      "Returns the centralized shop configuration: the six physical products with their base prices in IDR, the t-shirt fabric colors and sizes, and whether an online payment gateway is connected.",
     request: z.object({}),
     response: z.object({
       products: z.array(
         z.object({
-          id: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan"]),
+          id: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59"]),
           basePrice: z.number(),
           priceLabel: z.enum(["fixed", "from"]),
         }),
@@ -720,7 +721,7 @@ export const Actions = {
       paymentGatewayConnected: z.boolean(),
     }),
     async handler(): Promise<{
-      products: { id: "poster" | "papercraft" | "figurine" | "tshirt" | "celengan"; basePrice: number; priceLabel: "fixed" | "from" }[];
+      products: { id: "poster" | "papercraft" | "figurine" | "tshirt" | "celengan" | "accessory59"; basePrice: number; priceLabel: "fixed" | "from" }[];
       tshirtColors: string[];
       tshirtSizes: string[];
       paymentGatewayConnected: boolean;
@@ -730,6 +731,7 @@ export const Actions = {
           { id: "poster", basePrice: POSTER_BASE_PRICE, priceLabel: "fixed" },
           { id: "papercraft", basePrice: PAPERCRAFT_BASE_PRICE, priceLabel: "fixed" },
           { id: "celengan", basePrice: CELENGAN_BASE_PRICE, priceLabel: "fixed" },
+          { id: "accessory59", basePrice: ACCESSORY_59_BASE_PRICE, priceLabel: "fixed" },
           { id: "figurine", basePrice: FIGURINE_BASE_PRICE, priceLabel: "from" },
           { id: "tshirt", basePrice: TSHIRT_BASE_PRICE, priceLabel: "from" },
         ],
@@ -748,7 +750,7 @@ export const Actions = {
       "Creates a physical-product order from a saved coloring project. The price is computed on the server from the centralized product configuration (client-sent prices are never trusted), the artwork is snapshotted from the project row, and the order starts as Pending Payment.",
     request: z.object({
       projectId: z.number().int().positive(),
-      productType: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan"]),
+      productType: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59"]),
       tshirtColor: z.string().max(40).default(""),
       tshirtSize: z.string().max(40).default(""),
       childName: z.string().trim().max(24).default(""),
@@ -799,6 +801,9 @@ export const Actions = {
       } else if (args.productType === "celengan") {
         price = CELENGAN_BASE_PRICE;
         variant = "Aksesori celengan tabung custom — gambar, warna dan nama dari karya anak";
+      } else if (args.productType === "accessory59") {
+        price = ACCESSORY_59_BASE_PRICE;
+        variant = "Aksesori custom kedua — gambar, warna, dan nama dari karya anak";
       } else if (args.productType === "figurine") {
         price = FIGURINE_BASE_PRICE;
         variant = "Figurine custom — melewati Design Review";
@@ -2091,7 +2096,7 @@ export const Actions = {
         if (series.length > 366) break;
       }
       const productLabel = (t: string) =>
-        t === "poster" ? "Printed Poster" : t === "papercraft" ? "3D Papercraft Kit" : t === "celengan" ? "Celengan Custom" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
+        t === "poster" ? "Printed Poster" : t === "papercraft" ? "3D Papercraft Kit" : t === "celengan" ? "Celengan Custom" : t === "accessory59" ? "Aksesori Custom 59K" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
       const orders = comms.slice(0, 50).map((c) => {
         const o = orderById.get(c.orderId);
         return {
