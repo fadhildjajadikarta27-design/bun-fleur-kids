@@ -12,17 +12,20 @@ describe("3D Papercraft product pricing", () => {
       id: "papercraft", basePrice: 49000, priceLabel: "fixed",
     });
     expect(products.filter((p) => p.id === "papercraft")).toHaveLength(1);
-    expect(products).toHaveLength(6);
+    expect(products).toHaveLength(7);
     expect(products.find((p) => p.id === "celengan")).toEqual({
       id: "celengan", basePrice: 29000, priceLabel: "fixed",
     });
     expect(products.find((p) => p.id === "accessory59")).toEqual({
       id: "accessory59", basePrice: 59000, priceLabel: "fixed",
     });
+    expect(products.find((p) => p.id === "placemat")).toEqual({
+      id: "placemat", basePrice: 69000, priceLabel: "fixed",
+    });
   });
 
   test("rejects attempts to fake accessories prices using client-provided values", async () => {
-    for (const type of ["celengan", "accessory59"]) {
+    for (const type of ["celengan", "accessory59", "placemat"]) {
       const result = await dispatchAction("createOrder", {
         productType: type, productPrice: 1, customerName: "",
       });
