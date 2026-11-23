@@ -15,7 +15,7 @@ const weakPin = (pin: string) =>
   ["0123", "1234", "2345", "3456", "4567", "5678", "6789", "9876", "8765", "7654", "6543", "5432", "4321", "3210"].includes(pin);
 
 export function AffiliateRegistrationPage() {
-  const [form, setForm] = useState({ fullName: "", email: "", whatsapp: "", instagram: "", tiktok: "" });
+  const [form, setForm] = useState({ fullName: "", email: "", whatsapp: "", instagram: "", tiktok: "", couponCode: "" });
   const [step, setStep] = useState<"identity" | "pin">("identity");
   const [pin, setPin] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -32,6 +32,7 @@ export function AffiliateRegistrationPage() {
       whatsapp: form.whatsapp.trim(),
       instagram: form.instagram.trim(),
       tiktok: form.tiktok.trim(),
+      couponCode: form.couponCode.trim().toUpperCase(),
       pin,
       consent: true,
       website,
@@ -47,6 +48,9 @@ export function AffiliateRegistrationPage() {
     if (form.fullName.trim().length < 2) return setError("Nama lengkap minimal 2 karakter.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return setError("Format email tidak valid.");
     if (!phoneValid(form.whatsapp)) return setError("Nomor HP harus 9–15 digit angka, misalnya 081234567890.");
+    if (form.couponCode.trim() && !/^[A-Za-z0-9_-]{3,24}$/.test(form.couponCode.trim())) {
+      return setError("Kode kupon pilihan harus 3–24 karakter: huruf, angka, - atau _.");
+    }
     setStep("pin");
   };
   const register = () => {
@@ -110,6 +114,15 @@ export function AffiliateRegistrationPage() {
                 placeholder="@username" className={fieldClass} />
             </div>
           </div>
+          <div>
+            <label htmlFor="aff-reg-coupon" className="font-display text-sm font-bold">Kode kupon pilihan (opsional)</label>
+            <input id="aff-reg-coupon" value={form.couponCode} maxLength={24} autoCapitalize="characters"
+              onChange={update("couponCode")} placeholder="Contoh: BUNFADHIL" className={fieldClass} />
+            <p className="mt-1 text-xs font-semibold text-[var(--dim)]">
+              Boleh pilih kode sendiri (3–24 karakter, huruf/angka/-/_). Harus unik.
+              Jika kosong, kode otomatis dibuatkan.
+            </p>
+          </div>
           {error && <p role="alert" className="text-sm font-bold text-berry">{error}</p>}
           <button type="submit" className="w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-bold text-white">
             Lanjut Buat PIN
@@ -125,6 +138,7 @@ export function AffiliateRegistrationPage() {
           <div className="rounded-2xl bg-[var(--surface-alt)] p-4">
             <p className="font-display font-bold">{form.fullName.trim()}</p>
             <p className="text-sm font-semibold text-[var(--dim)]">Nomor login: {form.whatsapp.trim()}</p>
+            <p className="text-sm font-semibold text-[var(--dim)]">Kode kupon: {form.couponCode.trim().toUpperCase() || "Dibuat otomatis"}</p>
           </div>
           <div>
             <label htmlFor="aff-register-pin" className="font-display text-sm font-bold">PIN 4 digit *</label>
