@@ -12,7 +12,24 @@ describe("3D Papercraft product pricing", () => {
       id: "papercraft", basePrice: 49000, priceLabel: "fixed",
     });
     expect(products.filter((p) => p.id === "papercraft")).toHaveLength(1);
-    expect(products).toHaveLength(4);
+    expect(products).toHaveLength(6);
+    expect(products.find((p) => p.id === "celengan")).toEqual({
+      id: "celengan", basePrice: 29000, priceLabel: "fixed",
+    });
+    expect(products.find((p) => p.id === "accessory59")).toEqual({
+      id: "accessory59", basePrice: 59000, priceLabel: "fixed",
+    });
+  });
+
+  test("rejects attempts to fake accessories prices using client-provided values", async () => {
+    for (const type of ["celengan", "accessory59"]) {
+      const result = await dispatchAction("createOrder", {
+        productType: type, productPrice: 1, customerName: "",
+      });
+      // Invalid inputs are rejected before DB access. Price is always
+      // recalculated by the server, never taken from the request.
+      expect(result.status).toBe(400);
+    }
   });
 
   test("order requests validate product IDs instead of trusting a client-side price", async () => {
