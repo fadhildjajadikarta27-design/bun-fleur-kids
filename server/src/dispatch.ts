@@ -9,9 +9,9 @@
 // local dev server (scripts/dev-server.mjs).
 
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { Actions } from "./actions";
-import { ensureMigrations, getDb } from "./db";
-import { z, type ActionDef, type Ctx } from "./sdk";
+import { Actions } from "./actions.js";
+import { ensureMigrations, getDb } from "./db.js";
+import { z, type ActionDef, type Ctx } from "./sdk.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const actionsMap = Actions as unknown as Record<string, ActionDef<any, any>>;
