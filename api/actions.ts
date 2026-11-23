@@ -9,7 +9,7 @@
 // server (scripts/dev-server.mjs).
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { dispatchAction } from "../server/src/dispatch";
+import { dispatchAction } from "../server/src/dispatch.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
