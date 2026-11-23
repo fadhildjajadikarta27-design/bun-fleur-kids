@@ -25,7 +25,7 @@ import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 
-export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt";
+export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt" | "celengan";
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 
 export interface ShopProject {
@@ -78,6 +78,13 @@ export const PRODUCT_META: Record<
     cta: "Create My Poster",
     see: "See My Poster",
   },
+  celengan: {
+    title: "Celengan Custom",
+    tagline: "Aksesori Celengan",
+    description: "Celengan tabung bergambar karya si kecil, lengkap dengan warna dan namanya. Souvenir personal yang bisa digunakan sehari-hari.",
+    cta: "Buat Celengan-ku",
+    see: "Lihat Celengan-ku",
+  },
   papercraft: {
     title: "3D Papercraft Custom",
     tagline: "Papercraft 3D",
@@ -105,6 +112,7 @@ const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
   products: [
     { id: "poster", basePrice: 49000, priceLabel: "fixed" },
     { id: "papercraft", basePrice: 49000, priceLabel: "fixed" },
+    { id: "celengan", basePrice: 29000, priceLabel: "fixed" },
     { id: "figurine", basePrice: 120000, priceLabel: "from" },
     { id: "tshirt", basePrice: 79000, priceLabel: "from" },
   ],
@@ -313,6 +321,41 @@ export function PapercraftPreview({
   );
 }
 
+/** The owner-provided product image is an example. The mini-artwork
+ * beneath is rendered from the customer's actual saved coloring design. */
+export function CelenganPreview({
+  project, name, large = false,
+}: { project: ShopProject; name: string; large?: boolean }) {
+  const template = templateForSnapshot(project);
+  return (
+    <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
+      <div className="relative overflow-hidden rounded-2xl bg-[#F1F2E7] ring-1 ring-[var(--border)]">
+        <img src="/celengan-custom.webp" loading="lazy" className="aspect-square w-full object-cover"
+          alt="Contoh desain celengan tabung Bun & Fleur Kids: karakter dinosaurus dengan warna personal, nama anak, dan logo di sisi belakang" />
+        <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1.5 font-display text-xs font-bold text-olive-deep shadow-sm">
+          Contoh tampilan aksesori
+        </span>
+      </div>
+      <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white p-2.5 ring-1 ring-[var(--border)]">
+        <div className="w-20 shrink-0 overflow-hidden rounded-xl bg-white">
+          <ArtworkSvg template={template} colors={project.colors} strokes={project.strokes}
+            name={name} message={project.message} nameFont={project.nameFont}
+            nameColor={project.nameColor} nameAlign={project.nameAlign} />
+        </div>
+        <div className="min-w-0">
+          <p className="font-display text-xs font-extrabold text-olive-deep">Desain punyamu</p>
+          <p className="text-xs font-semibold leading-snug text-[var(--dim)]">
+            Gambar, warna, dan nama di celengan akan diambil dari karya yang kamu buat.
+          </p>
+        </div>
+      </div>
+      <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">
+        Foto celengan dinosaurus adalah contoh desain. Hasil pesanan dibuat dengan karya anak sendiri.
+      </p>
+    </div>
+  );
+}
+
 function ProductPreview({
   product,
   project,
@@ -328,6 +371,7 @@ function ProductPreview({
 }) {
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
   if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
+  if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
   if (product === "figurine") return <FigurinePreview project={project} height={large ? 320 : 210} />;
   return <TshirtPreview project={project} name={name} fabric={fabric} large={large} />;
 }
@@ -432,8 +476,8 @@ export function Masterpiece({
         </p>
       </section>
 
-      {/* Empat pilihan produk */}
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Pilih bentuk kreasimu">
+      {/* Lima pilihan produk, termasuk aksesori */}
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Pilih bentuk kreasimu">
         {(Object.keys(PRODUCT_META) as ProductId[]).map((id) => {
           const meta = PRODUCT_META[id];
           return (
@@ -449,6 +493,11 @@ export function Masterpiece({
               <h3 className="mt-3 font-display text-xl font-semibold">{meta.title}</h3>
               <p className="mt-1 font-semibold leading-relaxed text-[var(--dim)]">{meta.description}</p>
               <p className="mt-2 font-display text-lg font-semibold text-olive-deep">{priceLine(cfg, id)}</p>
+              {id === "celengan" && (
+                <p className="mt-1 text-xs font-bold text-olive-deep">
+                  Accessories · Rp29.000 · custom sesuai gambar yang diwarnai · ongkir terpisah.
+                </p>
+              )}
               {id === "papercraft" && (
                 <p className="mt-1 text-xs font-bold text-olive-deep">
                   Harga tetap Rp49.000 · kit lembar cetak untuk dirakit · gunting dan lem tidak termasuk.
@@ -555,6 +604,8 @@ export function Customize({
                   ? "Nama tercetak pada alas figurine, dengan gaya huruf & warna dari Studio Mewarnai."
                   : selection.product === "papercraft"
                     ? "Nama anak tercetak pada penyangga papercraft, sementara karakter dan warnanya mengikuti karya yang sudah diwarnai."
+                    : selection.product === "celengan"
+                      ? "Nama anak dan karakter kreasinya dicetak pada sisi depan celengan. Logo Bun & Fleur Kids pada sisi belakang."
                   : "Bila diisi, nama anak dicetak di bawah desain pada kaos."}
             </p>
           </div>
@@ -624,6 +675,16 @@ export function Customize({
             </div>
           )}
 
+          {selection.product === "celengan" && (
+            <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
+              <p className="font-display font-extrabold">Accessories — Celengan Custom · Rp29.000</p>
+              <p className="mt-1">
+                Celengan tabung dengan lubang uang pada tutupnya. Desain depan berisi gambar, warna
+                dan nama dari hasil mewarnai anak; logo Bun & Fleur Kids di belakang.
+                Foto adalah contoh, pesanan dibuat khusus sesuai desainmu. Ongkir terpisah.
+              </p>
+            </div>
+          )}
           {selection.product === "papercraft" && (
             <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
               <p className="font-display font-extrabold">Kit Papercraft 3D · Rp49.000</p>
@@ -646,7 +707,7 @@ export function Customize({
           <dl className="mt-5 space-y-1.5 border-t-2 border-dashed border-[var(--border)] pt-4 text-sm font-semibold">
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Harga produk</dt>
-              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
+              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft" || selection.product === "celengan") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Ongkos kirim</dt>
