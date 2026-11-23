@@ -1175,7 +1175,7 @@ export const Actions = {
 
   affiliateApply: defineAction({
     description:
-      "Public reusable affiliate registration. Application is pending manual WhatsApp confirmation; never creates an activation invitation or session.",
+      "Self-service affiliate registration: phone number is the future login ID; the user creates a salted 4-digit PIN and gets an active affiliate dashboard immediately. No WhatsApp OTP or manual verification.",
     request: z.object({
       fullName: z.string().trim().min(2, "Nama lengkap minimal 2 karakter.").max(80),
       email: z.string().trim().email("Format email belum benar.").max(120),
@@ -1183,23 +1183,26 @@ export const Actions = {
         (value) => /^[+0-9() .-]+$/.test(value) &&
           value.replace(/\D/g, "").length >= 9 &&
           value.replace(/\D/g, "").length <= 15,
-        "Nomor WhatsApp harus 9–15 digit angka, misalnya 081234567890.",
+        "Nomor HP harus 9–15 digit angka, misalnya 081234567890.",
       ),
       instagram: z.string().trim().max(80).default(""),
       tiktok: z.string().trim().max(80).default(""),
-      consent: z.literal(true, "Setujui untuk dihubungi lewat WhatsApp."),
-      // A blank hidden form field deters basic automated submissions.
+      pin: z.string().regex(/^\d{4}$/, "PIN harus tepat 4 digit angka."),
+      consent: z.literal(true, "Setujui syarat program affiliate untuk melanjutkan."),
+      // Hidden field reduces basic bot signups, but is not equivalent to server-side rate limiting.
       website: z.string().trim().max(120).default(""),
     }),
-    response: z.object({ received: z.literal(true) }),
-    async handler(ctx, args): Promise<{ received: true }> {
-      if (args.website) return { received: true };
+    response: z.object({ sessionToken: z.string(), affiliate: affiliatePublicOut }),
+    async handler(ctx, args) {
+      if (args.website) throw new Error("Pendaftaran tidak dapat diproses.");
+      if (isTrivialPin(args.pin)) {
+        throw new Error("PIN terlalu mudah ditebak. Hindari 0000, 1111, 1234, dan urutan angka.");
+      }
       const db = ctx.db<typeof schema>();
       const email = args.email.trim().toLowerCase();
-      const phoneDigits = args.whatsapp.replace(/\D/g, "");
-      const whatsapp = normalizeWa(phoneDigits);
+      const whatsapp = normalizeWa(args.whatsapp);
       const intlWa = whatsapp.startsWith("0") ? `62${whatsapp.slice(1)}` : whatsapp;
-      // Returning the same response for duplicates prevents public account enumeration.
+
       const known = await db.select({ id: schema.affiliates.id })
         .from(schema.affiliates)
         .where(or(
@@ -1208,28 +1211,38 @@ export const Actions = {
           eq(schema.affiliates.whatsapp, intlWa),
         ))
         .limit(1);
-      if (known.length) return { received: true };
-
-      const coupon = `BFK${randomToken(8).toUpperCase()}`;
+      if (known.length) {
+        throw new Error("Nomor HP atau email sudah terdaftar. Silakan masuk dengan nomor HP dan PIN, atau hubungi admin.");
+      }
+      const pinHash = await hashPin(args.pin);
       const now = new Date();
+      // Database has a unique index for normalized phone numbers to prevent
+      // a concurrent duplicate registration with a different email address.
       const inserted = await db.insert(schema.affiliates).values({
         name: args.fullName.trim(),
         email,
         whatsapp,
         instagram: args.instagram.trim().replace(/^@/, ""),
         tiktok: args.tiktok.trim().replace(/^@/, ""),
-        couponCode: coupon,
+        couponCode: `BFK${randomToken(8).toUpperCase()}`,
         discountPct: 10,
         commissionPct: 30,
-        status: "pending",
+        pinHash,
+        status: "active",
+        failedAttempts: 0,
+        lockedUntil: null,
         createdAt: now,
         updatedAt: now,
-      }).onConflictDoNothing().returning({ id: schema.affiliates.id });
-      if (inserted[0]) {
-        await audit(db, inserted[0].id, "affiliate.application", "Pendaftaran publik diterima. Menunggu konfirmasi WhatsApp oleh admin.");
+      }).onConflictDoNothing().returning();
+      const affiliate = inserted[0];
+      if (!affiliate) {
+        throw new Error("Nomor HP atau email sudah digunakan. Silakan masuk atau hubungi admin.");
       }
-      // Important: no invitation, usable account, or PIN until manual admin approval.
-      return { received: true };
+      await audit(db, affiliate.id, "affiliate.self_registered",
+        "Akun didaftarkan mandiri dengan nomor HP dan PIN; tanpa OTP/konfirmasi WhatsApp.");
+      const sessionToken = await createAffiliateSession(db, affiliate.id);
+      ctx.invalidateQueries();
+      return { sessionToken, affiliate: toAffiliatePublic(affiliate) };
     },
   }),
 
@@ -1314,6 +1327,7 @@ export const Actions = {
           inviteToken: z.string(),
           inviteExpiresAt: z.string().nullable(),
           pinResetRequested: z.boolean(),
+          hasPin: z.boolean(),
           totalOrders: z.number(),
           netSales: z.number(),
           totalCommission: z.number(),
@@ -1325,16 +1339,30 @@ export const Actions = {
     }),
     async handler(ctx) {
       const db = ctx.db<typeof schema>();
-      const rows = await db.select().from(schema.affiliates).orderBy(desc(schema.affiliates.createdAt));
-      const out = [];
-      for (const a of rows) {
-        const invites = await db
-          .select()
-          .from(schema.affiliateInvitations)
-          .where(eq(schema.affiliateInvitations.affiliateId, a.id))
-          .orderBy(desc(schema.affiliateInvitations.createdAt))
-          .limit(1);
-        const invite = invites[0];
+      const [rows, invites, allComms, pendingPayouts] = await Promise.all([
+        db.select().from(schema.affiliates).orderBy(desc(schema.affiliates.createdAt)),
+        db.select().from(schema.affiliateInvitations).orderBy(desc(schema.affiliateInvitations.createdAt)),
+        db.select().from(schema.commissions),
+        db.select().from(schema.payouts).where(inArray(schema.payouts.status, ["requested", "approved"])),
+      ]);
+      // Bulk fetch avoids three additional queries per affiliate when the
+      // program grows to hundreds of members.
+      const latestInvite = new Map<number, typeof schema.affiliateInvitations.$inferSelect>();
+      for (const inv of invites) {
+        if (!latestInvite.has(inv.affiliateId)) latestInvite.set(inv.affiliateId, inv);
+      }
+      const commissionsByAffiliate = new Map<number, typeof allComms>();
+      for (const c of allComms) {
+        const list = commissionsByAffiliate.get(c.affiliateId) ?? [];
+        list.push(c);
+        commissionsByAffiliate.set(c.affiliateId, list);
+      }
+      const payoutByAffiliate = new Map<number, number>();
+      for (const p of pendingPayouts) {
+        payoutByAffiliate.set(p.affiliateId, (payoutByAffiliate.get(p.affiliateId) ?? 0) + p.amount);
+      }
+      const out = rows.map((a) => {
+        const invite = latestInvite.get(a.id);
         let inviteState: "none" | "pending" | "used" | "expired" | "revoked" = "none";
         if (invite) {
           if (invite.usedAt) inviteState = "used";
@@ -1342,13 +1370,9 @@ export const Actions = {
           else if (invite.expiresAt.getTime() < Date.now()) inviteState = "expired";
           else inviteState = "pending";
         }
-        const comms = await db.select().from(schema.commissions).where(eq(schema.commissions.affiliateId, a.id));
-        const counted = comms.filter((c) => c.status === "confirmed" || c.status === "payable" || c.status === "paid");
-        const payoutRows = await db
-          .select()
-          .from(schema.payouts)
-          .where(and(eq(schema.payouts.affiliateId, a.id), inArray(schema.payouts.status, ["requested", "approved"])));
-        out.push({
+        const counted = (commissionsByAffiliate.get(a.id) ?? [])
+          .filter((c) => c.status === "confirmed" || c.status === "payable" || c.status === "paid");
+        return {
           ...toAffiliatePublic(a),
           whatsapp: a.whatsapp,
           instagram: a.instagram,
@@ -1357,14 +1381,15 @@ export const Actions = {
           inviteToken: inviteState === "pending" && invite ? invite.token : "",
           inviteExpiresAt: invite ? invite.expiresAt.toISOString() : null,
           pinResetRequested: a.pinResetRequestedAt != null,
+          hasPin: a.pinHash !== "",
           totalOrders: counted.length,
-          netSales: counted.reduce((s, c) => s + c.netSubtotal, 0),
-          totalCommission: counted.reduce((s, c) => s + c.amount, 0),
-          pendingPayout: payoutRows.reduce((s, p) => s + p.amount, 0),
+          netSales: counted.reduce((sum, c) => sum + c.netSubtotal, 0),
+          totalCommission: counted.reduce((sum, c) => sum + c.amount, 0),
+          pendingPayout: payoutByAffiliate.get(a.id) ?? 0,
           kpiTargetOrders: a.kpiTargetOrders,
           kpiTargetRevenue: a.kpiTargetRevenue,
-        });
-      }
+        };
+      });
       return { affiliates: out };
     },
   }),
@@ -1390,6 +1415,9 @@ export const Actions = {
       const changes: string[] = [];
       const patch: Partial<AffiliateRow> = { updatedAt: new Date() };
       if (args.status && args.status !== row.status) {
+        if (args.status === "active" && !row.pinHash) {
+          throw new Error("Akun lama belum memiliki PIN. Gunakan tautan aktivasi lama agar mitra membuat PIN terlebih dahulu.");
+        }
         patch.status = args.status;
         changes.push(`status ${row.status} → ${args.status}`);
       }
@@ -1447,6 +1475,7 @@ export const Actions = {
       const db = ctx.db<typeof schema>();
       const rows = await db.select().from(schema.affiliates).where(eq(schema.affiliates.id, args.affiliateId)).limit(1);
       if (!rows[0]) throw new Error("Afiliasi tidak ditemukan.");
+      if (rows[0].pinHash) throw new Error("Akun ini sudah punya PIN. Untuk mengganti PIN gunakan alur reset PIN, bukan undangan aktivasi.");
       const now = new Date();
       const open = await db
         .select()
@@ -1748,6 +1777,7 @@ export const Actions = {
       const affiliate = affRows[0];
       if (!affiliate) throw new Error("Akun afiliasi untuk undangan ini tidak ditemukan.");
       if (affiliate.status === "suspended") throw new Error("Akun afiliasi ini sedang ditangguhkan.");
+      if (affiliate.pinHash) throw new Error("Akun ini sudah aktif. Gunakan login nomor HP atau minta reset PIN.");
       // Identity confirmation: the email or WhatsApp the admin registered.
       const identity = args.identity.trim();
       const emailMatch = identity.includes("@") && identity.toLowerCase() === affiliate.email;
@@ -1774,23 +1804,25 @@ export const Actions = {
 
   affiliateLogin: defineAction({
     description:
-      "Returning affiliate login: identifier (registered email, WhatsApp, or coupon code) + 4-digit PIN. Five failed attempts lock the account for 15 minutes. Success returns a server-side session token.",
+      "Returning affiliate login: registered phone number + four-digit PIN. Five failed PIN attempts lock the account for 15 minutes. Success returns a server-side session token.",
     request: z.object({
-      identifier: z.string().trim().min(3).max(120),
+      identifier: z.string().trim().min(9).max(24).refine(
+        (value) => /^[+0-9() .-]+$/.test(value) &&
+          value.replace(/\D/g, "").length >= 9 && value.replace(/\D/g, "").length <= 15,
+        "Masukkan nomor HP yang terdaftar.",
+      ),
       pin: z.string().regex(/^\d{4}$/, "PIN harus tepat 4 digit angka."),
     }),
     response: z.object({ sessionToken: z.string(), affiliate: affiliatePublicOut }),
     async handler(ctx, args) {
       const db = ctx.db<typeof schema>();
-      const identifier = args.identifier.trim();
-      const all = await db.select().from(schema.affiliates);
-      const affiliate = all.find(
-        (a) =>
-          a.email === identifier.toLowerCase() ||
-          a.couponCode === identifier.toUpperCase() ||
-          (a.whatsapp !== "" && normalizeWa(a.whatsapp) === normalizeWa(identifier)),
-      );
-      const genericError = "Identitas atau PIN salah. Periksa lagi ya.";
+      const phone = normalizeWa(args.identifier);
+      const intlPhone = phone.startsWith("0") ? `62${phone.slice(1)}` : phone;
+      const matches = await db.select().from(schema.affiliates)
+        .where(or(eq(schema.affiliates.whatsapp, phone), eq(schema.affiliates.whatsapp, intlPhone)))
+        .limit(1);
+      const affiliate = matches[0];
+      const genericError = "Nomor HP atau PIN salah. Periksa lagi.";
       if (!affiliate || affiliate.pinHash === "") throw new Error(genericError);
       if (affiliate.status === "suspended") {
         throw new Error("Akun afiliasi ini sedang ditangguhkan. Hubungi tim Bun & Fleur Kids untuk bantuan.");
@@ -1826,18 +1858,16 @@ export const Actions = {
   affiliateRequestPinReset: defineAction({
     description:
       "Forgot PIN: records a reset request and creates a single-use reset token valid for 1 hour. The token is shared by the admin through the affiliate's verified channel (the response never reveals whether the account exists).",
-    request: z.object({ identifier: z.string().trim().min(3).max(120) }),
+    request: z.object({ identifier: z.string().trim().min(9).max(24) }),
     response: z.object({ ok: z.literal(true) }),
     async handler(ctx, args): Promise<{ ok: true }> {
       const db = ctx.db<typeof schema>();
-      const identifier = args.identifier.trim();
-      const all = await db.select().from(schema.affiliates);
-      const affiliate = all.find(
-        (a) =>
-          a.email === identifier.toLowerCase() ||
-          a.couponCode === identifier.toUpperCase() ||
-          (a.whatsapp !== "" && normalizeWa(a.whatsapp) === normalizeWa(identifier)),
-      );
+      const phone = normalizeWa(args.identifier);
+      const intlPhone = phone.startsWith("0") ? `62${phone.slice(1)}` : phone;
+      const matches = await db.select().from(schema.affiliates)
+        .where(or(eq(schema.affiliates.whatsapp, phone), eq(schema.affiliates.whatsapp, intlPhone)))
+        .limit(1);
+      const affiliate = matches[0];
       if (affiliate && affiliate.pinHash !== "") {
         const now = new Date();
         await db

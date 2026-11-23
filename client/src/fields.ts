@@ -227,6 +227,7 @@ export const FIELDS: FieldsShape<typeof Actions> = {
     "tiktok": {
       "maxLength": 80
     },
+    "pin": {},
     "consent": {},
     "website": {
       "maxLength": 120
@@ -344,15 +345,15 @@ export const FIELDS: FieldsShape<typeof Actions> = {
   },
   "affiliateLogin": {
     "identifier": {
-      "maxLength": 120,
-      "minLength": 3
+      "maxLength": 24,
+      "minLength": 9
     },
     "pin": {}
   },
   "affiliateRequestPinReset": {
     "identifier": {
-      "maxLength": 120,
-      "minLength": 3
+      "maxLength": 24,
+      "minLength": 9
     }
   },
   "resetPinWithToken": {
