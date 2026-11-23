@@ -22,7 +22,7 @@ import { downloadBlob } from "../lib/pdf";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
-import { qrisUrl } from "../assets-inline";
+import { officialQrisUrl } from "../official-qris";
 
 export type ProductId = "poster" | "figurine" | "tshirt";
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
@@ -859,17 +859,25 @@ export function Checkout({
             </p>
           </section>
 
-          <section className="rounded-[1.75rem] bg-butter-soft p-5 ring-1 ring-[var(--border)]" aria-label="Cara pembayaran">
-            <h2 className="font-display text-base font-semibold text-ink">Cara pembayaran: QRIS</h2>
-            <p className="mt-1 text-sm font-semibold leading-relaxed text-ink">
-              Setelah pesanan dibuat, kamu membayar lewat QRIS statis resmi {QRIS_MERCHANT} dengan nominal
-              persis (termasuk kode unik pesananmu), lalu menekan tombol “Saya Sudah Transfer”. Konfirmasi
-              itu TIDAK otomatis melunasi pesanan — tim kami memverifikasi transfer masuk secara manual,
-              dan produksi hanya dimulai setelah pembayaran terverifikasi.
-            </p>
-            <p className="mt-2 text-sm font-semibold leading-relaxed text-ink">
-              Batal atau berubah pikiran? Karyamu tetap tersimpan utuh di Kreasiku — tidak ada yang hilang.
-            </p>
+          <section className="overflow-hidden rounded-[1.75rem] bg-[var(--surface)] ring-1 ring-[var(--border)]" aria-label="Preview metode pembayaran">
+            <div className="band-sage px-5 py-4">
+              <p className="font-display text-xs font-bold uppercase tracking-[0.14em] text-olive-deep">Pembayaran resmi</p>
+              <h2 className="mt-1 font-display text-lg font-extrabold text-ink">QRIS GoPay Merchant</h2>
+              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">{QRIS_MERCHANT}</p>
+            </div>
+            <div className="px-5 py-5 text-center">
+              <div className="mx-auto max-w-[190px] rounded-2xl bg-white p-3 ring-1 ring-[#E6DFD0]">
+                <img src={officialQrisUrl} alt="Pratinjau QRIS resmi Bun and Fleur" className="w-full" />
+              </div>
+              <p className="mt-3 font-display text-sm font-bold text-olive-deep">Bayar setelah pesanan dibuat</p>
+              <p className="mt-1 text-xs font-semibold leading-relaxed text-[var(--dim)]">
+                Nominal pembayaran dan kode unik baru akan muncul setelah kamu menekan tombol
+                Buat Pesanan. Jangan scan atau bayar sebelum jumlah akhir beserta ongkir dikonfirmasi.
+              </p>
+              <div className="mt-4 rounded-2xl bg-butter-soft p-3 text-xs font-semibold leading-relaxed text-ink">
+                Setelah membayar, klik “Saya Sudah Transfer”. Tim memverifikasi transaksi secara manual sebelum produksi dimulai.
+              </div>
+            </div>
           </section>
         </aside>
       </div>
@@ -910,7 +918,7 @@ export const PAY_STATE_LABELS: Record<OrderOut["payState"], string> = {
   refunded: "Direfund",
 };
 
-export const QRIS_MERCHANT = "BUN AND FLEUR";
+export const QRIS_MERCHANT = "BUN AND FLEUR, PAKAIAN";
 export const QRIS_NMID = "ID1026626210169";
 
 /* --------------------- QRIS payment panel (Part 4) --------------------- */
@@ -942,103 +950,135 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
       setError("Tidak bisa menyalin otomatis — catat nominalnya persis ya: " + payable.toLocaleString("id-ID"));
     }
   };
+  const statusTone = payState === "verified"
+    ? "bg-olive text-white"
+    : payState === "rejected" || payState === "unmatched"
+      ? "bg-[#FCEBE5] text-berry"
+      : "bg-white text-olive-deep";
+
   return (
-    <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pembayaran QRIS">
-      <h2 className="font-display text-lg font-semibold">Bayar dengan QRIS</h2>
-      <p className="mt-1 text-sm font-semibold text-[var(--dim)]">
-        Status pembayaran: <span className="font-display text-ink">{PAY_STATE_LABELS[payState]}</span>
-      </p>
-      <div className="mt-4 grid items-start gap-5 sm:grid-cols-[240px_1fr]">
-        <div className="mx-auto w-full max-w-[240px]">
-          <img
-            src={qrisUrl}
-            alt={`QRIS resmi merchant ${QRIS_MERCHANT}`}
-            className="w-full rounded-3xl ring-1 ring-[var(--border)]"
-          />
-          <p className="mt-2 text-center font-display text-sm font-bold">{QRIS_MERCHANT}</p>
-          <p className="text-center text-xs font-semibold text-[var(--dim)]">NMID: {QRIS_NMID}</p>
-          <a
-            href={qrisUrl}
-            download="QRIS-Bun-Fleur-Kids.png"
-            className="mt-3 block rounded-full bg-[var(--surface-alt)] px-5 py-2.5 text-center font-display text-sm font-bold ring-1 ring-[var(--border)]"
-          >
-            Simpan QRIS
-          </a>
-        </div>
+    <section className="overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]"
+      aria-label="Pembayaran QRIS resmi Bun & Fleur">
+      <div className="band-sage flex flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-7">
         <div>
-          <dl className="space-y-1.5 text-sm font-semibold">
-            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Kode pesanan</dt><dd className="font-display">{order.code}</dd></div>
+          <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-olive-deep">Metode pembayaran</p>
+          <h2 className="mt-1 font-display text-2xl font-extrabold text-ink">Scan &amp; Bayar QRIS</h2>
+          <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Praktis melalui aplikasi bank atau e-wallet.</p>
+        </div>
+        <span className={`rounded-full px-4 py-2 font-display text-xs font-bold ring-1 ring-black/5 ${statusTone}`}>
+          {PAY_STATE_LABELS[payState]}
+        </span>
+      </div>
+      <div className="grid items-start gap-5 px-4 py-5 sm:grid-cols-[minmax(0,280px)_minmax(0,1fr)] sm:gap-6 sm:px-6 sm:py-6">
+        <div className="mx-auto w-full max-w-[340px]">
+          <div className="rounded-[1.75rem] border border-[#E6DFD0] bg-white p-4 shadow-[0_8px_30px_rgba(59,55,43,0.05)] sm:p-5">
+            <div className="flex items-center justify-between gap-2 border-b border-[#F0E9DE] pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E8F8FC] text-base font-black text-[#079FC4]">G</span>
+                <div>
+                  <p className="font-display text-xs font-extrabold uppercase tracking-wide text-ink">QRIS</p>
+                  <p className="text-[10px] font-bold text-[var(--dim)]">GoPay Merchant</p>
+                </div>
+              </div>
+              <span className="rounded-full bg-[#EEF4E4] px-2.5 py-1 font-display text-[10px] font-bold text-olive-deep">QRIS RESMI</span>
+            </div>
+            <img src={officialQrisUrl}
+              alt="Kode QRIS asli GoPay Merchant BUN AND FLEUR, PAKAIAN untuk pembayaran"
+              className="mx-auto mt-3 aspect-square w-full max-w-[330px] object-contain" />
+            <p className="mt-2 text-center font-display text-xs font-extrabold uppercase tracking-wide text-ink">{QRIS_MERCHANT}</p>
+            <p className="mt-1 text-center text-[11px] font-semibold text-[var(--dim)]">NMID: {QRIS_NMID}</p>
+          </div>
+          <a href={officialQrisUrl} download="QRIS-Resmi-Bun-and-Fleur.png"
+            className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-[var(--surface-alt)] px-4 py-2.5 text-center font-display text-sm font-bold text-ink ring-1 ring-[var(--border)] transition hover:bg-butter-soft">
+            Simpan Gambar QRIS
+          </a>
+          <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">
+            Bisa dipindai melalui GoPay, BCA, Mandiri, BNI, BRI dan aplikasi QRIS lainnya.
+          </p>
+        </div>
+        <div className="min-w-0">
+          <div className="rounded-3xl bg-[#F4F0E7] p-4 sm:p-5">
+            <p className="font-display text-xs font-bold uppercase tracking-[0.16em] text-[var(--dim)]">Total Pembayaran</p>
+            <p className="mt-1 break-words font-display text-3xl font-extrabold tracking-tight text-olive-deep">
+              {formatIDR(payable)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Termasuk kode unik pembayaran · Pesanan {order.code}</p>
+            <button type="button" onClick={() => void copyAmount()}
+              className="mt-3 inline-flex min-h-10 items-center justify-center rounded-full bg-olive px-5 py-2 font-display text-sm font-bold text-white transition hover:bg-olive-deep">
+              {copied ? "Nominal Berhasil Disalin" : "Salin Nominal Pembayaran"}
+            </button>
+          </div>
+
+          <dl className="mt-4 space-y-2 px-1 text-sm font-semibold">
             <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Produk</dt><dd className="text-right font-display">{PRODUCT_META[order.productType].title}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Subtotal produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Subtotal Produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
             {order.discountAmount > 0 && (
               <div className="flex justify-between gap-3">
-                <dt className="text-[var(--dim)]">Diskon kupon {order.couponCode}</dt>
+                <dt className="text-[var(--dim)]">Diskon {order.couponCode}</dt>
                 <dd className="font-display text-olive-deep">−{formatIDR(order.discountAmount)}</dd>
               </div>
             )}
             <div className="flex justify-between gap-3">
-              <dt className="text-[var(--dim)]">Ongkos kirim</dt>
-              <dd className="text-right">{order.shippingCost == null ? "Dikonfirmasi tim via WhatsApp" : formatIDR(order.shippingCost)}</dd>
+              <dt className="text-[var(--dim)]">Ongkos Kirim</dt>
+              <dd className="text-right">{order.shippingCost == null ? "Menunggu konfirmasi" : formatIDR(order.shippingCost)}</dd>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-[var(--dim)]">Kode unik pembayaran</dt>
+            <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2">
+              <dt className="text-[var(--dim)]">Kode Unik</dt>
               <dd className="font-display">{formatIDR(order.uniqueCode)}</dd>
             </div>
-            <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2 text-base">
-              <dt>Total yang dibayar</dt>
-              <dd className="font-display text-xl text-olive-deep">{formatIDR(payable)}</dd>
-            </div>
           </dl>
-          <p className="mt-2 text-xs font-semibold leading-relaxed text-[var(--dim)]">
-            Transfer PERSIS sebesar total di atas ke QRIS {QRIS_MERCHANT} — kode unik di tiga digit terakhir
-            membantu tim kami mencocokkan pembayaranmu. Masukkan nominalnya secara manual di aplikasi
-            bank / e-wallet kamu. Kode unik ini tidak berubah walau halaman dimuat ulang.
-            {order.shippingCost == null && " Ongkir belum termasuk — tim kami mengonfirmasinya via WhatsApp; bila ongkir ditambahkan sebelum kamu membayar, total di halaman Lacak Pesanan ikut terbarui dengan kode unik yang sama."}
+
+          <div className="mt-4 rounded-2xl bg-[#EEF4E4] p-4 text-sm font-semibold text-olive-deep">
+            <p className="font-display text-sm font-extrabold">Cara pembayaran</p>
+            <ol className="mt-2 space-y-2">
+              <li><strong>01.</strong> Scan QRIS menggunakan aplikasi bank atau e-wallet.</li>
+              <li><strong>02.</strong> Masukkan nominal <strong>{formatIDR(payable)}</strong> secara manual, tepat sesuai total.</li>
+              <li><strong>03.</strong> Setelah berhasil transfer, tekan tombol konfirmasi di bawah.</li>
+            </ol>
+          </div>
+          {order.shippingCost == null && (
+            <p className="mt-3 rounded-2xl bg-butter-soft px-4 py-3 text-xs font-semibold leading-relaxed text-ink">
+              Ongkos kirim masih menunggu konfirmasi tim via WhatsApp. Jangan membayar sebelum total akhir beserta ongkir disepakati; cek pembaruan nominal di Lacak Pesanan.
+            </p>
+          )}
+          <p className="mt-3 text-xs font-semibold leading-relaxed text-[var(--dim)]">
+            Ini QRIS statis: masukkan nominal sendiri. Jangan transfer dua kali. Konfirmasi di bawah
+            hanya mencatat laporan pembayaran; tim tetap memeriksa mutasi QRIS sebelum pesanan dinyatakan lunas.
           </p>
+
           {payState === "verified" ? (
             <p className="mt-4 rounded-2xl bg-sage-soft px-4 py-3 font-display text-sm font-bold text-olive-deep ring-1 ring-[var(--border)]">
-              Pembayaranmu sudah terverifikasi oleh tim kami. Pesanan lanjut ke tahap berikutnya.
+              Pembayaran sudah terverifikasi. Pesanan akan dilanjutkan ke tahap berikutnya.
             </p>
           ) : payState === "rejected" ? (
             <p className="mt-4 rounded-2xl bg-[#FDECEA] px-4 py-3 font-display text-sm font-bold text-berry ring-1 ring-[var(--border)]">
-              Pembayaran belum bisa diverifikasi. Hubungi tim kami via WhatsApp untuk mencocokkannya — jangan transfer ulang dulu.
+              Pembayaran belum bisa diverifikasi. Hubungi tim via WhatsApp untuk mencocokkan transaksi. Jangan transfer ulang dulu.
             </p>
           ) : payState === "refunded" ? (
-            <p className="mt-4 rounded-2xl bg-[var(--surface-alt)] px-4 py-3 font-display text-sm font-bold ring-1 ring-[var(--border)]">
-              Pesanan ini sudah direfund.
-            </p>
+            <p className="mt-4 rounded-2xl bg-[var(--surface-alt)] px-4 py-3 font-display text-sm font-bold ring-1 ring-[var(--border)]">Pesanan ini sudah direfund.</p>
           ) : (
             <>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void copyAmount()}
-                  className="rounded-full bg-sky-deep px-5 py-2.5 font-display text-sm font-semibold text-white"
-                >
-                  {copied ? "Nominal tersalin ✓" : "Salin Nominal Pembayaran"}
-                </button>
-                <button
-                  type="button"
-                  disabled={confirm.isPending || payState === "waiting_verification"}
-                  onClick={() => confirm.mutate()}
-                  className="rounded-full bg-tang px-5 py-2.5 font-display text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {payState === "waiting_verification" ? "Menunggu Verifikasi Tim" : confirm.isPending ? "Mencatat…" : "Saya Sudah Transfer"}
-                </button>
-              </div>
+              <button type="button"
+                disabled={confirm.isPending || payState === "waiting_verification"}
+                onClick={() => confirm.mutate()}
+                className="mt-4 min-h-12 w-full rounded-full bg-tang px-5 py-3 font-display text-base font-extrabold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50">
+                {payState === "waiting_verification"
+                  ? "Menunggu Verifikasi Tim"
+                  : confirm.isPending ? "Mencatat Pembayaran…" : "Saya Sudah Transfer"}
+              </button>
               {payState === "waiting_verification" && (
-                <p className="mt-2 text-sm font-semibold text-[var(--dim)]" role="status">
-                  Konfirmasimu tercatat{order.paymentConfirmedAt ? ` pada ${new Date(order.paymentConfirmedAt).toLocaleString("id-ID")}` : ""}. Tim kami memeriksa transfer masuk yang cocok dengan nominal unikmu — status berubah menjadi Terverifikasi setelah cocok, bukan otomatis.
+                <p className="mt-3 text-sm font-semibold text-[var(--dim)]" role="status">
+                  Konfirmasi berhasil dicatat. Tim sedang mencocokkan transaksi sesuai nominal unik. Status tidak otomatis berubah menjadi lunas.
                 </p>
               )}
               {payState === "unmatched" && (
-                <p className="mt-2 text-sm font-semibold text-[var(--dim)]" role="status">
-                  Tim kami belum menemukan transfer yang cocok dengan nominal unik ini. Pastikan nominal transfermu persis sama, lalu hubungi kami via WhatsApp bila sudah transfer.
+                <p className="mt-3 text-sm font-semibold text-[var(--dim)]" role="status">
+                  Transfer belum ditemukan pada mutasi QRIS. Hubungi tim melalui WhatsApp untuk pemeriksaan, jangan langsung transfer ulang.
                 </p>
               )}
             </>
           )}
-          {error && <p className="mt-2 text-sm font-bold text-berry" role="alert">{error}</p>}
+          {error && <p className="mt-3 text-sm font-bold text-berry" role="alert">{error}</p>}
         </div>
       </div>
     </section>
