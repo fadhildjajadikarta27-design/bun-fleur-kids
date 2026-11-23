@@ -63,3 +63,25 @@ const PUBLIC_ACTIONS = new Set([
 export function requiresAdmin(action: string): boolean {
   return !PUBLIC_ACTIONS.has(action);
 }
+
+const VISITOR_COOKIE = "bfk_visitor";
+const VISITOR_AGE = 365 * 24 * 60 * 60;
+
+/** Anonymous, signed visitor identity: not a login, but isolates artwork per browser. */
+export function visitorFromCookie(header: string | undefined): { id: string; cookie?: string } {
+  const raw = (header ?? "").split(";").map((part) => part.trim())
+    .find((part) => part.startsWith(`${VISITOR_COOKIE}=`))?.slice(VISITOR_COOKIE.length + 1);
+  if (raw) {
+    const [id, mac] = raw.split(".");
+    if (id && mac && /^[a-f0-9]{32}$/.test(id)) {
+      try {
+        if (safeEqual(signature("visitor:" + id), mac)) return { id };
+      } catch { /* rotate invalid visitor session */ }
+    }
+  }
+  const id = randomBytes(16).toString("hex");
+  return {
+    id,
+    cookie: `${VISITOR_COOKIE}=${id}.${signature("visitor:" + id)}; Path=/api; HttpOnly; Secure; SameSite=Lax; Max-Age=${VISITOR_AGE}`,
+  };
+}
