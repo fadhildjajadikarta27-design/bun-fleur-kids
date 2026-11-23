@@ -50,6 +50,35 @@ describe("Affiliate input validation", () => {
     expect(JSON.stringify(result.body)).toContain("WhatsApp");
   });
 
+  test("affiliate self-registration requires a 4-digit PIN", async () => {
+    const res = await dispatchAction("affiliateApply", {
+      fullName: "Mitra Sample",
+      email: "mitra@example.org",
+      whatsapp: "081234567890",
+      consent: true,
+      pin: "12345",
+    });
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toContain("PIN");
+  });
+
+  test("phone-only affiliate login rejects emails before database access", async () => {
+    const res = await dispatchAction("affiliateLogin", {
+      identifier: "mitra@example.org",
+      pin: "5073",
+    });
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toContain("nomor HP");
+  });
+
+  test("phone login requires four PIN digits", async () => {
+    const res = await dispatchAction("affiliateLogin", {
+      identifier: "081234567890",
+      pin: "51",
+    });
+    expect(res.status).toBe(400);
+  });
+
   test("unknown actions continue to return 404", async () => {
     const result = await dispatchAction("actionDoesNotExist", {});
     expect(result.status).toBe(404);
