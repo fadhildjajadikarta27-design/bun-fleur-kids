@@ -62,6 +62,13 @@ let migrationsPromise: Promise<void> | undefined;
 
 /** Applies any not-yet-applied drizzle/*.sql files. Safe to call often. */
 export function ensureMigrations(): Promise<void> {
+  // Production schema was fully bootstrapped (0001 through 0009).
+  // A serverless request must not run DDL: multiple Vercel cold starts
+  // can block each other and exhaust the function's 300-second duration.
+  // Apply future migrations via a coordinated database release step.
+  if (process.env.VERCEL_ENV === "production") {
+    return Promise.resolve();
+  }
   if (!migrationsPromise) {
     migrationsPromise = applyMigrations().catch((err) => {
       // Allow a later call to retry if the first attempt failed.
