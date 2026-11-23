@@ -1,6 +1,32 @@
 import { describe, expect, test } from "bun:test";
 import { dispatchAction } from "./dispatch.js";
 
+describe("3D Papercraft product pricing", () => {
+  test("shop catalog includes fixed Rp49.000 papercraft", async () => {
+    const res = await dispatchAction("getShopConfig", {});
+    expect(res.status).toBe(200);
+    const products = (res.body as { products: { id: string; basePrice: number; priceLabel: string }[] }).products;
+    expect(products.find((p) => p.id === "papercraft")).toEqual({
+      id: "papercraft", basePrice: 49000, priceLabel: "fixed",
+    });
+    expect(products.filter((p) => p.id === "papercraft")).toHaveLength(1);
+    expect(products).toHaveLength(4);
+  });
+
+  test("order requests validate product IDs instead of trusting a client-side price", async () => {
+    const res = await dispatchAction("createOrder", {
+      projectId: 1,
+      productType: "papercraft",
+      customerName: "",
+      whatsapp: "081234567890",
+      email: "x@example.org",
+      address: "Kota Jakarta, Indonesia",
+    });
+    expect(res.status).toBe(400);
+  });
+
+});
+
 describe("Affiliate input validation", () => {
   test("rejects a WhatsApp value that is not a telephone number before connecting to DB", async () => {
     const result = await dispatchAction("adminCreateAffiliate", {
