@@ -6,7 +6,7 @@
 // 3D preview, and the PDF export on the client.
 
 import { defineAction, z, type ActionsModule, type Ctx } from "./sdk.js";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, or } from "drizzle-orm";
 import * as schema from "./schema.js";
 
 const strokeSchema = z.object({
@@ -1168,6 +1168,68 @@ export const Actions = {
       if (!updated) throw new Error("Pesanan tidak ditemukan.");
       ctx.invalidateQueries();
       return { order: orderToOut(updated) };
+    },
+  }),
+
+  /* ----------------------- Public affiliate application ----------------------- */
+
+  affiliateApply: defineAction({
+    description:
+      "Public reusable affiliate registration. Application is pending manual WhatsApp confirmation; never creates an activation invitation or session.",
+    request: z.object({
+      fullName: z.string().trim().min(2, "Nama lengkap minimal 2 karakter.").max(80),
+      email: z.string().trim().email("Format email belum benar.").max(120),
+      whatsapp: z.string().trim().min(9).max(24).refine(
+        (value) => /^[+0-9() .-]+$/.test(value) &&
+          value.replace(/\D/g, "").length >= 9 &&
+          value.replace(/\D/g, "").length <= 15,
+        "Nomor WhatsApp harus 9–15 digit angka, misalnya 081234567890.",
+      ),
+      instagram: z.string().trim().max(80).default(""),
+      tiktok: z.string().trim().max(80).default(""),
+      consent: z.literal(true, "Setujui untuk dihubungi lewat WhatsApp."),
+      // A blank hidden form field deters basic automated submissions.
+      website: z.string().trim().max(120).default(""),
+    }),
+    response: z.object({ received: z.literal(true) }),
+    async handler(ctx, args): Promise<{ received: true }> {
+      if (args.website) return { received: true };
+      const db = ctx.db<typeof schema>();
+      const email = args.email.trim().toLowerCase();
+      const phoneDigits = args.whatsapp.replace(/\D/g, "");
+      const whatsapp = normalizeWa(phoneDigits);
+      const intlWa = whatsapp.startsWith("0") ? `62${whatsapp.slice(1)}` : whatsapp;
+      // Returning the same response for duplicates prevents public account enumeration.
+      const known = await db.select({ id: schema.affiliates.id })
+        .from(schema.affiliates)
+        .where(or(
+          eq(schema.affiliates.email, email),
+          eq(schema.affiliates.whatsapp, whatsapp),
+          eq(schema.affiliates.whatsapp, intlWa),
+        ))
+        .limit(1);
+      if (known.length) return { received: true };
+
+      const coupon = `BFK${randomToken(8).toUpperCase()}`;
+      const now = new Date();
+      const inserted = await db.insert(schema.affiliates).values({
+        name: args.fullName.trim(),
+        email,
+        whatsapp,
+        instagram: args.instagram.trim().replace(/^@/, ""),
+        tiktok: args.tiktok.trim().replace(/^@/, ""),
+        couponCode: coupon,
+        discountPct: 10,
+        commissionPct: 30,
+        status: "pending",
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoNothing().returning({ id: schema.affiliates.id });
+      if (inserted[0]) {
+        await audit(db, inserted[0].id, "affiliate.application", "Pendaftaran publik diterima. Menunggu konfirmasi WhatsApp oleh admin.");
+      }
+      // Important: no invitation, usable account, or PIN until manual admin approval.
+      return { received: true };
     },
   }),
 
