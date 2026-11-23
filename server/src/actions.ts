@@ -1339,16 +1339,30 @@ export const Actions = {
     }),
     async handler(ctx) {
       const db = ctx.db<typeof schema>();
-      const rows = await db.select().from(schema.affiliates).orderBy(desc(schema.affiliates.createdAt));
-      const out = [];
-      for (const a of rows) {
-        const invites = await db
-          .select()
-          .from(schema.affiliateInvitations)
-          .where(eq(schema.affiliateInvitations.affiliateId, a.id))
-          .orderBy(desc(schema.affiliateInvitations.createdAt))
-          .limit(1);
-        const invite = invites[0];
+      const [rows, invites, allComms, pendingPayouts] = await Promise.all([
+        db.select().from(schema.affiliates).orderBy(desc(schema.affiliates.createdAt)),
+        db.select().from(schema.affiliateInvitations).orderBy(desc(schema.affiliateInvitations.createdAt)),
+        db.select().from(schema.commissions),
+        db.select().from(schema.payouts).where(inArray(schema.payouts.status, ["requested", "approved"])),
+      ]);
+      // Bulk fetch avoids three additional queries per affiliate when the
+      // program grows to hundreds of members.
+      const latestInvite = new Map<number, typeof schema.affiliateInvitations.$inferSelect>();
+      for (const inv of invites) {
+        if (!latestInvite.has(inv.affiliateId)) latestInvite.set(inv.affiliateId, inv);
+      }
+      const commissionsByAffiliate = new Map<number, typeof allComms>();
+      for (const c of allComms) {
+        const list = commissionsByAffiliate.get(c.affiliateId) ?? [];
+        list.push(c);
+        commissionsByAffiliate.set(c.affiliateId, list);
+      }
+      const payoutByAffiliate = new Map<number, number>();
+      for (const p of pendingPayouts) {
+        payoutByAffiliate.set(p.affiliateId, (payoutByAffiliate.get(p.affiliateId) ?? 0) + p.amount);
+      }
+      const out = rows.map((a) => {
+        const invite = latestInvite.get(a.id);
         let inviteState: "none" | "pending" | "used" | "expired" | "revoked" = "none";
         if (invite) {
           if (invite.usedAt) inviteState = "used";
@@ -1356,13 +1370,9 @@ export const Actions = {
           else if (invite.expiresAt.getTime() < Date.now()) inviteState = "expired";
           else inviteState = "pending";
         }
-        const comms = await db.select().from(schema.commissions).where(eq(schema.commissions.affiliateId, a.id));
-        const counted = comms.filter((c) => c.status === "confirmed" || c.status === "payable" || c.status === "paid");
-        const payoutRows = await db
-          .select()
-          .from(schema.payouts)
-          .where(and(eq(schema.payouts.affiliateId, a.id), inArray(schema.payouts.status, ["requested", "approved"])));
-        out.push({
+        const counted = (commissionsByAffiliate.get(a.id) ?? [])
+          .filter((c) => c.status === "confirmed" || c.status === "payable" || c.status === "paid");
+        return {
           ...toAffiliatePublic(a),
           whatsapp: a.whatsapp,
           instagram: a.instagram,
@@ -1373,13 +1383,13 @@ export const Actions = {
           pinResetRequested: a.pinResetRequestedAt != null,
           hasPin: a.pinHash !== "",
           totalOrders: counted.length,
-          netSales: counted.reduce((s, c) => s + c.netSubtotal, 0),
-          totalCommission: counted.reduce((s, c) => s + c.amount, 0),
-          pendingPayout: payoutRows.reduce((s, p) => s + p.amount, 0),
+          netSales: counted.reduce((sum, c) => sum + c.netSubtotal, 0),
+          totalCommission: counted.reduce((sum, c) => sum + c.amount, 0),
+          pendingPayout: payoutByAffiliate.get(a.id) ?? 0,
           kpiTargetOrders: a.kpiTargetOrders,
           kpiTargetRevenue: a.kpiTargetRevenue,
-        });
-      }
+        };
+      });
       return { affiliates: out };
     },
   }),
