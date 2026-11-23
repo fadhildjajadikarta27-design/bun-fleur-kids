@@ -281,10 +281,10 @@ export function AffiliateInvitePage({
 
 export function AffiliateLoginPage({
   goDashboard,
-  goInviteHelp,
+  goRegister,
 }: {
   goDashboard: () => void;
-  goInviteHelp: () => void;
+  goRegister: () => void;
 }) {
   const [identifier, setIdentifier] = useState("");
   const [pin, setPin] = useState("");
@@ -309,7 +309,7 @@ export function AffiliateLoginPage({
         <img src={logoUrl} alt="" className="mx-auto h-16 w-16 rounded-3xl object-cover ring-1 ring-black/10" />
         <h1 className="mt-3 text-center font-display text-2xl font-semibold">Masuk Dasbor Afiliasi</h1>
         <p className="mt-1 text-center font-semibold text-[var(--dim)]">
-          Khusus mitra afiliasi Bun &amp; Fleur Kids yang sudah diundang admin.
+          Masukkan nomor HP yang kamu daftarkan dan PIN pribadi untuk masuk.
         </p>
         <form
           className="mt-5 space-y-3"
@@ -324,13 +324,16 @@ export function AffiliateLoginPage({
           }}
         >
           <div>
-            <label htmlFor="aff-id" className="font-display text-sm font-bold">Email, nomor WhatsApp, atau kode kuponmu</label>
+            <label htmlFor="aff-id" className="font-display text-sm font-bold">Nomor HP terdaftar</label>
             <input
               id="aff-id"
               {...FIELDS.affiliateLogin.identifier}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              autoComplete="username"
+              autoComplete="tel"
+              type="tel"
+              inputMode="tel"
+              placeholder="081234567890"
               className={inputCls}
             />
           </div>
@@ -351,7 +354,7 @@ export function AffiliateLoginPage({
           {error && <p className="text-sm font-bold text-berry" role="alert">{error}</p>}
           <button
             type="submit"
-            disabled={login.isPending || identifier.trim().length < 3}
+            disabled={login.isPending || identifier.trim().replace(/\D/g, "").length < 9}
             className="w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-white disabled:opacity-50"
           >
             {login.isPending ? "Memeriksa…" : "Masuk"}
@@ -366,7 +369,7 @@ export function AffiliateLoginPage({
           ) : (
             <button
               type="button"
-              disabled={forgot.isPending || identifier.trim().length < 3}
+              disabled={forgot.isPending || identifier.trim().replace(/\D/g, "").length < 9}
               onClick={() => {
                 setError("");
                 forgot.mutate();
@@ -377,9 +380,9 @@ export function AffiliateLoginPage({
             </button>
           )}
           <p className="mt-3 text-xs font-semibold text-[var(--dim)]">
-            Belum punya akun afiliasi? Program ini khusus undangan.{" "}
-            <button type="button" onClick={goInviteHelp} className="font-bold text-sky-deep underline">
-              Cara kerja undangannya
+            Belum punya akun affiliate?{" "}
+            <button type="button" onClick={goRegister} className="font-bold text-sky-deep underline">
+              Daftar sekarang
             </button>
           </p>
           <p className="mt-1 text-xs font-semibold text-[var(--dim)]">
@@ -842,7 +845,6 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
   const [kpiRevenue, setKpiRevenue] = useState(String(a.kpiTargetRevenue));
   const [msg, setMsg] = useState("");
   const [freshToken, setFreshToken] = useState("");
-  const [confirmedWhatsApp, setConfirmedWhatsApp] = useState(false);
   const [resetInfo, setResetInfo] = useState<{ token: string; expires: string | null } | null>(null);
   const update = useMutation({
     mutationFn: async () =>
@@ -870,7 +872,7 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
     onError: (e) => setMsg(e.message),
     onSuccess: (res) => {
       setFreshToken(res.inviteToken);
-      setMsg("Tautan aktivasi dibuat. Kirimkan secara pribadi ke WhatsApp yang sudah dikonfirmasi.");
+      setMsg("Tautan aktivasi akun lama dibuat. Kirim secara pribadi ke kontak yang sudah tercatat.");
       queryClient.invalidateQueries({ queryKey: ["adminAffiliates"] });
     },
   });
@@ -888,7 +890,6 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
     onSuccess: (res) => setResetInfo({ token: res.resetToken, expires: res.resetExpiresAt }),
   });
   const shownToken = freshToken || a.inviteToken;
-  const waitingForWhatsApp = a.status === "pending" && a.inviteState === "none";
   const waDigits = a.whatsapp.replace(/\D/g, "");
   const waInternational = waDigits.startsWith("0") ? `62${waDigits.slice(1)}` : waDigits;
   const activationUrl = typeof window === "undefined" ? inviteLink(shownToken) : `${window.location.origin}/${inviteLink(shownToken)}`;
@@ -908,7 +909,7 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
           </p>
           <p className="text-sm font-semibold text-[var(--dim)]">
             Status akun: <span className="font-display text-ink">{a.status === "active" ? "Aktif" : a.status === "suspended" ? "Ditangguhkan" : "Menunggu aktivasi"}</span>
-            {" · "}{waitingForWhatsApp ? "Pendaftaran umum — perlu konfirmasi WhatsApp" : INVITE_LABELS[a.inviteState]}
+            {" · "}{a.hasPin ? "PIN sudah diatur · akses dashboard tersedia" : INVITE_LABELS[a.inviteState]}
             {a.pinResetRequested && " · Meminta reset PIN"}
           </p>
           <p className="text-sm font-semibold text-[var(--dim)]">
@@ -957,33 +958,15 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
         {msg && <span className="text-sm font-bold text-olive-deep" role="status">{msg}</span>}
       </div>
 
-      {waitingForWhatsApp && (
-        <section className="mt-3 rounded-2xl bg-[#EEF4E4] p-4 ring-1 ring-olive/20" aria-label="Verifikasi WhatsApp pendaftar">
-          <p className="font-display font-bold text-olive-deep">Pendaftaran baru — verifikasi WhatsApp dulu</p>
-          <p className="mt-1 text-sm font-semibold text-[var(--dim)]">
-            Hubungi nomor pendaftar dan cocokkan identitasnya. Belum ada tautan aktivasi sampai kamu menyetujuinya.
-            WhatsApp tidak mengirim pesan otomatis.
-          </p>
-          <a href={`https://wa.me/${waInternational}?text=${encodeURIComponent(`Halo ${a.name}, kami dari Bun & Fleur Kids. Kami menerima pendaftaran affiliate kamu. Mohon konfirmasi nama lengkap dan akun media sosial kamu melalui chat ini, ya.`)}`}
-            target="_blank" rel="noreferrer"
-            className="mt-3 inline-flex rounded-full bg-olive px-4 py-2 font-display text-sm font-bold text-white">
-            1. Chat untuk Konfirmasi WhatsApp
-          </a>
-          <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink">
-            <input type="checkbox" className="h-4 w-4 accent-olive" checked={confirmedWhatsApp}
-              onChange={(event) => setConfirmedWhatsApp(event.target.checked)} />
-            Saya sudah konfirmasi nomor WhatsApp dan identitas pendaftar
-          </label>
-        </section>
-      )}
+      {!a.hasPin && (
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-dashed border-[var(--border)] pt-3">
-        <span className="font-display text-xs font-bold text-[var(--dim)]">Undangan:</span>
+        <span className="font-display text-xs font-bold text-[var(--dim)]">Aktivasi akun lama:</span>
         {shownToken ? (
           <>
             <code className="max-w-full break-all rounded-xl bg-[var(--surface)] px-3 py-1.5 text-xs font-bold ring-1 ring-[var(--border)]">{activationUrl}</code>
             <CopyButton text={activationUrl} label="Salin Tautan Aktivasi" />
             <a
-              href={`https://wa.me/${waInternational}?text=${encodeURIComponent(`Halo ${a.name}, pendaftaran affiliate Bun & Fleur Kids kamu sudah disetujui. Klik tautan aktivasi pribadi ini untuk membuat PIN: ${activationUrl} (berlaku 72 jam dan hanya bisa dipakai satu kali).`)}`}
+              href={`https://wa.me/${waInternational}?text=${encodeURIComponent(`Halo ${a.name}, akun affiliate Bun & Fleur Kids kamu sudah disiapkan. Klik tautan aktivasi pribadi ini untuk membuat PIN: ${activationUrl} (berlaku 72 jam dan hanya bisa dipakai satu kali).`)}`}
               target="_blank"
               rel="noreferrer"
               className="rounded-full bg-[var(--surface)] px-4 py-2 font-display text-xs font-bold ring-1 ring-[var(--border)]"
@@ -994,10 +977,10 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
         ) : (
           <span className="text-sm font-semibold text-[var(--dim)]">Tidak ada tautan aktif.</span>
         )}
-        <button type="button" disabled={regen.isPending || (waitingForWhatsApp && !confirmedWhatsApp)}
+        <button type="button" disabled={regen.isPending}
           onClick={() => regen.mutate()}
           className="rounded-full bg-[var(--surface)] px-4 py-2 font-display text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">
-          {regen.isPending ? "Menyiapkan…" : waitingForWhatsApp ? "2. Setujui & Buat Tautan" : a.inviteState === "expired" ? "Buat Ulang (kedaluwarsa)" : "Buat Ulang Undangan"}
+          {regen.isPending ? "Menyiapkan…" : a.inviteState === "expired" ? "Buat Ulang (kedaluwarsa)" : "Buat Tautan Aktivasi Akun Lama"}
         </button>
         {shownToken && (
           <button type="button" disabled={revoke.isPending} onClick={() => revoke.mutate()} className="rounded-full bg-[var(--surface)] px-4 py-2 font-display text-xs font-bold text-berry ring-1 ring-[var(--border)] disabled:opacity-50">
@@ -1008,6 +991,7 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
           <span className="text-xs font-semibold text-[var(--dim)]">Berlaku sampai {new Date(a.inviteExpiresAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</span>
         )}
       </div>
+      )}
 
       {a.pinResetRequested && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-dashed border-[var(--border)] pt-3">
@@ -1087,8 +1071,8 @@ export function AffiliateAdmin() {
       <div className="rounded-3xl bg-[#EEF4E4] p-5 ring-1 ring-olive/20">
         <p className="font-display text-lg font-extrabold text-olive-deep">Link Pendaftaran Affiliate Umum</p>
         <p className="mt-1 text-sm font-semibold text-[var(--dim)]">
-          Satu link untuk semua KOL. Pendaftar masuk daftar menunggu persetujuan,
-          lalu kamu verifikasi nomor WhatsApp sebelum mengirim tautan aktivasi pribadi.
+          Satu link untuk semua KOL. Mitra langsung membuat PIN sendiri saat mendaftar dan akun aktif otomatis.
+          Admin mengelola komisi, kupon, KPI, laporan, pencairan, serta penangguhan akun.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <code className="max-w-full break-all rounded-xl bg-white px-3 py-2 text-xs font-bold">
@@ -1100,7 +1084,7 @@ export function AffiliateAdmin() {
           />
         </div>
         <p className="mt-2 text-sm font-semibold text-olive-deep">
-          Pendaftar baru menunggu konfirmasi WhatsApp: {affiliates.data?.affiliates.filter((a) => a.status === "pending" && a.inviteState === "none").length ?? "…"}
+          Pendaftaran mandiri tidak memerlukan undangan atau verifikasi WhatsApp.
         </p>
       </div>
       <details className="rounded-3xl bg-[var(--surface)] px-4 py-3 ring-1 ring-[var(--border)]">
@@ -1195,7 +1179,7 @@ export function AffiliateAdmin() {
         {affiliates.isPending && <p className="font-display font-bold">Memuat afiliasi…</p>}
         {affiliates.error && <p className="font-display font-bold text-berry">Daftar afiliasi tidak bisa dimuat.</p>}
         {affiliates.data?.affiliates.length === 0 && (
-          <p className="font-semibold text-[var(--dim)]">Belum ada afiliasi. Undang yang pertama lewat formulir di atas.</p>
+          <p className="font-semibold text-[var(--dim)]">Belum ada affiliate. Bagikan link pendaftaran umum agar mitra bisa mendaftar sendiri.</p>
         )}
         {affiliates.data?.affiliates.map((a) => <AdminAffiliateCard key={a.id} a={a} />)}
       </div>
