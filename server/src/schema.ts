@@ -10,6 +10,7 @@ import { doublePrecision, integer, pgTable, text, timestamp } from "drizzle-orm/
 export const projects = pgTable("projects", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   templateId: text("template_id").notNull(),
+  ownerId: text("owner_id").notNull().default(""),
   childName: text("child_name").notNull().default(""),
   message: text("message").notNull().default(""),
   nameFont: text("name_font").notNull().default("baloo"),

@@ -22,7 +22,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres, { type Sql } from "postgres";
-import * as schema from "./schema";
+import * as schema from "./schema.js";
 
 type Db = PostgresJsDatabase<typeof schema>;
 

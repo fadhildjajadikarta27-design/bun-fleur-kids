@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaTopScrim } from "./components/SafeAreaTopScrim";
+import { AdminGate } from "./components/AdminGate";
 import { api, type ApiResponse } from "./api";
 import { FIELDS } from "./fields";
 import { NAME_COLORS, NAME_FONTS } from "./lib/model";
@@ -2213,6 +2214,7 @@ function Parents({ brandName }: { brandName: string }) {
         <p className="band-dim mt-2 max-w-2xl leading-relaxed">Cara platform ini bekerja, produk fisiknya, bahan dan batasannya — plus pengelolaan proyek tersimpan. Tanpa akun, tanpa daftar — proyek tersimpan secara privat di aplikasi ini.</p>
       </div>
 
+      <AdminGate>
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pengaturan merek">
         <h2 className="font-display text-lg font-extrabold">Nama studio</h2>
         <p className="text-sm font-semibold text-[var(--dim)]">Nama merek muncul di header dan di setiap PDF cetakan.</p>
@@ -2285,6 +2287,8 @@ function Parents({ brandName }: { brandName: string }) {
           <AdminOrders />
         </div>
       </section>
+
+      </AdminGate>
 
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Lacak pesanan">
         <h2 className="font-display text-lg font-extrabold">Lacak pesanan</h2>
@@ -2744,7 +2748,7 @@ export function App() {
         {route.view === "aff-reset" && (
           <AffiliateResetPage token={route.token} goDashboard={() => goAffiliate({ view: "aff-dashboard" })} />
         )}
-        {route.view === "aff-admin" && <AffiliateAdminPage />}
+        {route.view === "aff-admin" && <AdminGate><AffiliateAdminPage /></AdminGate>}
       </main>
       <footer className="bg-[#F1EBDD] px-4 pb-24 pt-10 text-center text-sm font-semibold sm:pb-10">
         <img src={logoUrl} alt="" className="mx-auto h-12 w-12 rounded-2xl object-cover ring-1 ring-black/10" />
