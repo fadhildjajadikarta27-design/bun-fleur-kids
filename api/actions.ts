@@ -10,7 +10,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dispatchAction } from "../server/src/dispatch.js";
-import { clearAdminCookie, isAdminAuthorized, issueAdminCookie, requiresAdmin, verifyPassword } from "../server/src/admin-auth.js";
+import { clearAdminCookie, isAdminAuthorized, issueAdminCookie, requiresAdmin, verifyPassword, visitorFromCookie } from "../server/src/admin-auth.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -38,6 +38,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     res.end(JSON.stringify({ error: "Request body must name an action." }));
     return;
   }
+  const visitor = visitorFromCookie(req.headers.cookie);
+  if (visitor.cookie) res.setHeader("set-cookie", visitor.cookie);
+
   // Admin sessions are issued only by this server-side entrypoint.
   // Neither a hidden URL nor a browser-provided role is authorization.
   const cookieHeader = req.headers.cookie;
@@ -66,7 +69,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
     try {
-      res.setHeader("set-cookie", issueAdminCookie());
+      res.setHeader("set-cookie", [ ...(visitor.cookie ? [visitor.cookie] : []), issueAdminCookie() ]);
       json(200, { authenticated: true });
     } catch {
       json(503, { error: "Sesi admin belum dikonfigurasi di server." });
@@ -74,7 +77,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
   if (payload.action === "adminLogout") {
-    res.setHeader("set-cookie", clearAdminCookie());
+    res.setHeader("set-cookie", [ ...(visitor.cookie ? [visitor.cookie] : []), clearAdminCookie() ]);
     json(200, { authenticated: false });
     return;
   }
@@ -82,7 +85,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     json(401, { error: "Akses admin dibatasi. Masuk melalui halaman admin terlebih dahulu." });
     return;
   }
-  const { status, body } = await dispatchAction(payload.action, payload.args ?? {});
+  const { status, body } = await dispatchAction(payload.action, payload.args ?? {}, visitor.id, isAdminAuthorized(cookieHeader));
   res.statusCode = status;
   res.setHeader("content-type", "application/json");
   res.end(JSON.stringify(body));
