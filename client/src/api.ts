@@ -35,11 +35,11 @@ async function callAction(action: string, args: unknown): Promise<unknown> {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action, args: args ?? {} }),
-      signal: action === "adminCreateAffiliate" ? AbortSignal.timeout(30_000) : undefined,
+      signal: action === "adminCreateAffiliate" || action === "affiliateApply" ? AbortSignal.timeout(30_000) : undefined,
     });
   } catch (err) {
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
-      throw new Error("Pembuatan afiliasi terlalu lama. Periksa daftar afiliasi sebelum mencoba lagi, agar tidak membuat duplikat.");
+      throw new Error(action === "affiliateApply" ? "Pendaftaran terlalu lama. Jangan mengirim berulang-ulang; hubungi tim Bun & Fleur Kids jika tidak ada kabar lewat WhatsApp." : "Pembuatan afiliasi terlalu lama. Periksa daftar afiliasi sebelum mencoba lagi, agar tidak membuat duplikat.");
     }
     throw err;
   }

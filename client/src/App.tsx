@@ -46,6 +46,7 @@ import {
   AffiliateLoginPage,
   AffiliateResetPage,
 } from "./components/Affiliate";
+import { AffiliateRegistrationPage } from "./components/AffiliateRegistration";
 import { buildPillowPdf, buildStandeePdf, buildToyPdf, downloadBlob } from "./lib/pdf";
 import { logoUrl } from "./assets-inline";
 
@@ -77,6 +78,7 @@ type Route =
   | { view: "checkout" }
   | { view: "ordered" }
   | { view: "creations" }
+  | { view: "aff-register" }
   | { view: "aff-invite"; token: string }
   | { view: "aff-login" }
   | { view: "aff-dashboard" }
@@ -93,6 +95,7 @@ function parseHashRoute(): Route | null {
   if (invite?.[1]) return { view: "aff-invite", token: invite[1] };
   const reset = h.match(/^#\/affiliate\/reset\/([A-Za-z0-9]+)/);
   if (reset?.[1]) return { view: "aff-reset", token: reset[1] };
+  if (h.startsWith("#/affiliate/daftar")) return { view: "aff-register" };
   if (h.startsWith("#/affiliate/login")) return { view: "aff-login" };
   if (h.startsWith("#/affiliate/dashboard")) return { view: "aff-dashboard" };
   // Rute khusus admin untuk Manajemen Afiliasi: SENGAJA tidak ditautkan
@@ -262,6 +265,7 @@ function navActiveView(route: Route): NavView {
   )
     return "explore";
   if (
+    route.view === "aff-register" ||
     route.view === "aff-invite" ||
     route.view === "aff-login" ||
     route.view === "aff-dashboard" ||
@@ -2165,11 +2169,11 @@ function AffiliateAdminPage() {
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Program afiliasi">
         <h2 className="font-display text-lg font-extrabold">Program Afiliasi (Admin)</h2>
         <p className="text-sm font-semibold text-[var(--dim)]">
-          Undang mitra afiliasi, atur kupon &amp; komisinya (bawaan 30% dari subtotal produk bersih setelah
-          diskon pelanggan — ongkir dan kode unik QRIS tidak pernah dihitung), pantau penjualannya, dan
-          proses permintaan penarikan komisi. Afiliasi mengaktifkan akunnya sendiri lewat tautan undangan
-          sekali pakai (berlaku terbatas) dan membuat PIN 4 digit yang tersimpan terenkripsi — PIN tidak
-          pernah bisa dilihat admin. Komisi tercatat otomatis: menunggu saat pesanan belum lunas,
+          Bagikan satu link pendaftaran umum ke semua KOL. Pendaftar masuk sebagai calon mitra,
+          lalu konfirmasi identitasnya melalui WhatsApp sebelum menyetujui dan mengirimkan
+          tautan aktivasi pribadi (72 jam, sekali pakai). Mitra membuat PIN 4 digit sendiri.
+          Komisi bawaan 30% dihitung dari subtotal bersih setelah diskon; ongkir dan
+          kode unik QRIS tidak masuk perhitungan. Komisi tercatat otomatis: menunggu saat pesanan belum lunas,
           terkonfirmasi saat pembayaran QRIS terverifikasi, siap dicairkan saat pesanan selesai, dan
           dibalikkan bila pesanan direfund.
         </p>
@@ -2423,7 +2427,8 @@ export function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
   const goAffiliate = (r: Route) => {
-    if (r.view === "aff-invite") window.location.hash = `/affiliate/invite/${r.token}`;
+    if (r.view === "aff-register") window.location.hash = "/affiliate/daftar";
+    else if (r.view === "aff-invite") window.location.hash = `/affiliate/invite/${r.token}`;
     else if (r.view === "aff-reset") window.location.hash = `/affiliate/reset/${r.token}`;
     else if (r.view === "aff-login") window.location.hash = "/affiliate/login";
     else if (r.view === "aff-dashboard") window.location.hash = "/affiliate/dashboard";
@@ -2729,6 +2734,7 @@ export function App() {
           />
         )}
         {route.view === "parents" && <Parents brandName={brandName} />}
+        {route.view === "aff-register" && <AffiliateRegistrationPage />}
         {route.view === "aff-invite" && (
           <AffiliateInvitePage
             token={route.token}
@@ -2754,9 +2760,12 @@ export function App() {
         <img src={logoUrl} alt="" className="mx-auto h-12 w-12 rounded-2xl object-cover ring-1 ring-black/10" />
         <p className="mt-3">{brandName} · Warnai → Personalisasi → 3D → Cetak → Rakit</p>
         <p className="mt-1 text-[var(--dim)]">Orang dewasa, mohon dampingi saat menggunting &amp; melipat.</p>
-        <p className="mt-2">
+        <p className="mt-2 flex flex-wrap justify-center gap-x-5 gap-y-2">
+          <button type="button" onClick={() => goAffiliate({ view: "aff-register" })} className="font-display font-bold text-olive-deep underline">
+            Daftar KOL &amp; Affiliate
+          </button>
           <button type="button" onClick={() => goAffiliate({ view: "aff-login" })} className="font-display font-bold text-sky-deep underline">
-            Program Afiliasi — masuk dasbor mitra
+            Masuk Dasbor Mitra
           </button>
         </p>
       </footer>

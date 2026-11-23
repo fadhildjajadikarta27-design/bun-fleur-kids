@@ -43,6 +43,8 @@ describe("admin access", () => {
     expect(requiresAdmin("adminUpdatePayout")).toBe(true);
     expect(requiresAdmin("adminListAffiliates")).toBe(true);
     expect(requiresAdmin("updateSettings")).toBe(true);
+    expect(requiresAdmin("adminRegenerateInvite")).toBe(true);
+    expect(requiresAdmin("affiliateApply")).toBe(false);
     expect(requiresAdmin("createOrder")).toBe(false);
     expect(requiresAdmin("getSettings")).toBe(false);
   });

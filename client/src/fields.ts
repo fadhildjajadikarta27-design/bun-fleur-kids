@@ -208,6 +208,30 @@ export const FIELDS: FieldsShape<typeof Actions> = {
     "id": {},
     "decision": {}
   },
+  "affiliateApply": {
+    "fullName": {
+      "maxLength": 80,
+      "minLength": 2
+    },
+    "email": {
+      "type": "email",
+      "maxLength": 120
+    },
+    "whatsapp": {
+      "maxLength": 24,
+      "minLength": 9
+    },
+    "instagram": {
+      "maxLength": 80
+    },
+    "tiktok": {
+      "maxLength": 80
+    },
+    "consent": {},
+    "website": {
+      "maxLength": 120
+    }
+  },
   "adminCreateAffiliate": {
     "fullName": {
       "maxLength": 80,
@@ -218,7 +242,7 @@ export const FIELDS: FieldsShape<typeof Actions> = {
       "maxLength": 120
     },
     "whatsapp": {
-      "maxLength": 20
+      "maxLength": 24
     },
     "instagram": {
       "maxLength": 40

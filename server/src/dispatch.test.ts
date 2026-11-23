@@ -27,6 +27,29 @@ describe("Affiliate input validation", () => {
     expect(result.status).toBe(400);
   });
 
+  test("public registration requires explicit permission to contact by WhatsApp", async () => {
+    const result = await dispatchAction("affiliateApply", {
+      fullName: "Mitra Contoh",
+      email: "mitra@example.org",
+      whatsapp: "081234567890",
+      instagram: "@mitra",
+      tiktok: "",
+      consent: false,
+    });
+    expect(result.status).toBe(400);
+  });
+
+  test("public registration rejects invalid WhatsApp before database access", async () => {
+    const result = await dispatchAction("affiliateApply", {
+      fullName: "Mitra Contoh",
+      email: "mitra@example.org",
+      whatsapp: "bukan-nomor",
+      consent: true,
+    });
+    expect(result.status).toBe(400);
+    expect(JSON.stringify(result.body)).toContain("WhatsApp");
+  });
+
   test("unknown actions continue to return 404", async () => {
     const result = await dispatchAction("actionDoesNotExist", {});
     expect(result.status).toBe(404);
