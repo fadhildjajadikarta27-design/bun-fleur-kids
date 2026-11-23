@@ -21,12 +21,14 @@ import { buildCustomTemplate, parseCustomDef } from "../lib/custom";
 import { buildPillowPdf, downloadBlob } from "../lib/pdf";
 import { papercraftSampleUrl } from "../papercraft-sample";
 import { celenganPhotoUrl } from "../celengan-photo";
+import { puzzlePhotoUrl } from "../puzzle-photo";
+import { placematPhotoUrl } from "../placemat-photo";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 
-export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt" | "celengan" | "accessory59";
+export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt" | "celengan" | "accessory59" | "placemat";
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 
 export interface ShopProject {
@@ -80,11 +82,18 @@ export const PRODUCT_META: Record<
     see: "See My Poster",
   },
   accessory59: {
-    title: "Aksesori Custom Premium",
-    tagline: "Accessories",
-    description: "Aksesori personal dari hasil mewarnai si kecil — karakter, pilihan warna, serta namanya menjadi desain produk miliknya sendiri.",
-    cta: "Buat Aksesori-ku",
-    see: "Lihat Desain-ku",
+    title: "Puzzle Custom",
+    tagline: "Puzzle Personal",
+    description: "Karya mewarnai anak menjadi puzzle bergambar karakter dan namanya sendiri. Aktivitas menyusun yang seru bersama keluarga.",
+    cta: "Buat Puzzle-ku",
+    see: "Lihat Puzzle-ku",
+  },
+  placemat: {
+    title: "Alas Makan Custom",
+    tagline: "Placemats Anak",
+    description: "Teman makan si kecil dengan ilustrasi, warna, dan nama dari karya mewarnainya sendiri.",
+    cta: "Buat Alas Makan-ku",
+    see: "Lihat Alas Makan-ku",
   },
   celengan: {
     title: "Celengan Custom",
@@ -122,6 +131,7 @@ const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
     { id: "papercraft", basePrice: 49000, priceLabel: "fixed" },
     { id: "celengan", basePrice: 29000, priceLabel: "fixed" },
     { id: "accessory59", basePrice: 59000, priceLabel: "fixed" },
+    { id: "placemat", basePrice: 69000, priceLabel: "fixed" },
     { id: "figurine", basePrice: 120000, priceLabel: "from" },
     { id: "tshirt", basePrice: 79000, priceLabel: "from" },
   ],
@@ -381,22 +391,36 @@ function ProductPreview({
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
   if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
   if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
-  if (product === "accessory59") {
+  if (product === "accessory59" || product === "placemat") {
+    const puzzle = product === "accessory59";
+    const template = templateForSnapshot(project);
     return (
       <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
-        <div className="rounded-3xl bg-[#EEF4E4] p-5 ring-1 ring-[var(--border)]">
-          <div className="mx-auto max-w-[250px] overflow-hidden rounded-3xl bg-white p-3 shadow-sm">
-            <ArtworkSvg template={templateForSnapshot(project)} colors={project.colors}
-              strokes={project.strokes} name={name} message={project.message}
-              nameFont={project.nameFont} nameColor={project.nameColor}
-              nameAlign={project.nameAlign} />
-          </div>
-          <p className="mt-3 text-center font-display text-sm font-bold text-olive-deep">
-            Aksesori custom dari karya yang kamu warnai
-          </p>
+        <div className="relative overflow-hidden rounded-2xl bg-[#F7F2E7] ring-1 ring-[var(--border)]">
+          <img src={puzzle ? puzzlePhotoUrl : placematPhotoUrl}
+            alt={puzzle
+              ? "Contoh puzzle custom bergambar dinosaurus warna-warni dengan nama Adam"
+              : "Contoh alas makan custom Bun & Fleur Kids dengan dinosaurus berwarna dan nama Adam"}
+            className={`w-full object-cover ${puzzle ? "aspect-square" : "aspect-[3/2]"}`} loading="lazy" />
+          <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1.5 font-display text-xs font-bold text-olive-deep shadow-sm">
+            Contoh Produk
+          </span>
         </div>
-        <p className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">
-          Pratinjau karya dan warna pesanan. Contoh foto produk belum tersedia pada katalog.
+        <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white p-2.5 ring-1 ring-[var(--border)]">
+          <div className="w-20 shrink-0 overflow-hidden rounded-xl bg-white">
+            <ArtworkSvg template={template} colors={project.colors} strokes={project.strokes}
+              name={name} message={project.message} nameFont={project.nameFont}
+              nameColor={project.nameColor} nameAlign={project.nameAlign} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-display text-xs font-extrabold text-olive-deep">Karya untuk pesananmu</p>
+            <p className="text-xs font-semibold leading-snug text-[var(--dim)]">
+              Gambar, warna, dan nama dari karya tersimpan digunakan untuk desain custom produk ini.
+            </p>
+          </div>
+        </div>
+        <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">
+          Foto dinosaurus hanya contoh. Produk dibuat dari karya anak yang kamu pilih.
         </p>
       </div>
     );
@@ -505,7 +529,7 @@ export function Masterpiece({
         </p>
       </section>
 
-      {/* Enam pilihan produk, termasuk dua aksesori */}
+      {/* Tujuh produk fisik, termasuk puzzle, celengan, dan alas makan */}
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Pilih bentuk kreasimu">
         {(Object.keys(PRODUCT_META) as ProductId[]).map((id) => {
           const meta = PRODUCT_META[id];
@@ -524,7 +548,12 @@ export function Masterpiece({
               <p className="mt-2 font-display text-lg font-semibold text-olive-deep">{priceLine(cfg, id)}</p>
               {id === "accessory59" && (
                 <p className="mt-1 text-xs font-bold text-olive-deep">
-                  Accessories · Rp59.000 · personalisasi gambar dan nama · ongkir terpisah.
+                  Puzzle Custom · Rp59.000 · karakter dan nama anak · ongkir terpisah.
+                </p>
+              )}
+              {id === "placemat" && (
+                <p className="mt-1 text-xs font-bold text-olive-deep">
+                  Alas Makan Custom · Rp69.000 · gambar dan nama anak · ongkir terpisah.
                 </p>
               )}
               {id === "celengan" && (
@@ -641,7 +670,9 @@ export function Customize({
                     : selection.product === "celengan"
                       ? "Nama anak dan karakter kreasinya dicetak pada sisi depan celengan. Logo Bun & Fleur Kids pada sisi belakang."
                       : selection.product === "accessory59"
-                        ? "Nama dan gambar kreasimu ikut dalam desain aksesori custom; spesifikasi cetak akhir disesuaikan produk."
+                        ? "Nama anak menjadi bagian desain puzzle bersama gambar serta warna karya mewarnainya."
+                        : selection.product === "placemat"
+                          ? "Nama anak dicetak pada alas makan bersama karya yang telah diwarnai."
                   : "Bila diisi, nama anak dicetak di bawah desain pada kaos."}
             </p>
           </div>
@@ -713,9 +744,19 @@ export function Customize({
 
           {selection.product === "accessory59" && (
             <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
-              <p className="font-display font-extrabold">Aksesori Custom Premium · Rp59.000</p>
-              <p className="mt-1">Karya mewarnai anak dipakai untuk personalisasi aksesori.
-                Harga tetap, ongkir terpisah. Foto dan detail bentuk fisik akan dikonfirmasi sebelum produksi.</p>
+              <p className="font-display font-extrabold">Puzzle Custom · Rp59.000</p>
+              <p className="mt-1">Puzzle kepingan dengan karakter dan nama dari hasil mewarnai anak.
+                Foto memperlihatkan contoh desain dinosaurus; jumlah kepingan serta bahan final
+                dikonfirmasi oleh tim sebelum produksi. Kepingan kecil perlu pengawasan orang dewasa.
+                Harga belum termasuk ongkir.</p>
+            </div>
+          )}
+          {selection.product === "placemat" && (
+            <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
+              <p className="font-display font-extrabold">Alas Makan Custom · Rp69.000</p>
+              <p className="mt-1">Alas makan personal dengan karya yang sudah diwarnai, nama anak, dan
+                tampilan Bun & Fleur Kids. Foto merupakan contoh desain. Spesifikasi bahan dan
+                ukuran dikonfirmasi tim sebelum produksi. Harga belum termasuk ongkir.</p>
             </div>
           )}
           {selection.product === "celengan" && (
@@ -750,7 +791,7 @@ export function Customize({
           <dl className="mt-5 space-y-1.5 border-t-2 border-dashed border-[var(--border)] pt-4 text-sm font-semibold">
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Harga produk</dt>
-              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft" || selection.product === "celengan" || selection.product === "accessory59") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
+              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft" || selection.product === "celengan" || selection.product === "accessory59" || selection.product === "placemat") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Ongkos kirim</dt>
