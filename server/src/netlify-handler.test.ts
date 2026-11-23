@@ -76,8 +76,8 @@ describe("Netlify API compatibility", () => {
     expect(process.env.BFK_SKIP_MIGRATIONS).toBe("1");
   });
 
-  test("unknown action returns 404 without using database", async () => {
+  test("unknown action is blocked for unauthenticated callers", async () => {
     const res = await netlifyHandler(request("unknownAction"));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
   });
 });
