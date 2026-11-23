@@ -101,7 +101,7 @@ function parseHashRoute(): Route | null {
   // Rute khusus admin untuk Manajemen Afiliasi: SENGAJA tidak ditautkan
   // dari menu, header, footer, Dasbor Orang Tua, atau halaman publik mana
   // pun — admin membukanya langsung lewat potongan alamat ini.
-  if (h.startsWith("#/kelola-afiliasi-4821")) return { view: "aff-admin" };
+  if (h.startsWith("#/admin/affiliate") || h.startsWith("#/kelola-afiliasi-4821")) return { view: "aff-admin" };
   return null;
 }
 
@@ -2163,17 +2163,17 @@ function AffiliateAdminPage() {
       <div className="band-sage mt-4 rounded-[2rem] px-6 py-8 sm:px-8">
         <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Khusus Admin</p>
         <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">Manajemen <span className="band-accent">Afiliasi</span></h1>
-        <p className="band-dim mt-2 max-w-2xl leading-relaxed">Undang mitra afiliasi, atur kupon &amp; komisinya, pantau penjualannya, dan proses permintaan penarikan komisi — semua dari halaman khusus ini.</p>
+        <p className="band-dim mt-2 max-w-2xl leading-relaxed">Dasbor pribadi admin: ringkasan performa, seluruh mitra, kode referral, KPI, komisi, pencairan, dan log aktivitas.</p>
       </div>
 
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Program afiliasi">
         <h2 className="font-display text-lg font-extrabold">Program Afiliasi (Admin)</h2>
         <p className="text-sm font-semibold text-[var(--dim)]">
-          Bagikan satu link pendaftaran umum ke semua KOL. Pendaftar masuk sebagai calon mitra,
-          lalu konfirmasi identitasnya melalui WhatsApp sebelum menyetujui dan mengirimkan
-          tautan aktivasi pribadi (72 jam, sekali pakai). Mitra membuat PIN 4 digit sendiri.
-          Komisi bawaan 30% dihitung dari subtotal bersih setelah diskon; ongkir dan
-          kode unik QRIS tidak masuk perhitungan. Komisi tercatat otomatis: menunggu saat pesanan belum lunas,
+          Bagikan satu link pendaftaran umum ke semua KOL. Mitra langsung mendaftarkan
+          nomor HP dan data diri, membuat PIN 4 digit, kemudian mendapat akses dashboard sendiri
+          tanpa OTP atau konfirmasi WhatsApp. Login berikutnya hanya nomor HP + PIN.
+          Komisi awal 30% dihitung dari subtotal produk setelah diskon, tidak termasuk ongkir
+          dan kode unik QRIS. Komisi tercatat otomatis: menunggu saat pesanan belum lunas,
           terkonfirmasi saat pembayaran QRIS terverifikasi, siap dicairkan saat pesanan selesai, dan
           dibalikkan bila pesanan direfund.
         </p>
@@ -2432,7 +2432,7 @@ export function App() {
     else if (r.view === "aff-reset") window.location.hash = `/affiliate/reset/${r.token}`;
     else if (r.view === "aff-login") window.location.hash = "/affiliate/login";
     else if (r.view === "aff-dashboard") window.location.hash = "/affiliate/dashboard";
-    else if (r.view === "aff-admin") window.location.hash = "/kelola-afiliasi-4821";
+    else if (r.view === "aff-admin") window.location.hash = "/admin/affiliate";
     setRoute(r);
     window.scrollTo({ top: 0 });
   };
@@ -2745,7 +2745,7 @@ export function App() {
         {route.view === "aff-login" && (
           <AffiliateLoginPage
             goDashboard={() => goAffiliate({ view: "aff-dashboard" })}
-            goInviteHelp={() => go({ view: "parents" })}
+            goRegister={() => goAffiliate({ view: "aff-register" })}
           />
         )}
         {route.view === "aff-dashboard" && (
