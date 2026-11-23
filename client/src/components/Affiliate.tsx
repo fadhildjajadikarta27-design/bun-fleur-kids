@@ -1021,6 +1021,26 @@ export function AffiliateAdmin() {
   const payouts = useQuery({ queryKey: ["adminPayouts"], queryFn: () => api.adminListPayouts({ limit: 50 }) });
   const config = useQuery({ queryKey: ["affiliateConfig"], queryFn: () => api.getAffiliateConfig({}) });
   const auditLog = useQuery({ queryKey: ["affiliateAudit"], queryFn: () => api.adminListAffiliateAudit({ limit: 20 }) });
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "pending" | "suspended">("all");
+  const rows = affiliates.data?.affiliates ?? [];
+  const filtered = rows.filter((a) => {
+    if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    const needle = search.trim().toLowerCase();
+    return !needle || [a.name, a.whatsapp, a.email, a.couponCode, a.instagram, a.tiktok]
+      .some((v) => v.toLowerCase().includes(needle));
+  });
+  const total = (name: "netSales" | "totalOrders" | "totalCommission" | "pendingPayout") =>
+    rows.reduce((sum, a) => sum + a[name], 0);
+  const metrics = [
+    { label: "Total Affiliate", value: String(rows.length), hint: "Seluruh akun terdaftar" },
+    { label: "Akun Aktif", value: String(rows.filter((a) => a.status === "active").length), hint: "Bisa login & membagikan kode" },
+    { label: "Pesanan Terbayar", value: String(total("totalOrders")), hint: "Pesanan yang menghasilkan komisi" },
+    { label: "Penjualan Bersih", value: formatIDR(total("netSales")), hint: "Dari kode affiliate" },
+    { label: "Total Komisi", value: formatIDR(total("totalCommission")), hint: "Komisi atas pesanan terbayar" },
+    { label: "Pencairan Diproses", value: formatIDR(total("pendingPayout")), hint: "Permintaan yang belum selesai" },
+  ];
+  const leaders = [...rows].sort((a, b) => b.netSales - a.netSales).slice(0, 5);
   const [form, setForm] = useState({ name: "", email: "", whatsapp: "", instagram: "", tiktok: "", couponCode: "", discountPct: "10", commissionPct: "30" });
   const [error, setError] = useState("");
   const [created, setCreated] = useState<{ name: string; token: string } | null>(null);
@@ -1068,6 +1088,38 @@ export function AffiliateAdmin() {
   const setF = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
     <div className="space-y-5">
+      <section className="rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Ringkasan dashboard affiliate">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="font-display text-xs font-bold uppercase tracking-[0.15em] text-olive-deep">Dashboard Admin</p>
+            <h2 className="mt-1 font-display text-2xl font-extrabold">Ringkasan Program Afiliasi</h2>
+            <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Pantau performa mitra, kode referral, komisi, pencairan, dan keamanan akun.</p>
+          </div>
+          <button type="button" onClick={() => {
+            void queryClient.invalidateQueries({ queryKey: ["adminAffiliates"] });
+            void queryClient.invalidateQueries({ queryKey: ["adminPayouts"] });
+            void queryClient.invalidateQueries({ queryKey: ["affiliateAudit"] });
+          }} className="rounded-full bg-[var(--surface-alt)] px-5 py-2.5 font-display text-sm font-bold ring-1 ring-[var(--border)]">
+            Perbarui Data
+          </button>
+        </div>
+        {affiliates.isPending ? (
+          <p className="mt-4 text-sm font-semibold text-[var(--dim)]">Memuat ringkasan…</p>
+        ) : affiliates.error ? (
+          <p className="mt-4 text-sm font-semibold text-berry">Ringkasan tidak dapat dimuat. Pastikan sudah login admin.</p>
+        ) : (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {metrics.map((m) => (
+              <div key={m.label} className="rounded-2xl bg-[var(--bg)] p-4 ring-1 ring-[var(--border)]">
+                <p className="font-display text-xs font-bold text-[var(--dim)]">{m.label}</p>
+                <p className="mt-2 font-display text-2xl font-extrabold text-olive-deep">{m.value}</p>
+                <p className="mt-1 text-xs font-semibold text-[var(--dim)]">{m.hint}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="rounded-3xl bg-[#EEF4E4] p-5 ring-1 ring-olive/20">
         <p className="font-display text-lg font-extrabold text-olive-deep">Link Pendaftaran Affiliate Umum</p>
         <p className="mt-1 text-sm font-semibold text-[var(--dim)]">
@@ -1087,9 +1139,23 @@ export function AffiliateAdmin() {
           Pendaftaran mandiri tidak memerlukan undangan atau verifikasi WhatsApp.
         </p>
       </div>
+      <section className="rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Affiliate dengan penjualan terbanyak">
+        <h3 className="font-display text-lg font-extrabold">Affiliate Teratas</h3>
+        <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Urutan berdasarkan nilai penjualan bersih yang sudah terbayar.</p>
+        <div className="mt-3 space-y-2">
+          {leaders.length === 0 && <p className="text-sm font-semibold text-[var(--dim)]">Belum ada mitra terdaftar.</p>}
+          {leaders.map((a, index) => (
+            <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[var(--bg)] px-4 py-3">
+              <p className="text-sm font-bold"><span className="mr-3 font-display text-olive-deep">#{index + 1}</span>{a.name}</p>
+              <p className="font-display text-sm font-bold">{formatIDR(a.netSales)} <span className="text-xs text-[var(--dim)]">({a.totalOrders} pesanan)</span></p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <details className="rounded-3xl bg-[var(--surface)] px-4 py-3 ring-1 ring-[var(--border)]">
         <summary className="cursor-pointer font-display text-sm font-bold text-[var(--dim)]">
-          Pendaftaran manual (opsional — untuk admin)
+          Undangan manual untuk akun lama (opsional)
         </summary>
       <form
         className="mt-3 rounded-3xl bg-[var(--bg)] p-4 ring-1 ring-[var(--border)]"
@@ -1175,13 +1241,43 @@ export function AffiliateAdmin() {
         {saveConfig.isSuccess && <span className="pb-2 font-display text-sm font-bold text-olive-deep">Tersimpan ✓</span>}
       </div>
 
+      <section className="rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Manajemen akun affiliate">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg font-extrabold">Kelola Seluruh Affiliate</h3>
+            <p className="text-sm font-semibold text-[var(--dim)]">Cari berdasarkan nama, HP, email, Instagram, TikTok, atau kode kupon. Atur status, komisi, diskon, dan KPI di tiap kartu.</p>
+          </div>
+          <p className="font-display text-sm font-bold text-olive-deep">{filtered.length} dari {rows.length} akun</p>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label htmlFor="aff-admin-search" className="font-display text-xs font-bold text-[var(--dim)]">Cari akun</label>
+            <input id="aff-admin-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Nama, nomor HP, kode, Instagram…" className={inputCls} />
+          </div>
+          <div>
+            <label htmlFor="aff-admin-status" className="font-display text-xs font-bold text-[var(--dim)]">Filter status</label>
+            <select id="aff-admin-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className={inputCls}>
+              <option value="all">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="pending">Belum Aktif (Akun Lama)</option>
+              <option value="suspended">Ditangguhkan</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
       <div className="space-y-3">
         {affiliates.isPending && <p className="font-display font-bold">Memuat afiliasi…</p>}
         {affiliates.error && <p className="font-display font-bold text-berry">Daftar afiliasi tidak bisa dimuat.</p>}
         {affiliates.data?.affiliates.length === 0 && (
           <p className="font-semibold text-[var(--dim)]">Belum ada affiliate. Bagikan link pendaftaran umum agar mitra bisa mendaftar sendiri.</p>
         )}
-        {affiliates.data?.affiliates.map((a) => <AdminAffiliateCard key={a.id} a={a} />)}
+        {filtered.length === 0 && rows.length > 0 && !affiliates.isPending && (
+          <p className="rounded-2xl bg-[var(--surface)] p-4 text-sm font-semibold text-[var(--dim)]">Tidak ada affiliate yang cocok dengan pencarian/filter.</p>
+        )}
+        {filtered.map((a) => <AdminAffiliateCard key={a.id} a={a} />)}
       </div>
 
       <div className="rounded-3xl bg-[var(--bg)] p-4 ring-1 ring-[var(--border)]">
