@@ -1,1 +1,1 @@
-ALTER TABLE projects ADD COLUMN custom_def TEXT NOT NULL DEFAULT '';
+ALTER TABLE projects ADD COLUMN custom_def text NOT NULL DEFAULT '';

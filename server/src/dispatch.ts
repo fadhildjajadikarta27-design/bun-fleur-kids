@@ -8,7 +8,7 @@
 // This module is shared by the Vercel Function (api/actions.ts) and the
 // local dev server (scripts/dev-server.mjs).
 
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { Actions } from "./actions";
 import { ensureMigrations, getDb } from "./db";
 import { z, type ActionDef, type Ctx } from "./sdk";
@@ -76,7 +76,7 @@ const ctx: Ctx = {
   // getDb() is built with this app's schema (server/src/schema.ts), which
   // is the only schema actions ever request via ctx.db<typeof schema>().
   db: <TSchema extends Record<string, unknown>>() =>
-    getDb() as unknown as LibSQLDatabase<TSchema>,
+    getDb() as unknown as PostgresJsDatabase<TSchema>,
   invalidateQueries: () => {
     // The Space runtime used this to bust its hosted query cache. The
     // standalone client refetches through react-query itself, so there is

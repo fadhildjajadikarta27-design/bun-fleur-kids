@@ -5,10 +5,10 @@
 // export. Region colors and freehand strokes are stored as JSON text.
 // `settings` holds the configurable brand name (single row, id = 1).
 
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { doublePrecision, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const projects = sqliteTable("projects", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const projects = pgTable("projects", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   templateId: text("template_id").notNull(),
   childName: text("child_name").notNull().default(""),
   message: text("message").notNull().default(""),
@@ -26,10 +26,10 @@ export const projects = sqliteTable("projects", {
   status: text("status", { enum: ["draft", "done"] })
     .notNull()
     .default("draft"),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
@@ -37,7 +37,7 @@ export const projects = sqliteTable("projects", {
 // QRIS / affiliate settings live on the single settings row: the minimum
 // withdrawal an affiliate may request and how long an invitation link
 // stays valid (hours, default 72 per the affiliate brief).
-export const settings = sqliteTable("settings", {
+export const settings = pgTable("settings", {
   id: integer("id").primaryKey(),
   brandName: text("brand_name").notNull().default("Bun & Fleur Kids"),
   minWithdrawal: integer("min_withdrawal").notNull().default(50000),
@@ -50,7 +50,7 @@ export const settings = sqliteTable("settings", {
 // has been built and tested (prototype_tested = 1) — enforced in the
 // updateTemplateQc action. Every change appends a template_versions row
 // as an audit trail.
-export const templateQc = sqliteTable("template_qc", {
+export const templateQc = pgTable("template_qc", {
   templateId: text("template_id").primaryKey(),
   status: text("status", {
     enum: ["draft", "needs_review", "validated", "production_ready"],
@@ -60,9 +60,9 @@ export const templateQc = sqliteTable("template_qc", {
   prototypeTested: integer("prototype_tested").notNull().default(0),
   checksPassed: integer("checks_passed").notNull().default(0),
   scalePct: integer("scale_pct").notNull().default(100),
-  tabDepthMm: real("tab_depth_mm").notNull().default(7),
-  nameOffsetMm: real("name_offset_mm").notNull().default(0),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+  tabDepthMm: doublePrecision("tab_depth_mm").notNull().default(7),
+  nameOffsetMm: doublePrecision("name_offset_mm").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
@@ -73,8 +73,8 @@ export const templateQc = sqliteTable("template_qc", {
 // the server-computed price, and the payment / fulfilment status pair.
 // Payment status is only ever changed through the admin action after the
 // team verifies payment — there is no self-serve "paid" path.
-export const orders = sqliteTable("orders", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const orders = pgTable("orders", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   code: text("code").notNull().unique(),
   projectId: integer("project_id"),
   templateId: text("template_id").notNull(),
@@ -111,7 +111,7 @@ export const orders = sqliteTable("orders", {
   })
     .notNull()
     .default("awaiting"),
-  paymentConfirmedAt: integer("payment_confirmed_at", { mode: "timestamp_ms" }),
+  paymentConfirmedAt: timestamp("payment_confirmed_at", { withTimezone: true, mode: "date" }),
   // Null until the team confirms the real courier cost with the customer;
   // the app never invents a shipping price.
   shippingCost: integer("shipping_cost"),
@@ -142,21 +142,21 @@ export const orders = sqliteTable("orders", {
     .notNull()
     .default("pending_payment"),
   trackingNumber: text("tracking_number").notNull().default(""),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const templateVersions = sqliteTable("template_versions", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const templateVersions = pgTable("template_versions", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   templateId: text("template_id").notNull(),
   version: integer("version").notNull(),
   status: text("status").notNull(),
   note: text("note").notNull().default(""),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
@@ -168,8 +168,8 @@ export const templateVersions = sqliteTable("template_versions", {
 // are server-side rows with revocable random tokens — a dashboard is
 // never reachable from an affiliate id or URL alone.
 
-export const affiliates = sqliteTable("affiliates", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const affiliates = pgTable("affiliates", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   whatsapp: text("whatsapp").notNull().default(""),
@@ -184,43 +184,43 @@ export const affiliates = sqliteTable("affiliates", {
     .default("pending"),
   pinHash: text("pin_hash").notNull().default(""),
   failedAttempts: integer("failed_attempts").notNull().default(0),
-  lockedUntil: integer("locked_until", { mode: "timestamp_ms" }),
+  lockedUntil: timestamp("locked_until", { withTimezone: true, mode: "date" }),
   // Monthly KPI targets are admin-configured only (0 = not configured);
   // the app never invents targets or bonuses.
   kpiTargetOrders: integer("kpi_target_orders").notNull().default(0),
   kpiTargetRevenue: integer("kpi_target_revenue").notNull().default(0),
   // PIN reset: a pending request flag for the admin, plus a single-use
   // expiring reset token the admin shares through a verified channel.
-  pinResetRequestedAt: integer("pin_reset_requested_at", { mode: "timestamp_ms" }),
+  pinResetRequestedAt: timestamp("pin_reset_requested_at", { withTimezone: true, mode: "date" }),
   resetToken: text("reset_token").notNull().default(""),
-  resetExpiresAt: integer("reset_expires_at", { mode: "timestamp_ms" }),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  resetExpiresAt: timestamp("reset_expires_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
-
-export const affiliateInvitations = sqliteTable("affiliate_invitations", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  affiliateId: integer("affiliate_id").notNull(),
-  token: text("token").notNull().unique(),
-  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-  usedAt: integer("used_at", { mode: "timestamp_ms" }),
-  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const affiliateSessions = sqliteTable("affiliate_sessions", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const affiliateInvitations = pgTable("affiliate_invitations", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   affiliateId: integer("affiliate_id").notNull(),
   token: text("token").notNull().unique(),
-  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const affiliateSessions = pgTable("affiliate_sessions", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  affiliateId: integer("affiliate_id").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
@@ -229,8 +229,8 @@ export const affiliateSessions = sqliteTable("affiliate_sessions", {
 // can never be duplicated). Status flow: pending (order unpaid) →
 // confirmed (payment verified) → payable (order completed) → paid
 // (covered by a paid payout); reversed when the order is refunded.
-export const commissions = sqliteTable("commissions", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const commissions = pgTable("commissions", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   orderId: integer("order_id").notNull().unique(),
   affiliateId: integer("affiliate_id").notNull(),
   netSubtotal: integer("net_subtotal").notNull(),
@@ -240,16 +240,16 @@ export const commissions = sqliteTable("commissions", {
     .notNull()
     .default("pending"),
   payoutId: integer("payout_id"),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const payouts = sqliteTable("payouts", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const payouts = pgTable("payouts", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   affiliateId: integer("affiliate_id").notNull(),
   amount: integer("amount").notNull(),
   bankName: text("bank_name").notNull().default(""),
@@ -259,22 +259,22 @@ export const payouts = sqliteTable("payouts", {
     .notNull()
     .default("requested"),
   note: text("note").notNull().default(""),
-  paidAt: integer("paid_at", { mode: "timestamp_ms" }),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
 // Append-only audit trail for sensitive affiliate/payment changes.
-export const affiliateAudit = sqliteTable("affiliate_audit", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const affiliateAudit = pgTable("affiliate_audit", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   affiliateId: integer("affiliate_id"),
   action: text("action").notNull(),
   detail: text("detail").notNull().default(""),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),
 });

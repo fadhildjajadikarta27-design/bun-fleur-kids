@@ -6,7 +6,8 @@
 //
 //   bun scripts/dev-server.mjs
 //
-// Without TURSO_DATABASE_URL in the environment, data lands in ./dev.db.
+// Needs DATABASE_URL in the environment (any Postgres; in production the
+// Supabase transaction-pooler connection string).
 
 import { createServer } from "node:http";
 import { dispatchAction } from "../server/src/dispatch.ts";

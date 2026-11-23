@@ -7,7 +7,7 @@
 // needed its import line changed. The runtime behaviour (HTTP dispatch, DB,
 // inference) lives in ./dispatch.ts and ./db.ts.
 
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import type { z } from "zod";
 
 export { z } from "zod";
@@ -22,7 +22,7 @@ export interface Inference {
 
 /** The context object every action handler receives. */
 export interface Ctx {
-  db<TSchema extends Record<string, unknown> = Record<string, unknown>>(): LibSQLDatabase<TSchema>;
+  db<TSchema extends Record<string, unknown> = Record<string, unknown>>(): PostgresJsDatabase<TSchema>;
   invalidateQueries(): void;
   inference: Inference;
 }
