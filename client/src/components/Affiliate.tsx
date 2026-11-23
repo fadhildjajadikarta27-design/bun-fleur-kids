@@ -42,11 +42,13 @@ export function inviteLink(token: string): string {
 }
 
 export function resetLink(token: string): string {
-  return `#/affiliate/reset/${token}`;
+  const route = `#/affiliate/reset/${token}`;
+  return typeof window === "undefined" ? route : `${window.location.origin}/${route}`;
 }
 
 export function referralLink(couponCode: string): string {
-  return `#/ref/${couponCode}`;
+  const route = `#/ref/${encodeURIComponent(couponCode)}`;
+  return typeof window === "undefined" ? route : `${window.location.origin}/${route}`;
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -561,7 +563,7 @@ export function AffiliateDashboard({
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <p className="font-display text-xl font-semibold">Kamu belum masuk sebagai afiliasi.</p>
-        <p className="mt-2 font-semibold text-[var(--dim)]">Dasbor ini privat — masuk dulu dengan email/kupon + PIN kamu.</p>
+        <p className="mt-2 font-semibold text-[var(--dim)]">Dasbor privat — masuk dengan nomor HP terdaftar dan PIN kamu.</p>
         <button type="button" onClick={goLogin} className="mt-5 rounded-full bg-olive px-6 py-3 font-display text-base font-semibold text-white">
           Ke Halaman Masuk
         </button>
@@ -640,7 +642,7 @@ export function AffiliateDashboard({
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--dim)]">Tautan referral kamu</p>
             <p className="mt-1 break-all font-display text-base font-bold">{referralLink(a.couponCode)}</p>
             <p className="text-sm font-semibold text-[var(--dim)]">
-              Tambahkan potongan ini di akhir alamat aplikasi Bun &amp; Fleur Kids saat membagikannya — kuponmu terisi otomatis di checkout.
+              Bagikan link lengkap ini langsung ke Instagram, TikTok, atau WhatsApp. Kode referral kamu akan tersimpan saat pengunjung membuka link.
             </p>
             <div className="mt-2">
               <CopyButton text={referralLink(a.couponCode)} label="Copy Referral Link" />
