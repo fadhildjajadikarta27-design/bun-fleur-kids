@@ -403,6 +403,7 @@ export const Actions = {
       const rows = await db
         .select()
         .from(schema.projects)
+        .where(ctx.isAdmin ? undefined : eq(schema.projects.ownerId, ctx.visitorId))
         .orderBy(desc(schema.projects.updatedAt))
         .limit(args.limit);
       return { projects: rows.map(toOut) };
@@ -419,6 +420,7 @@ export const Actions = {
       const result = await db
         .insert(schema.projects)
         .values({
+          ownerId: ctx.visitorId,
           templateId: args.templateId,
           childName: args.childName,
           message: args.message,
@@ -462,7 +464,9 @@ export const Actions = {
           status: args.status,
           updatedAt: new Date(),
         })
-        .where(eq(schema.projects.id, args.id))
+        .where(ctx.isAdmin
+          ? eq(schema.projects.id, args.id)
+          : and(eq(schema.projects.id, args.id), eq(schema.projects.ownerId, ctx.visitorId)))
         .returning();
       const row = result[0];
       if (!row) throw new Error("That project no longer exists.");
@@ -479,7 +483,9 @@ export const Actions = {
       const db = ctx.db<typeof schema>();
       await db
         .delete(schema.projects)
-        .where(eq(schema.projects.id, args.id));
+        .where(ctx.isAdmin
+          ? eq(schema.projects.id, args.id)
+          : and(eq(schema.projects.id, args.id), eq(schema.projects.ownerId, ctx.visitorId)));
       ctx.invalidateQueries();
       return { ok: true };
     },
@@ -759,7 +765,9 @@ export const Actions = {
       const rows = await db
         .select()
         .from(schema.projects)
-        .where(eq(schema.projects.id, args.projectId))
+        .where(ctx.isAdmin
+          ? eq(schema.projects.id, args.projectId)
+          : and(eq(schema.projects.id, args.projectId), eq(schema.projects.ownerId, ctx.visitorId)))
         .limit(1);
       const project = rows[0];
       if (!project) {
