@@ -89,7 +89,7 @@ export const orders = pgTable("orders", {
     .default("center"),
   colors: text("colors").notNull().default("{}"),
   strokes: text("strokes").notNull().default("[]"),
-  productType: text("product_type", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59"] }).notNull(),
+  productType: text("product_type", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "placemat"] }).notNull(),
   variant: text("variant").notNull().default(""),
   productPrice: integer("product_price").notNull(),
   // Affiliate attribution (brief Part 3): the coupon code the customer
