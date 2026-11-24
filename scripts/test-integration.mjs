@@ -35,6 +35,9 @@ try {
   const migrations = await sql`SELECT name FROM __port_migrations ORDER BY name`;
   assert.ok(migrations.some(m=>m.name==="0017_birthday_events.sql"));
   assert.ok(migrations.some(m=>m.name==="0018_bundles_gifts.sql"));
+  assert.ok(migrations.some(m=>m.name==="0020_order_archive.sql"));
+  assert.equal((await call("getShopConfig")).body.products.length,12);
+  assert.equal((await sql`SELECT count(*)::int AS n FROM birthday_prices`)[0].n,12);
   assert.equal((await sql`SELECT has_table_privilege('anon', 'public.payment_proofs', 'SELECT') AS allowed`)[0].allowed, false);
 
   const first = await call("listProjects");
@@ -55,9 +58,9 @@ try {
   assert.equal((await call("listProjects", {}, { cookie: admin.cookie + "; " + guest.cookie })).body.projects.length, 0);
   console.log("PASS migrations, RLS privileges, private artwork, authenticated admin");
   const date=new Date();date.setUTCDate(date.getUTCDate()+35);
-  const eventArgs={requestId:randomUUID(),eventName:"QA Birthday",childAge:4,eventDate:date.toISOString().slice(0,10),theme:"Dinosaurus",guestCount:20,productIds:["poster","papercraft"],expectedPerGuest:49800,organizer:"QA Parent",whatsapp:phone,address:"Alamat QA Jakarta"};
+  const eventArgs={requestId:randomUUID(),eventName:"QA Birthday",childAge:4,eventDate:date.toISOString().slice(0,10),theme:"Dinosaurus",guestCount:20,productIds:["poster","papercraft"],expectedPerGuest:59800,organizer:"QA Parent",whatsapp:phone,address:"Alamat QA Jakarta"};
   const event=(await call("createBirthdayEvent",eventArgs,owner)).body.event;
-  assert.equal(event.total,996000);
+  assert.equal(event.total,1196000);
   assert.equal((await call("createBirthdayEvent",eventArgs,owner)).body.event.id,event.id);
   assert.ok(!(await call("listMyBirthdayEvents",{},guest)).body.events.some(e=>e.id===event.id));
   await call("adminListBirthdayEvents",{},{expected:401});
@@ -119,6 +122,9 @@ try {
   assert.match(locked.body.error, /terkunci/);
   console.log("PASS affiliate signup, phone normalization, coupon, hashed PIN and token, concurrent PIN lockout");
 
+  // Regression fixtures preserve legacy checkout prices; new defaults tested separately.
+  for(const [productId,price] of [["poster",24900],["papercraft",36900],["placemat",54900],["growthchart",69000]])await call("adminSetProductPrice",{productId,price},admin);
+  await call("adminSaveBundle",{id:"little-artist",name:"Little Artist",productIds:["poster","papercraft"],price:54900,active:true},admin);
   const orderArgs = {
     checkoutId: randomUUID(), quantity: 7, projectId: project.id, productType: "papercraft", childName: "",
     customerName: "QA Parent", whatsapp: phone, email: `parent-${token}@example.test`,
@@ -308,7 +314,17 @@ try {
   assert.ok(paymentQueue.orders.every(o => o.paymentStatus !== "paid" && o.orderStatus !== "cancelled"));
   const fulfillment = (await call("listOrders", { scope: "fulfillment", limit: 100 }, admin)).body;
   assert.ok(fulfillment.orders.every(o => o.paymentStatus === "paid" && o.orderStatus !== "completed"));
-  console.log("PASS admin finance and scoped orders");
+  await call("adminBulkAffiliateDiscount",{affiliateIds:[rule.affiliateId],productType:"kidswatch",discountPct:10},{expected:401});
+  await call("adminBulkAffiliateDiscount",{affiliateIds:[rule.affiliateId],productType:"kidswatch",discountPct:10},admin);
+  const watch=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,productType:"kidswatch",childName:""},owner)).body.order;
+  assert.equal(watch.productPrice,179000);assert.equal(watch.childName,"");assert.equal(watch.discountAmount,17900);
+  assert.equal((await sql`SELECT amount FROM commissions WHERE order_id=${watch.id}`)[0].amount,48330);
+  await call("adminArchiveOrder",{id:watch.id},{expected:401});
+  await call("adminArchiveOrder",{id:order.id},{...admin,expected:400});
+  await call("adminArchiveOrder",{id:watch.id},admin);
+  assert.ok(!(await call("listOrders",{limit:100},admin)).body.orders.some(o=>o.id===watch.id));
+  assert.equal((await sql`SELECT count(*)::int AS n FROM orders WHERE id=${watch.id} AND archived_at IS NOT NULL`)[0].n,1);
+  console.log("PASS admin finance, bulk discount, new watch, blank name, archive and scoped orders");
 
 } finally {
   await sql.end();

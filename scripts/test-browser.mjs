@@ -57,7 +57,7 @@ try {
   assert.equal(response.status(),200,await response.text());
   const order=(await response.json()).order;
   assert.equal(order.bundleName,"Little Artist");
-  assert.equal(order.total,64900);
+  assert.equal(order.total,74900);
   assert.equal(order.items.length,2);
   assert.equal(order.gift.recipient,"QA Penerima");
   console.log("PASS mobile two-product cart, reload restore, bundle, gift and checkout");
