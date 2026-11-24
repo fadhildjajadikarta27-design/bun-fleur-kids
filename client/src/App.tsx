@@ -243,14 +243,6 @@ const NAV_ITEMS: { view: NavView; label: string; short: string; icon: ReactNode 
     ),
   },
   {
-    view: "custom",
-    label: "Buat Sendiri",
-    short: "Buat",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14" /><path d="M5 12h14" /></svg>
-    ),
-  },
-  {
     view: "creations",
     label: "Kreasiku",
     short: "Kreasiku",
@@ -590,7 +582,7 @@ function Home({
             </article>
           ))}
         </div>
-        <p className="mt-4 text-sm font-semibold text-[var(--dim)]">Pola DIY gratis tetap tersedia di Studio Cetak. Harga papercraft fisik {formatIDR(catalogPrices.papercraft ?? PRODUCT_DEFAULT_PRICES.papercraft)} belum termasuk ongkir.</p>
+
       </section>
 
       {/* KOLEKSI — kartu editorial ala kemasan mainan, di panel putih */}
@@ -812,31 +804,6 @@ function Home({
             </div>
           ))}
         </dl>
-      </section>
-
-      {/* BUAT KARAKTER SENDIRI — panel oranye logo */}
-      <section className="band-tang mt-20 grid items-center gap-6 rounded-[2rem] p-6 sm:p-8 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Buat Karakter Sendiri</p>
-          <h2 className="mt-2 font-display text-3xl font-semibold">Tidak ada di buku? <span className="band-accent">Ceritakan saja.</span></h2>
-          <p className="band-dim mt-2 max-w-lg leading-relaxed">
-            Tulis cerita karakter impian — “kucing astronot pakai topi bintang” — dan AI kami
-            merakitnya dari bagian-bagian Bun &amp; Fleur yang sudah teruji, lengkap dengan
-            warna per bagian. Atau rakit sendiri bagian demi bagian. Hasilnya bisa diwarnai
-            ulang dan dicetak sebagai Bantal Kertas atau Standee.
-          </p>
-          <button
-            type="button"
-            onClick={onCustom}
-            className="mt-5 rounded-full bg-olive px-6 py-2.5 font-display text-base font-semibold text-white shadow-sm transition hover:bg-olive-deep"
-          >
-            Rakit Karakterku
-          </button>
-        </div>
-        <div className="mx-auto w-52 rounded-[1.75rem] bg-white p-3 shadow-sm ring-1 ring-black/5 sm:w-60">
-          <ArtworkSvg template={customPreview} colors={{}} strokes={[]} name="" nameFont="baloo" nameColor="#E4572E" />
-          <p className="pb-1 pt-2 text-center font-display text-xs font-semibold text-[var(--dim)]">Mulai hitam putih juga — warnanya dari kamu</p>
-        </div>
       </section>
 
       {/* CTA PENUTUP — satu-satunya panel warna pekat: olive #667C3E */}
@@ -1492,7 +1459,7 @@ function Studio({
             textAlign: project.nameAlign,
           }}
         >
-          {project.childName.trim() ? project.childName.trim().toUpperCase() : "Nama Si Kecil"}
+          {project.childName.trim().toUpperCase()}
         </p>
         <p
           className="mx-auto mt-2 max-w-md leading-relaxed"
@@ -1515,19 +1482,7 @@ function Studio({
         >
           Simpan Kreasi
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (Object.keys(project.colors).length === 0 && project.strokes.length === 0) {
-              setNameError("Warnai minimal satu bagian dulu — baru keajaibannya bekerja!");
-              return;
-            }
-            onDone();
-          }}
-          className="rounded-full bg-tang px-9 py-4 font-display text-xl font-extrabold text-ink shadow-lg transition hover:scale-[1.03] hover:bg-tang-deep"
-        >
-          Lihat Hasilnya
-        </button>
+
         <button
           type="button"
           onClick={() => {
@@ -2035,9 +1990,7 @@ function Creations({
             <button type="button" onClick={() => startTemplate("pb-dino")} className="rounded-full bg-tang px-6 py-3 font-display font-extrabold text-ink shadow">
               Warnai Dino
             </button>
-            <button type="button" onClick={onCustomNew} className="rounded-full bg-[var(--surface)] px-6 py-3 font-display font-extrabold shadow ring-1 ring-[var(--border)]">
-              Buat Karakter Sendiri
-            </button>
+
           </div>
         </div>
       ) : (
@@ -2063,10 +2016,8 @@ function Creations({
                 </p>
                 <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
                   <button type="button" onClick={() => openProject(p, "studio")} className="rounded-full bg-sky-deep px-2 py-2 font-display text-xs font-extrabold text-white">Warnai</button>
-                  <button type="button" onClick={() => openProject(p, "magic")} className="rounded-full bg-sage px-2 py-2 font-display text-xs font-extrabold text-white">{t.custom ? "Lihat" : "3D"}</button>
-                  <button type="button" onClick={() => openProject(p, "print")} className="rounded-full bg-tang px-2 py-2 font-display text-xs font-extrabold text-ink">Cetak</button>
                 </div>
-                {Object.keys(p.colors).length > 0 && (
+                {(Object.keys(p.colors).length > 0 || p.strokes.length > 0) && (
                   <button
                     type="button"
                     onClick={() => openProject(p, "finish")}
@@ -2550,7 +2501,7 @@ export function App() {
   };
 
   const startCustomize = (product: ProductId) => {
-    setShopSel((s) => ({ ...s, product, childName: cartLines.length ? cartName : projectRef.current.childName || s.childName }));
+    setShopSel((s) => ({ ...s, product, childName: cartLines.length ? cartName : projectRef.current.childName }));
     go({ view: "customize" });
   };
 

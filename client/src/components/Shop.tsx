@@ -227,10 +227,10 @@ export function PapercraftPreview({ project, name, large = false }: { project: S
         <div className="relative w-[85%] rounded-md bg-[#FDFBF5] p-1 shadow-[6px_5px_0_#ADB78D,8px_8px_10px_#82765F44]">
           <PersonalArtwork project={project} name="" showLabel={false} />
         </div>
-        <div className="w-full rounded-b-md border border-[#89965A] bg-[#B7C583] px-2 py-2 text-center">
+        {(name.trim() || project.message.trim()) && <div className="w-full rounded-b-md border border-[#89965A] bg-[#B7C583] px-2 py-2 text-center">
           <p className="break-words font-extrabold" style={{fontFamily:fontFamilyOf(project.nameFont), color:project.nameColor, fontSize:large ? 17 : 11}}>{name.trim().toUpperCase()}</p>
           {project.message.trim() && <p className="break-words text-[9px] font-bold">{project.message}</p>}
-        </div>
+        </div>}
         <p className="mt-1 text-xs font-bold text-[#665944]">Ilustrasi rakitan berdiri</p>
       </div>
     </div>
@@ -354,9 +354,30 @@ function GrowthChartPreview({ project, name, large }: { project: ShopProject; na
   </div>;
 }
 
+function NewPersonalizedPreview({product,project,name,large}:{product:"rewardchart"|"namestickers"|"wallclock"|"nightlamp"|"kidswatch";project:ShopProject;name:string;large:boolean}){
+ const label=name.trim();
+ const art=(flip=false)=><div className={flip?"-scale-x-100":""}><PersonalArtwork project={project} name="" showLabel={false}/></div>;
+ const title=label?<p className="relative z-10 mx-auto max-w-full break-words rounded-full border border-[#89965A] bg-[#FFF8E8] px-2 py-1 text-center font-extrabold leading-tight" style={{color:project.nameColor,fontFamily:fontFamilyOf(project.nameFont),fontSize:large?16:10}}>{label}</p>:null;
+ const logo=<img src={logoUrl} alt="Bun & Fleur Kids" className="relative z-10 mx-auto w-[25%] object-contain"/>;
+ const habits=["Bangun tepat waktu","Sikat gigi","Berpakaian sendiri","Makan dengan baik","Belajar / bermain","Menolong orang lain"];
+ return <div className={`mx-auto w-full ${large?"max-w-lg":"max-w-sm"}`}>
+ <div className="rounded-3xl bg-[#F1E5D4] p-3">
+ {product==="nightlamp"&&<div className="mx-auto w-[80%]"><div className="relative overflow-hidden rounded-t-3xl border-2 border-[#FBD77C] bg-[#FFF7DDB0] p-3 shadow-[0_0_16px_#F9C963]"><ProductDecor/>{logo}<div className="relative z-10 mx-auto w-[85%]">{art()}{title}</div></div><div className="h-12 rounded-md border border-[#B58B60] bg-gradient-to-b from-[#EBC08D] to-[#BE8F59] shadow-md"/></div>}
+ {product==="wallclock"&&<div className="relative mx-auto aspect-square w-full rounded-full border-[10px] border-[#FFF9EC] bg-[#FCF3DE] shadow-lg">
+ <div className="absolute inset-[5%] overflow-hidden rounded-full"><ProductDecor/></div>
+ {Array.from({length:12},(_,i)=><span key={i} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 font-extrabold text-[#486126]" style={{left:`${50+41*Math.sin(i*Math.PI/6)}%`,top:`${50-41*Math.cos(i*Math.PI/6)}%`,fontSize:large?22:15}}>{i||12}</span>)}
+ <div className="absolute inset-x-[34%] top-[17%]"><img src={logoUrl} alt="Bun & Fleur Kids"/></div><div className="absolute bottom-[15%] left-[25%] w-[50%]">{art()}{title}</div>
+ <div className="absolute left-1/2 top-1/2 z-20 h-[23%] w-[3%] origin-top rotate-[120deg] rounded-full bg-[#282622]"/><div className="absolute left-1/2 top-1/2 z-20 h-[31%] w-[2%] origin-top rotate-[240deg] rounded-full bg-[#282622]"/><div className="absolute left-1/2 top-1/2 z-20 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#F2762E]"/></div>}
+ {product==="kidswatch"&&<div className="mx-auto w-[82%]"><div className="mx-auto h-12 w-[48%] rounded-t-xl border-4 border-white/90 bg-white/40"/><div className="relative rounded-[25%] border-[10px] border-white/90 bg-[#FCF3DE] p-3 shadow-lg">{logo}<div className="mt-2 grid grid-cols-[1fr_2.4fr_1fr] items-center gap-1">{art()}<div className="rounded-md border-[3px] border-[#4A4940] bg-[#AAB1A1] px-1 py-2 text-center font-mono font-bold text-[#252B24]"><div className="text-[8px]">MO TU WE TH FR</div><div className="text-xl">08:36</div></div>{art(true)}</div><div className="mt-2">{title}</div></div><div className="mx-auto h-12 w-[48%] rounded-b-xl border-4 border-white/90 bg-white/40"/></div>}
+ {product==="namestickers"&&<div className="rounded-xl bg-[#FFF8E8] p-2">{logo}<p className="my-2 text-center text-xs font-extrabold text-olive-deep">Stiker Nama · 15 pcs</p><div className="grid grid-cols-3 gap-1">{Array.from({length:15},(_,i)=><div key={i} className="flex min-w-0 items-center rounded-full border-2 border-white p-1" style={{background:["#F9EAC8","#A5DAEF","#C3DB82","#FFE080","#FFC18B"][i%5]}}><div className={label?"w-[42%] shrink-0":"mx-auto w-[65%]"}>{art()}</div>{label&&<span className="min-w-0 flex-1 break-all text-center text-[8px] font-bold" style={{color:project.nameColor}}>{label}</span>}</div>)}</div></div>}
+ {product==="rewardchart"&&<div className="rounded-xl bg-[#FFF8E8] p-2">{logo}<p className="text-center text-sm font-extrabold text-olive-deep">Papan Penghargaan Aku</p><div className="mx-auto w-[34%]">{art()}</div>{title}<div className="mt-2 grid grid-cols-[2fr_repeat(7,1fr)] items-center gap-1 text-center text-[8px] font-bold text-olive-deep"><span>Kebiasaanku</span>{["Sen","Sel","Rab","Kam","Jum","Sab","Min"].map(d=><span key={d}>{d}</span>)}{habits.flatMap((h,i)=>[<span key={h} className="text-left">{h}</span>,...Array.from({length:7},(_,j)=><span key={i+"-"+j} className="aspect-square rounded-full border border-[#89965A]"/> )])}</div><p className="mt-2 text-[9px] font-bold">Hadiahku: __________________</p><div className="mt-2 rounded-lg bg-white p-2"><p className="text-center text-[9px] font-bold">Stiker penghargaan</p><div className="grid grid-cols-7 gap-1">{Array.from({length:42},(_,i)=><svg key={i} viewBox="0 0 24 24" className="w-full"><circle cx="12" cy="12" r="6" fill="#FFC62C"/>{Array.from({length:8},(_,j)=><path key={j} d="M12 1V4" stroke="#FFC62C" strokeWidth="2" strokeLinecap="round" transform={`rotate(${j*45} 12 12)`}/>)}</svg>)}</div></div></div>}
+ </div><MockupCaption>Personalisasi dari warna dan karakter karya anak</MockupCaption></div>;
+}
+
 export function ProductPreview({ product, project, name, fabric, large = false }: {
   product: ProductId; project: ShopProject; name: string; fabric: string; large?: boolean;
 }) {
+  if (product === "rewardchart" || product === "namestickers" || product === "wallclock" || product === "nightlamp" || product === "kidswatch") return <NewPersonalizedPreview product={product} project={project} name={name} large={large} />;
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
   if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
   if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
@@ -386,7 +407,7 @@ export function Masterpiece({
 }) {
   const cfg = useShopConfig();
   const template = templateForSnapshot(project);
-  const [featured, setFeatured] = useState<ProductId | "artwork">("artwork");
+  const [featured, setFeatured] = useState<ProductId | "artwork">("poster");
   const displayName = project.childName.trim();
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16">
@@ -442,22 +463,6 @@ export function Masterpiece({
           )}
         </div>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <button
-            type="button"
-            onClick={onMagic}
-            className="rounded-full bg-[var(--surface-alt)] px-5 py-2.5 font-display text-sm font-bold ring-1 ring-[var(--border)]"
-          >
-            Putar dalam 3D
-          </button>
-          {featured !== "artwork" && (
-            <button
-              type="button"
-              onClick={() => setFeatured("artwork")}
-              className="rounded-full bg-[var(--surface-alt)] px-5 py-2.5 font-display text-sm font-bold ring-1 ring-[var(--border)]"
-            >
-              Lihat karya aslinya
-            </button>
-          )}
         </div>
       </section>
 

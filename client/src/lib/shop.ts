@@ -1,9 +1,9 @@
-export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt" | "celengan" | "accessory59" | "puzzle" | "placemat" | "growthchart";
+export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt" | "celengan" | "accessory59" | "puzzle" | "placemat" | "growthchart" | "rewardchart" | "namestickers" | "wallclock" | "nightlamp" | "kidswatch";
 
 // Retired SKUs remain in ProductId and metadata for historical orders.
-export const ACTIVE_PRODUCT_IDS: readonly ProductId[] = ["poster", "papercraft", "placemat", "celengan", "puzzle", "growthchart", "tshirt"];
+export const ACTIVE_PRODUCT_IDS: readonly ProductId[] = ["poster", "rewardchart", "papercraft", "namestickers", "celengan", "puzzle", "tshirt", "placemat", "growthchart", "wallclock", "nightlamp", "kidswatch"];
 export const PRODUCT_DEFAULT_PRICES: Record<ProductId, number> = {
-  poster: 24900, papercraft: 36900, placemat: 54900, celengan: 59900, puzzle: 69000, growthchart: 69000, tshirt: 79000, figurine: 120000, accessory59: 59000,
+  poster: 29900, rewardchart: 39900, papercraft: 39900, namestickers: 44900, celengan: 59900, puzzle: 69000, placemat: 79900, tshirt: 79000, growthchart: 99000, wallclock: 99000, nightlamp: 129000, kidswatch: 179000, figurine: 120000, accessory59: 59000,
 };
 
 export function formatIDR(n: number): string {
@@ -14,6 +14,11 @@ export const PRODUCT_META: Record<
   ProductId,
   { title: string; tagline: string; description: string; cta: string; see: string }
 > = {
+  rewardchart: { title: "Papan Penghargaan", tagline: "Papan Penghargaan Personalisasi", description: "Papan kebiasaan mingguan dengan karakter dan stiker matahari.", cta: "Buat Karyaku", see: "Lihat Desain" },
+  namestickers: { title: "Sticker Pack Nama (15 pcs)", tagline: "Sticker Pack Nama (15 pcs) Personalisasi", description: "15 stiker barang pribadi dengan karakter dan nama opsional.", cta: "Buat Karyaku", see: "Lihat Desain" },
+  wallclock: { title: "Jam Dinding", tagline: "Jam Dinding Personalisasi", description: "Jam bulat dengan karakter hasil mewarnai.", cta: "Buat Karyaku", see: "Lihat Desain" },
+  nightlamp: { title: "Lampu Tidur", tagline: "Lampu Tidur Personalisasi", description: "Lampu akrilik dengan ilustrasi personal dan dudukan kayu.", cta: "Buat Karyaku", see: "Lihat Desain" },
+  kidswatch: { title: "Jam Tangan Anak", tagline: "Jam Tangan Anak Personalisasi", description: "Jam digital dengan karakter di kedua sisi layar.", cta: "Buat Karyaku", see: "Lihat Desain" },
   poster: {
     title: "Poster",
     tagline: "Poster Personalisasi",

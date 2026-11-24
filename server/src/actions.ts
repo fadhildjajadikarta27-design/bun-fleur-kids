@@ -87,8 +87,8 @@ function toOut(row: ProjectRow): z.infer<typeof projectOut> {
 // Centralized pricing (brief §5): the ONLY place product prices live on
 // the server. Orders always recompute from these constants — a price
 // sent by the client is never trusted.
-const PRODUCT_IDS = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart"] as const;
-const ACTIVE_PRODUCT_IDS = ["poster", "papercraft", "placemat", "celengan", "puzzle", "growthchart", "tshirt"] as const;
+const PRODUCT_IDS = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch"] as const;
+const ACTIVE_PRODUCT_IDS = ["poster", "rewardchart", "papercraft", "namestickers", "celengan", "puzzle", "tshirt", "placemat", "growthchart", "wallclock", "nightlamp", "kidswatch"] as const;
 const purchasableProduct = z.enum(PRODUCT_IDS).refine(id => ACTIVE_PRODUCT_IDS.some(active => active === id), "Produk ini tidak lagi tersedia.");
 type ProductId = typeof PRODUCT_IDS[number];
 const discountPct = z.number().int().min(0).max(90);
@@ -99,8 +99,7 @@ function couponDiscountFor(affiliate: { discountPct: number; productDiscounts: P
 }
 const SHIPPING_POLICY = { freeFrom: 100000, flatRate: 10000 } as const;
 const DEFAULT_PRICES: Record<ProductId, number> = {
-  poster: 24900, papercraft: 36900, figurine: 120000, tshirt: 79000,
-  celengan: 59900, accessory59: 59000, puzzle: 69000, placemat: 54900, growthchart: 69000,
+  poster: 29900, rewardchart: 39900, papercraft: 39900, namestickers: 44900, celengan: 59900, puzzle: 69000, placemat: 79900, tshirt: 79000, growthchart: 99000, wallclock: 99000, nightlamp: 129000, kidswatch: 179000, figurine: 120000, accessory59: 59000,
 };
 // Fabric colors fixed by the brand (brief §2C) and the configured kids
 // t-shirt sizes; all sizes are priced at the base price (no invented
@@ -113,7 +112,7 @@ async function catalogPrices(db: Database): Promise<Record<ProductId, number>> {
   return { ...DEFAULT_PRICES, ...Object.fromEntries(overrides.map(({ productId, price }) => [productId, price])) };
 }
 
-const bundleOut=z.object({id:z.string().min(1).max(60),name:z.string().trim().min(2).max(80),productIds:z.array(z.enum(ACTIVE_PRODUCT_IDS)).min(2).max(7).refine(ids=>new Set(ids).size===ids.length),price:z.number().int().min(1000).max(70000000),active:z.boolean()});
+const bundleOut=z.object({id:z.string().min(1).max(60),name:z.string().trim().min(2).max(80),productIds:z.array(z.enum(ACTIVE_PRODUCT_IDS)).min(2).max(12).refine(ids=>new Set(ids).size===ids.length),price:z.number().int().min(1000).max(70000000),active:z.boolean()});
 const giftOut=z.object({sender:z.string().trim().min(2).max(80),recipient:z.string().trim().min(2).max(80),message:z.string().trim().max(250)});
 async function shopBundles(db:Database){const rows=await db.select().from(schema.shopBundles).orderBy(schema.shopBundles.id);return rows.map(r=>bundleOut.parse({...r,active:r.active===1}));}
 const orderItem = z.object({ productType: z.enum(PRODUCT_IDS), variant: z.string(), quantity: z.number().int().positive(), unitPrice: z.number(), gross: z.number(), discount: z.number() });
@@ -140,6 +139,11 @@ function productVariant(id: ProductId, color: string, size: string): string {
     case "puzzle": return "Puzzle personalisasi";
     case "placemat": return "Alas makan personalisasi";
     case "growthchart": return "Growth chart tempel personalisasi";
+    case "rewardchart": return "Papan Penghargaan personalisasi";
+    case "namestickers": return "Sticker Pack Nama (15 pcs) personalisasi";
+    case "wallclock": return "Jam Dinding personalisasi";
+    case "nightlamp": return "Lampu Tidur personalisasi";
+    case "kidswatch": return "Jam Tangan Anak personalisasi";
     default: throw new Error("Produk ini tidak lagi tersedia.");
   }
 }
@@ -483,7 +487,7 @@ function toAffiliatePublic(row: Pick<AffiliateRow, "id" | "name" | "email" | "co
   };
 }
 
-const BIRTHDAY_DEFAULTS: Record<typeof ACTIVE_PRODUCT_IDS[number],number> = {poster:19900,papercraft:29900,placemat:44900,celengan:49900,puzzle:59900,growthchart:59900,tshirt:69900};
+const BIRTHDAY_DEFAULTS: Record<typeof ACTIVE_PRODUCT_IDS[number],number> = {poster: 24900, rewardchart: 34900, papercraft: 34900, namestickers: 39900, celengan: 54900, puzzle: 59900, placemat: 69900, tshirt: 69900, growthchart: 84900, wallclock: 84900, nightlamp: 115000, kidswatch: 159000};
 const birthdayStatus = z.enum(["requested","confirmed","paid","production","shipped","completed","cancelled","refunded"]);
 const birthdayItem = z.object({productId:z.enum(ACTIVE_PRODUCT_IDS),unitPrice:z.number().int().positive()});
 const birthdayOut = z.object({
@@ -820,7 +824,7 @@ export const Actions = {
   createBirthdayEvent: defineAction({
     request:z.object({requestId:z.uuid(),eventName:z.string().trim().min(2).max(80),childAge:z.number().int().min(1).max(18),
       eventDate:z.string().regex(/^20\d{2}-\d{2}-\d{2}$/),theme:z.string().trim().min(2).max(80),guestCount:z.number().int().min(20).max(500),
-      productIds:z.array(z.enum(ACTIVE_PRODUCT_IDS)).min(1).max(7).refine(ids=>new Set(ids).size===ids.length),
+      productIds:z.array(z.enum(ACTIVE_PRODUCT_IDS)).min(1).max(12).refine(ids=>new Set(ids).size===ids.length),
       expectedPerGuest:z.number().int().positive(),organizer:z.string().trim().min(2).max(80),
       whatsapp:z.string().trim().min(9).max(20),address:z.string().trim().min(10).max(500),notes:z.string().trim().max(500).default("")}),
     response:z.object({event:birthdayOut}),
@@ -2566,7 +2570,7 @@ export const Actions = {
         if (series.length > 366) break;
       }
       const productLabel = (t: string) =>
-        t === "poster" ? "Poster" : t === "papercraft" ? "Papercraft 3D" : t === "celengan" ? "Celengan" : t === "accessory59" ? "Aksesori Personalisasi (lama)" : t === "puzzle" ? "Puzzle" : t === "placemat" ? "Alas Makan" : t === "growthchart" ? "Pengukur Tinggi Badan (Growth Chart)" : t === "figurine" ? "Figur 3D (lama)" : "Kaos Personalisasi";
+        t === "poster" ? "Poster" : t === "papercraft" ? "Papercraft 3D" : t === "celengan" ? "Celengan" : t === "accessory59" ? "Aksesori Personalisasi (lama)" : t === "puzzle" ? "Puzzle" : t === "placemat" ? "Alas Makan" : t === "growthchart" ? "Pengukur Tinggi Badan (Growth Chart)" : t === "rewardchart" ? "Papan Penghargaan" : t === "namestickers" ? "Sticker Pack Nama (15 pcs)" : t === "wallclock" ? "Jam Dinding" : t === "nightlamp" ? "Lampu Tidur" : t === "kidswatch" ? "Jam Tangan Anak" : t === "figurine" ? "Figur 3D (lama)" : "Kaos Personalisasi";
       const orders = comms.slice(0, 50).map((c) => {
         const o = orderById.get(c.orderId);
         return {
