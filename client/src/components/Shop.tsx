@@ -396,7 +396,6 @@ export function Masterpiece({
   onCustomize,
   cartCount,
   onCart,
-  onMagic,
 }: {
   project: ShopProject;
   onBack: () => void;

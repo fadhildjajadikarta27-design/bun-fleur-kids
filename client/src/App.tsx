@@ -417,7 +417,6 @@ function Home({
   startTemplate,
   go,
   onAge,
-  onCustom,
 }: {
   brandName: string;
   catalogPrices: Partial<Record<ProductId, number>>;
@@ -426,7 +425,6 @@ function Home({
   onAge: (bandId: string) => void;
   onCustom: () => void;
 }) {
-  const customPreview = buildCustomTemplate(DEFAULT_CUSTOM_DEF);
   const dino = getTemplate("pb-dino");
   // Contoh hasil warnai untuk etalase transformasi — diberi label jelas
   // sebagai contoh. Katalog & halaman awal tetap hitam putih; warna di
@@ -1247,7 +1245,6 @@ function Studio({
   project,
   setProject,
   saveState,
-  onDone,
   onSave,
   onMakeReal,
   onEditCustom,
@@ -1954,7 +1951,6 @@ function Creations({
   openProject,
   startTemplate,
   onEditCustom,
-  onCustomNew,
 }: {
   openProject: (p: ServerProject, view: "studio" | "magic" | "print" | "finish") => void;
   startTemplate: (id: string) => void;
