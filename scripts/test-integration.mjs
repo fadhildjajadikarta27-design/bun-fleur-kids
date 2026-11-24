@@ -33,7 +33,7 @@ async function call(action, args = {}, { cookie = "", ip = "127.10.1.1", expecte
 try {
   await ensureMigrations();
   const migrations = await sql`SELECT name FROM __port_migrations ORDER BY name`;
-  assert.equal(migrations.at(-1).name, "0015_admin_finance.sql");
+  assert.equal(migrations.at(-1).name, "0016_order_cart.sql");
   assert.equal((await sql`SELECT has_table_privilege('anon', 'public.payment_proofs', 'SELECT') AS allowed`)[0].allowed, false);
 
   const first = await call("listProjects");
@@ -214,6 +214,28 @@ try {
   assert.deepEqual(growth.colors, project.colors);
   assert.equal(placemat.affiliateId, rule.affiliateId);
 
+  // A cart uses a single checkout ID, order row, unique payment and commission.
+  const cartArgs = { ...orderArgs, checkoutId: randomUUID(), productType: "poster",
+    items: [
+      { productType: "poster", quantity: 2, expectedUnitPrice: 24900, expectedCouponDiscountPct: 10 },
+      { productType: "puzzle", quantity: 1, expectedUnitPrice: 69000, expectedCouponDiscountPct: 20 },
+      { productType: "placemat", quantity: 1, expectedUnitPrice: 54900, expectedCouponDiscountPct: 0 },
+    ] };
+  const cart = (await call("createOrder", cartArgs, owner)).body.order;
+  assert.equal(cart.items.length, 3);
+  assert.equal(cart.quantity, 4);
+  assert.equal(cart.productPrice, 173700);
+  assert.equal(cart.discountAmount, 18780);
+  assert.equal(cart.total, 154920);
+  assert.equal((await call("createOrder", cartArgs, owner)).body.order.id, cart.id);
+  const cartComms = await sql`SELECT amount FROM commissions WHERE order_id = ${cart.id}`;
+  assert.equal(cartComms.length, 1);
+  assert.equal(cartComms[0].amount, 46476);
+  await call("createOrder", { ...cartArgs, checkoutId: randomUUID(),
+    items: [...cartArgs.items, { productType: "tshirt", quantity: 1, tshirtSize: "invalid" }] }, { ...owner, expected: 400 });
+  await call("verifyOrderPayment", { id: cart.id, decision: "verify", paymentReference: "CART-" + token }, admin);
+  assert.equal((await call("trackOrder", { code: cart.code, whatsapp: phone })).body.order.items.length, 3);
+  console.log("PASS multi-product cart, per-item discount, payment, commission and idempotency");
   await call("adminSetAffiliateProductDiscount", { ...rule, discountPct: null }, admin);
   assert.equal(await rate("puzzle"), 10);
   const stale = await call("createOrder", { ...puzzle, checkoutId: randomUUID() }, { ...owner, expected: 400 });

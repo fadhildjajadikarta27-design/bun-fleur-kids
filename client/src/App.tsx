@@ -24,7 +24,7 @@ import { ArtworkSvg, ColoringEditor, type Stroke } from "./components/ColoringEd
 import { ModelViewer } from "./components/ModelViewer";
 import { PillowViewer } from "./components/PillowViewer";
 import { NetPreview, PillowPreview, StandeePreview } from "./components/PrintPreview";
-import type { OrderOut, ShopSelection } from "./components/Shop";
+import type { CartLine, OrderOut, ShopSelection } from "./components/Shop";
 import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
 import { logoUrl } from "./assets-inline";
 
@@ -2448,6 +2448,32 @@ export function App() {
     childName: "",
   });
   const [lastOrder, setLastOrder] = useState<OrderOut | null>(null);
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [cartProject, setCartProject] = useState<number | null>(null);
+  const [cartName, setCartName] = useState("");
+  const cartCheckoutId = useRef<string | null>(null);
+  const cartLines = cartProject === project.id ? cart : [];
+  const cartCount = cartLines.reduce((n, line) => n + line.quantity, 0);
+  const changeCart = (lines: CartLine[]) => {
+    setCart(lines);
+    cartCheckoutId.current = null;
+  };
+  const addToCart = () => {
+    const pid = projectRef.current.id;
+    if (pid == null) return;
+    const current = cartProject === pid ? cart : [];
+    const line = { product: shopSel.product, tshirtColor: shopSel.product === "tshirt" ? shopSel.tshirtColor : "",
+      tshirtSize: shopSel.product === "tshirt" ? shopSel.tshirtSize : "", quantity: 1 };
+    const same = current.findIndex(x => x.product === line.product && x.tshirtColor === line.tshirtColor && x.tshirtSize === line.tshirtSize);
+    if ((same >= 0 && current[same]!.quantity >= 20) || (same < 0 && current.length >= 20) || current.reduce((n,x) => n+x.quantity,0) >= 140) {
+      window.alert("Keranjang sudah mencapai batas jumlah pesanan.");
+      return;
+    }
+    if (!current.length) setCartName(shopSel.childName.trim());
+    setCartProject(pid);
+    changeCart(same < 0 ? [...current,line] : current.map((x,i) => i === same ? {...x, quantity:x.quantity+1} : x));
+    go({ view: "finish" });
+  };
 
   // "Jadikan Nyata" / Finish Coloring: tandai karya selesai, pastikan
   // tersimpan (pesanan membaca snapshot dari baris proyek di server),
@@ -2475,7 +2501,7 @@ export function App() {
   };
 
   const startCustomize = (product: ProductId) => {
-    setShopSel((s) => ({ ...s, product, childName: projectRef.current.childName || s.childName }));
+    setShopSel((s) => ({ ...s, product, childName: cartLines.length ? cartName : projectRef.current.childName || s.childName }));
     go({ view: "customize" });
   };
 
@@ -2548,6 +2574,8 @@ export function App() {
             project={project}
             onBack={() => go({ view: "studio" })}
             onCustomize={startCustomize}
+            cartCount={cartCount}
+            onCart={() => go({ view: "checkout" })}
             onMagic={() => go({ view: "magic" })}
           />
         )}
@@ -2557,15 +2585,22 @@ export function App() {
             selection={shopSel}
             setSelection={setShopSel}
             onBack={() => go({ view: "finish" })}
-            onCheckout={() => go({ view: "checkout" })}
+            onAddToCart={addToCart}
+            nameLocked={cartCount > 0}
+            cartCount={cartCount}
+            onCart={() => go({ view: "checkout" })}
           />
         )}
         {route.view === "checkout" && (
           <Checkout
             project={project}
-            selection={shopSel}
-            onBack={() => go({ view: "customize" })}
+            cart={cartLines}
+            childName={cartName}
+            changeCart={changeCart}
+            checkoutId={cartCheckoutId}
+            onBack={() => go({ view: "finish" })}
             onPlaced={(o) => {
+              changeCart([]);
               setLastOrder(o);
               go({ view: "ordered" });
             }}

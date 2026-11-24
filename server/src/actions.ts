@@ -111,6 +111,34 @@ async function catalogPrices(db: Database): Promise<Record<ProductId, number>> {
   return { ...DEFAULT_PRICES, ...Object.fromEntries(overrides.map(({ productId, price }) => [productId, price])) };
 }
 
+const orderItem = z.object({ productType: z.enum(PRODUCT_IDS), variant: z.string(), quantity: z.number().int().positive(), unitPrice: z.number(), gross: z.number(), discount: z.number() });
+const cartItemRequest = z.object({
+  productType: purchasableProduct, quantity: z.number().int().min(1).max(20),
+  tshirtColor: z.string().max(40).default(""), tshirtSize: z.string().max(40).default(""),
+  expectedUnitPrice: z.number().int().positive().optional(),
+  expectedCouponDiscountPct: discountPct.optional(),
+});
+function orderItems(row: OrderRow): z.infer<typeof orderItem>[] {
+  return row.items?.length ? row.items : [{ productType: row.productType, variant: row.variant, quantity: row.quantity,
+    unitPrice: Math.round(row.productPrice / Math.max(1, row.quantity)), gross: row.productPrice, discount: row.discountAmount }];
+}
+function productVariant(id: ProductId, color: string, size: string): string {
+  if (id === "tshirt") {
+    if (!(TSHIRT_COLORS as readonly string[]).includes(color) || !(TSHIRT_SIZES as readonly string[]).includes(size))
+      throw new Error("Pilih warna dan ukuran kaos yang tersedia.");
+    return `Kaos ${color} · ukuran ${size}`;
+  }
+  switch (id) {
+    case "poster": return "Poster personalisasi";
+    case "papercraft": return "Kit Papercraft 3D — pola gunting, lipat & lem";
+    case "celengan": return "Celengan tabung personalisasi";
+    case "puzzle": return "Puzzle personalisasi";
+    case "placemat": return "Alas makan personalisasi";
+    case "growthchart": return "Growth chart tempel personalisasi";
+    default: throw new Error("Produk ini tidak lagi tersedia.");
+  }
+}
+
 const orderOut = z.object({
   id: z.number(),
   code: z.string(),
@@ -128,6 +156,7 @@ const orderOut = z.object({
   variant: z.string(),
   productPrice: z.number(),
   quantity: z.number(),
+  items: z.array(orderItem),
   couponCode: z.string(),
   affiliateId: z.number().nullable(),
   discountAmount: z.number(),
@@ -193,6 +222,7 @@ function orderToOut(row: OrderRow): z.infer<typeof orderOut> {
     variant: row.variant,
     productPrice: row.productPrice,
     quantity: row.quantity,
+    items: orderItems(row),
     couponCode: row.couponCode,
     affiliateId: row.affiliateId,
     discountAmount: row.discountAmount,
@@ -793,6 +823,7 @@ export const Actions = {
       quantity: z.number().int().min(1).max(20).default(1),
       expectedUnitPrice: z.number().int().positive().optional(),
       productType: purchasableProduct,
+      items: z.array(cartItemRequest).min(1).max(20).optional(),
       tshirtColor: z.string().max(40).default(""),
       tshirtSize: z.string().max(40).default(""),
       childName: z.string().trim().max(24).optional(),
@@ -839,65 +870,35 @@ export const Actions = {
           throw new Error("Karya ini belum diwarnai — warnai dulu minimal satu bagian sebelum memesan.");
         }
 
-        let variant = "";
-        const [override] = await db.select().from(schema.productPrices)
-          .where(eq(schema.productPrices.productId, args.productType)).limit(1);
-        const unitPrice = override?.price ?? DEFAULT_PRICES[args.productType];
-        if (args.expectedUnitPrice !== undefined && args.expectedUnitPrice !== unitPrice) {
-          throw new Error("Harga produk baru saja berubah. Periksa ringkasan harga dan coba lagi.");
-        }
-        if (args.productType === "poster") {
-          variant = "Poster berbingkai";
-        } else if (args.productType === "papercraft") {
-          variant = "Kit Papercraft 3D custom — pola gunting, lipat & lem dari karya anak";
-        } else if (args.productType === "celengan") {
-          variant = "Aksesori celengan tabung custom — gambar, warna dan nama dari karya anak";
-        } else if (args.productType === "accessory59") {
-          variant = "Aksesori custom kedua — gambar, warna, dan nama dari karya anak";
-        } else if (args.productType === "puzzle") {
-          variant = "Puzzle personalisasi";
-        } else if (args.productType === "placemat") {
-          variant = "Alas makan personalisasi";
-        } else if (args.productType === "growthchart") {
-          variant = "Growth chart tempel personalisasi";
-        } else if (args.productType === "figurine") {
-          variant = "Figurine custom — melewati Design Review";
-        } else {
-          if (!(TSHIRT_COLORS as readonly string[]).includes(args.tshirtColor)) {
-            throw new Error("Pilih warna kaos yang tersedia: Cream, Mustard, Terracotta, Sage Green, atau Brown.");
-          }
-          if (!(TSHIRT_SIZES as readonly string[]).includes(args.tshirtSize)) {
-            throw new Error("Pilih ukuran kaos yang tersedia.");
-          }
-          variant = `Kaos ${args.tshirtColor} · ukuran ${args.tshirtSize}`;
-        }
-
-        const price = unitPrice * args.quantity;
-
-        // Affiliate coupon (brief Part 3.7): validated on the server —
-        // the code must belong to an active affiliate. The discount comes
-        // from the affiliate's configured rate, never from the client.
+        // One order, one immutable artwork/name snapshot and one QRIS payment.
+        // All lines are validated and persisted in this same transaction.
+        const requested = args.items ?? [{ productType: args.productType, quantity: args.quantity,
+          tshirtColor: args.tshirtColor, tshirtSize: args.tshirtSize, expectedUnitPrice: args.expectedUnitPrice,
+          expectedCouponDiscountPct: args.expectedCouponDiscountPct }];
+        const totalQuantity = requested.reduce((n, item) => n + item.quantity, 0);
+        if (totalQuantity > 140) throw new Error("Maksimal 140 unit per pesanan.");
+        const prices = await catalogPrices(db);
         let affiliate: AffiliateRow | null = null;
-        let discountAmount = 0;
         const couponInput = args.couponCode.trim().toUpperCase();
         if (couponInput) {
-          const rows = await db
-            .select()
-            .from(schema.affiliates)
-            .where(eq(schema.affiliates.couponCode, couponInput))
-            .limit(1)
-            .for("update");
-          const found = rows[0];
-          if (!found || found.status !== "active") {
-            throw new Error("Kode kupon tidak ditemukan atau sudah tidak aktif. Periksa lagi kode-nya, atau lanjutkan tanpa kupon.");
-          }
+          const [found] = await db.select().from(schema.affiliates).where(eq(schema.affiliates.couponCode, couponInput)).limit(1).for("update");
+          if (!found || found.status !== "active") throw new Error("Kode kupon tidak ditemukan atau sudah tidak aktif.");
           affiliate = found;
-          const pct = couponDiscountFor(found, args.productType);
-          if (args.expectedCouponDiscountPct !== undefined && args.expectedCouponDiscountPct !== pct) {
-            throw new Error("Diskon kupon berubah. Periksa ringkasan terbaru sebelum membuat pesanan.");
-          }
-          discountAmount = Math.floor((price * pct) / 100);
         }
+        const items = requested.map(item => {
+          const unitPrice = prices[item.productType];
+          if (item.expectedUnitPrice !== undefined && item.expectedUnitPrice !== unitPrice)
+            throw new Error("Harga produk berubah. Periksa ringkasan terbaru sebelum memesan.");
+          const pct = affiliate ? couponDiscountFor(affiliate, item.productType) : 0;
+          if (item.expectedCouponDiscountPct !== undefined && item.expectedCouponDiscountPct !== pct)
+            throw new Error("Diskon kupon berubah. Periksa ringkasan terbaru sebelum memesan.");
+          const gross = unitPrice * item.quantity;
+          return { productType: item.productType, quantity: item.quantity, unitPrice, gross,
+            discount: Math.floor(gross * pct / 100), variant: productVariant(item.productType, item.tshirtColor, item.tshirtSize) };
+        });
+        const first = items[0]!;
+        const price = items.reduce((n, item) => n + item.gross, 0);
+        const discountAmount = items.reduce((n, item) => n + item.discount, 0);
         const netSubtotal = price - discountAmount;
 
         // Unique QRIS payment identifier (brief Part 4.2): Rp1–999 chosen
@@ -932,7 +933,8 @@ export const Actions = {
           .values({
             code: makeOrderCode(),
             checkoutKey,
-            quantity: args.quantity,
+            quantity: totalQuantity,
+            items,
             projectId: project.id,
             templateId: project.templateId,
             customDef: project.customDef,
@@ -943,8 +945,8 @@ export const Actions = {
             nameAlign: project.nameAlign,
             colors: project.colors,
             strokes: project.strokes,
-            productType: args.productType,
-            variant,
+            productType: first.productType,
+            variant: items.length === 1 ? first.variant : "Keranjang " + items.length + " pilihan produk",
             productPrice: price,
             couponCode: affiliate ? affiliate.couponCode : "",
             affiliateId: affiliate ? affiliate.id : null,
@@ -1028,7 +1030,7 @@ export const Actions = {
 
   adminSalesReport: defineAction({
     description: "Admin-only sales analytics grouped by order date in WIB, with current paid orders, recorded affiliate commission and cost estimate settings.",
-    request: z.object({ month: z.string().regex(/^20\\d{2}-(0[1-9]|1[0-2])$/) }),
+    request: z.object({ month: z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/) }),
     response: z.object({
       daily: z.array(z.object({ day: z.string(), productId: z.enum(PRODUCT_IDS), affiliate: z.boolean(),
         orders: z.number(), quantity: z.number(), gross: z.number(), discount: z.number(), commission: z.number() })),
@@ -1045,15 +1047,28 @@ export const Actions = {
       const end = new Date(Date.UTC(year, month, 1, -7));
       const day = sql<string>`to_char(${o.createdAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`;
       const affiliate = sql<boolean>`${o.affiliateId} IS NOT NULL`;
-      const daily = await db.select({
-        day, productId: o.productType, affiliate, orders: count(),
-        quantity: sql<number>`coalesce(sum(${o.quantity}),0)`.mapWith(Number),
-        gross: sql<number>`coalesce(sum(${o.productPrice}),0)`.mapWith(Number),
-        discount: sql<number>`coalesce(sum(${o.discountAmount}),0)`.mapWith(Number),
-        commission: sql<number>`coalesce(sum(${c.amount}) FILTER (WHERE ${c.status} IN ('confirmed','payable','paid')),0)`.mapWith(Number),
+      const sales = await db.select({
+        day, affiliate, items: o.items, productType: o.productType, variant: o.variant,
+        quantity: o.quantity, productPrice: o.productPrice, discountAmount: o.discountAmount,
+        commission: sql<number>`CASE WHEN ${c.status} IN ('confirmed','payable','paid') THEN ${c.amount} ELSE 0 END`.mapWith(Number),
       }).from(o).leftJoin(c, eq(c.orderId, o.id))
-        .where(and(eq(o.paymentStatus, "paid"), sql`${o.createdAt} >= ${start.toISOString()}::timestamptz AND ${o.createdAt} < ${end.toISOString()}::timestamptz`))
-        .groupBy(day, o.productType, affiliate).orderBy(day);
+        .where(and(eq(o.paymentStatus, "paid"), sql`${o.createdAt} >= ${start.toISOString()}::timestamptz AND ${o.createdAt} < ${end.toISOString()}::timestamptz`));
+      const grouped = new Map<string, {day: string; productId: ProductId; affiliate: boolean; orders: number; quantity: number; gross: number; discount: number; commission: number}>();
+      for (const sale of sales) {
+        const items = sale.items.length ? sale.items : [{productType: sale.productType, quantity: sale.quantity, gross: sale.productPrice, discount: sale.discountAmount}];
+        const net = sale.productPrice - sale.discountAmount;
+        let cumulative = 0, allocated = 0;
+        items.forEach((item, index) => {
+          cumulative += item.gross - item.discount;
+          const next = index === items.length - 1 ? sale.commission : net > 0 ? Math.round(sale.commission * cumulative / net) : 0;
+          const key = JSON.stringify([sale.day, item.productType, sale.affiliate]);
+          const row = grouped.get(key) ?? {day:sale.day, productId:item.productType, affiliate:sale.affiliate, orders:0, quantity:0, gross:0, discount:0, commission:0};
+          row.orders += index === 0 ? 1 : 0;
+          row.quantity += item.quantity; row.gross += item.gross; row.discount += item.discount; row.commission += next - allocated;
+          allocated = next; grouped.set(key,row);
+        });
+      }
+      const daily = [...grouped.values()].sort((a,b) => a.day.localeCompare(b.day));
       const costs = await db.select().from(schema.productCosts);
       const [operating] = await db.select().from(schema.monthlyOperatingCosts).where(eq(schema.monthlyOperatingCosts.month, args.month));
       return { daily, costs, operatingCost: operating?.amount ?? null };
@@ -1077,7 +1092,7 @@ export const Actions = {
 
   adminSetOperatingCost: defineAction({
     description: "Admin: sets or clears total recorded monthly operating expenses.",
-    request: z.object({ month: z.string().regex(/^20\\d{2}-(0[1-9]|1[0-2])$/), amount: z.number().int().min(0).max(2000000000).nullable() }),
+    request: z.object({ month: z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/), amount: z.number().int().min(0).max(2000000000).nullable() }),
     response: z.object({ ok: z.literal(true) }),
     async handler(ctx, args): Promise<{ ok: true }> {
       return schemaDb(ctx).transaction(async (db) => {
@@ -2350,7 +2365,7 @@ export const Actions = {
         .orderBy(desc(schema.commissions.createdAt));
       const recentOrderIds = comms.slice(0, 50).map(({ orderId }) => orderId);
       const orderRows = recentOrderIds.length
-        ? await db.select({ id: schema.orders.id, code: schema.orders.code, productType: schema.orders.productType })
+        ? await db.select({ id: schema.orders.id, code: schema.orders.code, productType: schema.orders.productType, items: schema.orders.items })
           .from(schema.orders).where(inArray(schema.orders.id, recentOrderIds))
         : [];
       const orderById = new Map(orderRows.map((o) => [o.id, o]));
@@ -2392,7 +2407,7 @@ export const Actions = {
         return {
           date: c.createdAt.toISOString(),
           maskedCode: o ? `${o.code.slice(0, 7)}•••` : "BFK-•••",
-          productLabel: o ? productLabel(o.productType) : "Produk",
+          productLabel: o ? (o.items?.length > 1 ? o.items.map(item => productLabel(item.productType) + " ×" + item.quantity).join(", ") : productLabel(o.productType)) : "Produk",
           netSubtotal: c.netSubtotal,
           commission: c.amount,
           status: c.status,

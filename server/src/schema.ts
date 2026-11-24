@@ -74,12 +74,15 @@ export const templateQc = pgTable("template_qc", {
 // the server-computed price, and the payment / fulfilment status pair.
 // Payment status is only ever changed through the admin action after the
 // team verifies payment — there is no self-serve "paid" path.
+const ordersProductIds = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart"] as const;
 export const orders = pgTable("orders", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   code: text("code").notNull().unique(),
   projectId: integer("project_id"),
   checkoutKey: text("checkout_key"),
   quantity: integer("quantity").notNull().default(1),
+  // Empty for historical single-product orders. New carts snapshot every line.
+  items: jsonb("items").$type<{ productType: typeof ordersProductIds[number]; variant: string; quantity: number; unitPrice: number; gross: number; discount: number }[]>().notNull().default([]),
   paymentReference: text("payment_reference"),
   templateId: text("template_id").notNull(),
   customDef: text("custom_def").notNull().default(""),

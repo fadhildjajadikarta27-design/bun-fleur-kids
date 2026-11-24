@@ -28,6 +28,21 @@ import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
+function linesOf(order: OrderOut): OrderOut["items"] {
+  return order.items?.length ? order.items : [{productType:order.productType, variant:order.variant, quantity:order.quantity, unitPrice:Math.round(order.productPrice/Math.max(1,order.quantity)), gross:order.productPrice, discount:order.discountAmount}];
+}
+function orderTitle(order: OrderOut) {
+  return linesOf(order).length > 1 ? "Pesanan beberapa produk" : PRODUCT_META[order.productType].title;
+}
+function includesProduct(order: OrderOut, id: ProductId) { return linesOf(order).some(line=>line.productType===id); }
+function OrderedItems({ order }: { order: OrderOut }) {
+  return <ul className="my-3 space-y-2 text-sm font-semibold" aria-label="Daftar barang pesanan">
+    {linesOf(order).map((item,i) => <li key={i} className="flex justify-between gap-2 rounded-xl bg-[var(--surface-alt)] p-2">
+      <div><p>{PRODUCT_META[item.productType].title} × {item.quantity}</p><p className="text-xs text-[var(--dim)]">{item.variant}</p>{item.discount > 0 && <p className="text-xs text-olive-deep">Diskon {formatIDR(item.discount)}</p>}</div>
+      <span>{formatIDR(item.gross-item.discount)}</span>
+    </li>)}
+  </ul>;
+}
 
 export interface ShopProject {
   id: number | null;
@@ -42,6 +57,8 @@ export interface ShopProject {
   customDef: string;
   status: "draft" | "done";
 }
+
+export interface CartLine { product: ProductId; tshirtColor: string; tshirtSize: string; quantity: number }
 
 export interface ShopSelection {
   product: ProductId;
@@ -353,11 +370,15 @@ export function Masterpiece({
   project,
   onBack,
   onCustomize,
+  cartCount,
+  onCart,
   onMagic,
 }: {
   project: ShopProject;
   onBack: () => void;
   onCustomize: (p: ProductId) => void;
+  cartCount: number;
+  onCart: () => void;
   onMagic: () => void;
 }) {
   const cfg = useShopConfig();
@@ -379,7 +400,7 @@ export function Masterpiece({
             Karya Si Kecil <span className="band-accent">Sudah Siap!</span>
           </h1>
           <p className="band-dim mx-auto mt-2 max-w-lg font-semibold">
-            Turn your little one&rsquo;s imagination into something real.
+            Wujudkan imajinasi si kecil menjadi barang istimewa.
           </p>
         </div>
       </div>
@@ -447,7 +468,11 @@ export function Masterpiece({
         </p>
       </section>
 
-      {/* Enam pilihan produk, termasuk dua aksesori */}
+      <div className="sticky top-2 z-20 mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[var(--surface)] p-3 shadow-md ring-1 ring-[var(--border)]">
+        <div aria-live="polite" className="font-display font-bold text-olive-deep">Keranjang · {cartCount} barang</div>
+        <button type="button" disabled={!cartCount} onClick={onCart} className="rounded-full bg-olive px-5 py-2.5 font-bold text-white disabled:opacity-40">Lihat Keranjang</button>
+      </div>
+      {/* Tujuh pilihan produk */}
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Pilih bentuk kreasimu">
         {ACTIVE_PRODUCT_IDS.map((id) => {
           const meta = PRODUCT_META[id];
@@ -501,7 +526,7 @@ export function Masterpiece({
                   onClick={() => onCustomize(id)}
                   className="rounded-full bg-tang px-5 py-3 font-display text-base font-semibold text-ink shadow-sm transition hover:bg-tang-deep"
                 >
-                  {meta.cta}
+                  Pilih &amp; Tambah ke Keranjang
                 </button>
               </div>
             </article>
@@ -522,13 +547,19 @@ export function Customize({
   selection,
   setSelection,
   onBack,
-  onCheckout,
+  onAddToCart,
+  nameLocked,
+  cartCount,
+  onCart,
 }: {
   project: ShopProject;
   selection: ShopSelection;
   setSelection: (s: ShopSelection) => void;
   onBack: () => void;
-  onCheckout: () => void;
+  onAddToCart: () => void;
+  nameLocked: boolean;
+  cartCount: number;
+  onCart: () => void;
 }) {
   const cfg = useShopConfig();
   const meta = PRODUCT_META[selection.product];
@@ -569,10 +600,12 @@ export function Customize({
               id="order-child-name"
               {...FIELDS.createOrder.childName}
               value={selection.childName}
+              disabled={nameLocked}
               onChange={(e) => setSelection({ ...selection, childName: e.target.value })}
               placeholder="cth. BABA"
               className="mt-1 w-full rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-display text-lg font-bold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
             />
+            {nameLocked && <p className="mt-1 text-xs font-bold text-olive-deep">Nama dan karya yang sama digunakan untuk semua barang di keranjang ini. Kosongkan keranjang untuk memilih nama lain.</p>}
             <p className="mt-1 text-xs font-semibold text-[var(--dim)]">
               {selection.product === "poster"
                 ? "Nama tampil di bawah karya pada poster, dengan gaya huruf & warna dari Studio Mewarnai."
@@ -707,12 +740,13 @@ export function Customize({
                 setError("Pilih dulu ukuran kaosnya ya.");
                 return;
               }
-              onCheckout();
+              onAddToCart();
             }}
             className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink shadow transition hover:bg-tang-deep"
           >
-            Lanjut ke Pemesanan
+            Tambah ke Keranjang
           </button>
+          {cartCount > 0 && <button type="button" onClick={onCart} className="mt-2 w-full rounded-full border border-olive px-5 py-3 font-bold text-olive-deep">Lihat Keranjang ({cartCount})</button>}
         </section>
       </div>
     </div>
@@ -723,21 +757,25 @@ export function Customize({
 
 export function Checkout({
   project,
-  selection,
+  cart,
+  childName,
+  changeCart,
+  checkoutId,
   onBack,
   onPlaced,
 }: {
   project: ShopProject;
-  selection: ShopSelection;
+  cart: CartLine[];
+  childName: string;
+  changeCart: (lines: CartLine[]) => void;
+  checkoutId: { current: string | null };
   onBack: () => void;
   onPlaced: (o: OrderOut) => void;
 }) {
   const cfg = useShopConfig();
   const queryClient = useQueryClient();
-  const meta = PRODUCT_META[selection.product];
-  const [quantity, setQuantity] = useState(1);
-  const checkoutId = useRef<string | null>(null);
-  const price = basePrice(cfg, selection.product) * quantity;
+  const price = cart.reduce((n, line) => n + basePrice(cfg,line.product)*line.quantity, 0);
+  const quantity = cart.reduce((n,line) => n+line.quantity,0);
   const [customerName, setCustomerName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
@@ -745,21 +783,26 @@ export function Checkout({
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const [couponInput, setCouponInput] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPct: number } | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; rates: Partial<Record<ProductId, number>> } | null>(null);
   const [couponMsg, setCouponMsg] = useState("");
   const validate = useMutation({
-    mutationFn: async (code: string) => await api.validateCoupon({ code, productType: selection.product }),
+    mutationFn: async (code: string) => {
+      const ids = [...new Set(cart.map(line => line.product))];
+      const results = await Promise.all(ids.map(productType => api.validateCoupon({ code, productType })));
+      return { valid: results.length > 0 && results.every(r => r.valid), code: results[0]?.code ?? code,
+        rates: Object.fromEntries(ids.map((id,i) => [id,results[i]?.discountPct ?? 0])) as Partial<Record<ProductId,number>> };
+    },
     onError: (e) => {
       setAppliedCoupon(null);
       setCouponMsg(e.message);
     },
     onSuccess: (res) => {
       if (res.valid) {
-        setAppliedCoupon({ code: res.code, discountPct: res.discountPct });
-        setCouponMsg(res.message);
+        setAppliedCoupon({ code: res.code, rates: res.rates });
+        setCouponMsg("Kupon aktif. Diskon dihitung sesuai masing-masing produk.");
       } else {
         setAppliedCoupon(null);
-        setCouponMsg(res.message);
+        setCouponMsg("Kode kupon tidak ditemukan atau tidak aktif.");
       }
     },
   });
@@ -778,20 +821,18 @@ export function Checkout({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const discount = appliedCoupon ? Math.floor((price * appliedCoupon.discountPct) / 100) : 0;
+  const discount = appliedCoupon ? cart.reduce((n,line) => n + Math.floor(basePrice(cfg,line.product)*line.quantity*(appliedCoupon.rates[line.product] ?? 0)/100),0) : 0;
   const create = useMutation({
     mutationFn: async () =>
       await api.createOrder({
         projectId: project.id ?? 0,
         checkoutId: checkoutId.current ??= crypto.randomUUID(),
-        quantity,
-        expectedUnitPrice: basePrice(cfg, selection.product),
-        productType: selection.product,
-        tshirtColor: selection.product === "tshirt" ? selection.tshirtColor : "",
-        tshirtSize: selection.product === "tshirt" ? selection.tshirtSize : "",
-        childName: selection.childName.trim(),
+        productType: cart[0]!.product,
+        items: cart.map(line => ({ productType: line.product, quantity: line.quantity,
+          tshirtColor: line.tshirtColor, tshirtSize: line.tshirtSize,
+          expectedUnitPrice: basePrice(cfg,line.product), expectedCouponDiscountPct: appliedCoupon ? appliedCoupon.rates[line.product] : undefined })),
+        childName: childName.trim(),
         couponCode: appliedCoupon?.code ?? "",
-        expectedCouponDiscountPct: appliedCoupon?.discountPct,
         customerName: customerName.trim(),
         whatsapp: whatsapp.trim(),
         email: email.trim(),
@@ -806,34 +847,47 @@ export function Checkout({
     onSuccess: (res) => onPlaced(res.order),
   });
   const submit = () => {
-    if (validate.isPending || create.isPending) return;
+    if (validate.isPending || create.isPending || !cart.length) return;
     setError("");
     if (project.id == null) {
       setError("Karya ini belum tersimpan. Kembali ke Studio Mewarnai sebentar supaya tersimpan, lalu coba lagi.");
       return;
     }
+    if (couponInput.trim() && !appliedCoupon) return setError("Pakai atau kosongkan kode kupon terlebih dahulu.");
     if (customerName.trim().length < 2) return setError("Isi nama pemesan dulu ya.");
     if (whatsapp.replace(/\D/g, "").length < 9) return setError("Nomor WhatsApp perlu 9–15 digit angka.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Format email belum benar.");
     if (address.trim().length < 10) return setError("Isi alamat pengiriman lengkap (jalan, kota, kode pos) ya.");
     create.mutate();
   };
+  if (!cart.length) return <div className="mx-auto max-w-xl p-6 text-center"><h1 className="font-display text-2xl font-bold">Keranjang kosong</h1><button type="button" onClick={onBack} className="mt-4 rounded-full bg-olive px-5 py-3 text-white">Pilih Produk</button></div>;
   return (
     <div className="mx-auto max-w-4xl px-4 pb-16">
       <div className="band-sky mt-4 flex flex-wrap items-center gap-2 rounded-[1.75rem] px-5 py-4">
-        <button type="button" onClick={onBack} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
-          ← Kembali ke pengaturan
+        <button type="button" disabled={create.isPending} onClick={onBack} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
+          ← Tambah produk lain
         </button>
-        <h1 className="font-display text-2xl font-semibold">Pemesanan</h1>
+        <h1 className="font-display text-2xl font-semibold">Keranjang &amp; Pemesanan ({quantity})</h1>
       </div>
-      <div className="mt-4 flex items-center gap-3 px-2">
-        <label htmlFor="checkout-quantity" className="font-display text-sm font-bold">Jumlah</label>
-        <input id="checkout-quantity" type="number" inputMode="numeric" min={1} max={20}
-          value={quantity} disabled={create.isPending}
-          onChange={(event) => setQuantity(Math.min(20, Math.max(1, Math.trunc(Number(event.target.value)) || 1)))}
-          className="w-24 rounded-2xl bg-white px-4 py-2 text-ink ring-1 ring-[var(--border)]" />
-      </div>
-
+      <section className="mt-4 space-y-3 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]" aria-label="Isi keranjang">
+        <h2 className="font-display text-lg font-bold">Isi keranjang</h2>
+        <p className="text-xs font-semibold text-[var(--dim)]">Seluruh barang menggunakan karya dan nama yang sama. {childName && "Nama: " + childName}</p>
+        {cart.map((line,i) => <article key={line.product + "|" + line.tshirtColor + "|" + line.tshirtSize} className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-3">
+          <div className="w-24 shrink-0"><ProductPreview product={line.product} project={project} name={childName} fabric={line.tshirtColor || "Cream"} /></div>
+          <div className="min-w-32 flex-1"><p className="font-bold">{PRODUCT_META[line.product].title}</p>
+            {line.product === "tshirt" && <p className="text-xs">{FABRIC_LABELS[line.tshirtColor] ?? line.tshirtColor} · {line.tshirtSize}</p>}
+            <p className="text-sm font-bold">{formatIDR(basePrice(cfg,line.product))} / unit</p>
+            {appliedCoupon && <p className="text-xs text-olive-deep">Diskon {appliedCoupon.rates[line.product] ?? 0}%</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" aria-label={"Kurangi jumlah " + PRODUCT_META[line.product].title} disabled={create.isPending || line.quantity <= 1} onClick={() => changeCart(cart.map((x,j)=>j===i?{...x,quantity:x.quantity-1}:x))} className="h-9 w-9 rounded-full border font-bold disabled:opacity-40">−</button>
+            <span className="min-w-5 text-center font-bold">{line.quantity}</span>
+            <button type="button" aria-label={"Tambah jumlah " + PRODUCT_META[line.product].title} disabled={create.isPending || line.quantity >= 20 || quantity >= 140} onClick={() => changeCart(cart.map((x,j)=>j===i?{...x,quantity:x.quantity+1}:x))} className="h-9 w-9 rounded-full border font-bold disabled:opacity-40">+</button>
+          </div>
+          <div className="text-right"><p className="font-bold">{formatIDR(basePrice(cfg,line.product)*line.quantity)}</p><button type="button" disabled={create.isPending || validate.isPending} onClick={() => changeCart(cart.filter((_,j)=>j!==i))} className="text-xs font-bold text-berry">Hapus</button></div>
+        </article>)}
+        <div className="flex justify-between border-t border-[var(--border)] pt-3 font-bold"><span>Subtotal</span><span>{formatIDR(price)}</span></div>
+      </section>
 
       <div className="mt-4 grid items-start gap-4 md:grid-cols-[1fr_360px]">
         <form
@@ -953,33 +1007,15 @@ export function Checkout({
         <aside className="space-y-4">
           <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Ringkasan pesanan">
             <h2 className="font-display text-lg font-semibold">Ringkasan pesanan</h2>
-            <div className="mx-auto mt-3 max-w-[180px]">
-              <ProductPreview product={selection.product} project={project} name={selection.childName} fabric={selection.tshirtColor} />
-            </div>
             <dl className="mt-3 space-y-1.5 text-sm font-semibold">
-              <div className="flex justify-between gap-3">
-                <dt className="text-[var(--dim)]">Produk</dt>
-                <dd className="text-right font-display">{meta.title}</dd>
-              </div>
-              {selection.product === "tshirt" && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--dim)]">Varian</dt>
-                  <dd className="text-right">Kaos {selection.tshirtColor} · {selection.tshirtSize}</dd>
-                </div>
-              )}
-              {selection.childName.trim() && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--dim)]">Nama anak</dt>
-                  <dd className="text-right">{selection.childName.trim()}</dd>
-                </div>
-              )}
+              {cart.map((line,i) => <div key={i} className="flex justify-between gap-3"><dt>{PRODUCT_META[line.product].title} × {line.quantity}</dt><dd>{formatIDR(basePrice(cfg,line.product)*line.quantity)}</dd></div>)}
               <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2">
                 <dt className="text-[var(--dim)]">Harga produk</dt>
                 <dd className="font-display">{formatIDR(price)}</dd>
               </div>
               {appliedCoupon && (
                 <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--dim)]">Diskon kupon {appliedCoupon.code} ({appliedCoupon.discountPct}%)</dt>
+                  <dt className="text-[var(--dim)]">Diskon kupon {appliedCoupon.code}</dt>
                   <dd className="font-display text-olive-deep">−{formatIDR(discount)}</dd>
                 </div>
               )}
@@ -1270,7 +1306,6 @@ export function OrderConfirmation({
   onCreations: () => void;
   onHome: () => void;
 }) {
-  const meta = PRODUCT_META[order.productType];
   const snap: ShopProject = useMemo(
     () => ({
       id: order.projectId,
@@ -1292,7 +1327,7 @@ export function OrderConfirmation({
       <section className="band-sage mt-4 rounded-[2rem] px-6 py-8 text-center" aria-label="Konfirmasi pesanan">
         <p className="font-display text-3xl font-semibold">Pesanan Diterima!</p>
         <p className="band-dim mx-auto mt-2 max-w-md font-semibold">
-          Terima kasih — {meta.tagline.toLowerCase()} dari karya si kecil sudah tercatat di tim kami.
+          Terima kasih — semua barang dari karya si kecil sudah tercatat dalam satu pesanan.
         </p>
         <p className="mt-4 inline-block rounded-2xl bg-white px-5 py-3 ring-1 ring-[var(--border)]">
           <span className="block text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">Kode pesanan</span>
@@ -1306,17 +1341,15 @@ export function OrderConfirmation({
       </section>
 
       <section className="mt-4 rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Detail pesanan">
-        <div className="mx-auto max-w-[200px]">
-          <ProductPreview
-            product={order.productType}
-            project={snap}
-            name={order.childName}
-            fabric={order.variant.startsWith("Kaos ") ? order.variant.slice(5).split(" · ")[0]! : "Cream"}
-          />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {linesOf(order).map((item,i) => <div key={i} className="min-w-0">
+            <ProductPreview product={item.productType} project={snap} name={order.childName}
+              fabric={item.variant.startsWith("Kaos ") ? item.variant.slice(5).split(" · ")[0]! : "Cream"} />
+            <p className="text-center text-xs font-bold">{PRODUCT_META[item.productType].title} × {item.quantity}</p>
+          </div>)}
         </div>
+        <OrderedItems order={order} />
         <dl className="mx-auto mt-4 max-w-md space-y-1.5 text-sm font-semibold">
-          <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Produk</dt><dd className="text-right font-display">{meta.title}</dd></div>
-          {order.variant && <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Varian</dt><dd className="text-right">{order.variant}</dd></div>}
           {order.childName.trim() && <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Nama anak</dt><dd className="text-right">{order.childName.trim()}</dd></div>}
           <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Pemesan</dt><dd className="text-right">{order.customerName}</dd></div>
           <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2"><dt className="text-[var(--dim)]">Harga produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
@@ -1478,11 +1511,12 @@ export function OrderTracking() {
             </div>
             <div className="min-w-52 flex-1">
               <p className="font-display text-lg font-semibold">
-                {order.code} · {PRODUCT_META[order.productType].title}
+                {order.code} · {orderTitle(order)}
               </p>
               <p className="text-sm font-semibold text-[var(--dim)]">
                 {order.variant} · Total {formatIDR(order.total)} · Pembayaran: {PAY_STATE_LABELS[order.payState]}
               </p>
+              <OrderedItems order={order} />
               {order.orderStatus === "cancelled" ? (
                 <p className="mt-2 font-display font-semibold text-berry">Pesanan ini dibatalkan. Karyamu tetap tersimpan di Kreasiku bila ingin memesan lagi.</p>
               ) : (
@@ -1522,7 +1556,7 @@ export function OrderTracking() {
 
           {/* File produksi poster: hanya terbuka setelah pembayaran
               terverifikasi di server (paymentStatus === "paid"). */}
-          {order.productType === "poster" && order.paymentStatus === "paid" && (
+          {includesProduct(order, "poster") && order.paymentStatus === "paid" && (
             <div className="mt-4 border-t border-dashed border-[var(--border)] pt-3">
               <div className="sr-only" aria-hidden>
                 <ArtworkSvg
@@ -1544,11 +1578,11 @@ export function OrderTracking() {
                 Unduh File Poster Resolusi Produksi (PNG)
               </button>
               <p className="mt-1.5 text-xs font-semibold text-[var(--dim)]">
-                Pembayaranmu sudah terverifikasi, jadi file final postermu terbuka. Poster fisik berbingkainya tetap diproduksi &amp; dikirim oleh tim kami.
+                Pembayaranmu sudah terverifikasi, jadi file final postermu terbuka. Poster fisik tetap diproduksi &amp; dikirim oleh tim kami.
               </p>
             </div>
           )}
-          {order.productType === "poster" && order.paymentStatus !== "paid" && order.orderStatus !== "cancelled" && (
+          {includesProduct(order, "poster") && order.paymentStatus !== "paid" && order.orderStatus !== "cancelled" && (
             <p className="mt-4 border-t border-dashed border-[var(--border)] pt-3 text-sm font-semibold text-[var(--dim)]">
               File poster resolusi produksi terkunci sampai pembayaran terverifikasi oleh tim kami.
             </p>
@@ -1565,7 +1599,7 @@ export function OrderTracking() {
  * This is an admin-only workflow, reached through the admin order dashboard.
  * No production file is generated before payment is verified. */
 function downloadPapercraftKit(order: OrderOut) {
-  if (order.productType !== "papercraft" || order.paymentStatus !== "paid") return;
+  if (!includesProduct(order, "papercraft") || order.paymentStatus !== "paid") return;
   const template = templateForSnapshot({ templateId: order.templateId, customDef: order.customDef });
   const blob = buildPillowPdf({
     template,
@@ -1656,11 +1690,12 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
         </div>
         <div className="min-w-56 flex-1">
           <p className="font-display text-base font-semibold">
-            {order.code} · {PRODUCT_META[order.productType].title}
+            {order.code} · {orderTitle(order)}
           </p>
           <p className="text-sm font-semibold text-[var(--dim)]">
             {order.variant || "—"} · {new Date(order.createdAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}
           </p>
+          <OrderedItems order={order} />
           <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm font-semibold sm:grid-cols-2">
             <div><dt className="inline text-[var(--dim)]">Pemesan: </dt><dd className="inline">{order.customerName}</dd></div>
             <div><dt className="inline text-[var(--dim)]">WhatsApp: </dt><dd className="inline">{order.whatsapp}</dd></div>
@@ -1687,7 +1722,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
             const svg = artworkRef.current;
             if (svg) downloadBlob(new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml;charset=utf-8" }), `artwork-${order.code}.svg`);
           }} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">Unduh artwork SVG pesanan</button>
-          {order.productType === "papercraft" && (
+          {includesProduct(order, "papercraft") && (
             <div className="mt-3 rounded-2xl bg-[#EDF2E6] p-3 ring-1 ring-[var(--border)]">
               <p className="font-display text-sm font-bold text-olive-deep">Berkas Produksi Papercraft 3D</p>
               <p className="mt-1 text-xs font-semibold text-[var(--dim)]">
