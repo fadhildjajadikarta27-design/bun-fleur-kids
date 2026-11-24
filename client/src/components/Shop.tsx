@@ -221,12 +221,13 @@ export function PapercraftPreview({ project, name, large = false }: { project: S
 /** Only public catalog uses example photos, never a customer's product preview.
  * If a new photo has not been installed yet, the example SVG mockup remains visible. */
 const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
-  tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: papercraftSampleUrl,
+  tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: "/products/papercraft.webp",
+  celengan: "/products/celengan.webp", puzzle: "/products/puzzle.webp", placemat: "/products/placemat.webp", growthchart: "/products/growthchart.webp",
 };
 export function CatalogProductPreview({ product, project }: { product: ProductId; project: ShopProject }) {
   const [failed, setFailed] = useState(false);
-  const src = CATALOG_PHOTOS[product];
-  return src && !failed ? <figure>
+  const src = failed && product === "papercraft" ? papercraftSampleUrl : CATALOG_PHOTOS[product];
+  return src && (!failed || product === "papercraft") ? <figure>
     <img src={src} alt={`Contoh produk ${PRODUCT_META[product].title}`} loading="lazy" decoding="async" onError={() => setFailed(true)} className="mx-auto aspect-square w-full rounded-2xl object-contain" />
     <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Foto contoh produk; desain pesanan mengikuti hasil mewarnai anak.</figcaption>
   </figure> : <ProductPreview product={product} project={project} name={project.childName} fabric="Cream" />;
