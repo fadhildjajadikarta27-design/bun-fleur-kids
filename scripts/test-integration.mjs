@@ -36,8 +36,10 @@ try {
   assert.ok(migrations.some(m=>m.name==="0017_birthday_events.sql"));
   assert.ok(migrations.some(m=>m.name==="0018_bundles_gifts.sql"));
   assert.ok(migrations.some(m=>m.name==="0020_order_archive.sql"));
-  assert.equal((await call("getShopConfig")).body.products.length,12);
-  assert.equal((await sql`SELECT count(*)::int AS n FROM birthday_prices`)[0].n,12);
+  assert.ok(migrations.some(m=>m.name==="0021_expand_lunchbox_tumbler.sql"));
+  assert.ok(migrations.some(m=>m.name==="0022_order_background.sql"));
+  assert.equal((await call("getShopConfig")).body.products.length,14);
+  assert.equal((await sql`SELECT count(*)::int AS n FROM birthday_prices`)[0].n,14);
   assert.equal((await sql`SELECT has_table_privilege('anon', 'public.payment_proofs', 'SELECT') AS allowed`)[0].allowed, false);
 
   const first = await call("listProjects");
