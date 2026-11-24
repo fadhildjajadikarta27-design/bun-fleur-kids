@@ -1464,8 +1464,8 @@ export function OrderConfirmation({
 
 /* ------------------------- Tracking + download ------------------------- */
 
-async function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
-  if (!svg) return;
+async function artworkXml(svg: SVGSVGElement | null): Promise<string | null> {
+  if (!svg) return null;
   const copy=svg.cloneNode(true) as SVGSVGElement;
   try {
     for(const image of Array.from(copy.querySelectorAll("image[data-background]"))){
@@ -1477,8 +1477,18 @@ async function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
       const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsDataURL(blob);});
       image.setAttribute("href",data);
     }
-  }catch{window.alert("Background belum berhasil dimuat. Coba unduh kembali.");return;}
-  const xml = new XMLSerializer().serializeToString(copy);
+  }catch{window.alert("Background belum berhasil dimuat. Coba unduh kembali.");return null;}
+  return new XMLSerializer().serializeToString(copy);
+}
+
+async function downloadArtworkSvg(svg: SVGSVGElement | null, filename: string) {
+  const xml=await artworkXml(svg);
+  if(xml) downloadBlob(new Blob([xml], {type:"image/svg+xml;charset=utf-8"}),filename);
+}
+
+async function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
+  const xml=await artworkXml(svg);
+  if(!xml)return;
   const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
   const img = new Image();
   img.onload = () => {
@@ -1818,10 +1828,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
               </dd>
             </div>
           </dl>
-          <button type="button" disabled={order.paymentStatus !== "paid"} onClick={() => {
-            const svg = artworkRef.current;
-            if (svg) downloadBlob(new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml;charset=utf-8" }), `artwork-${order.code}.svg`);
-          }} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">Unduh artwork SVG pesanan</button>
+          <button type="button" disabled={order.paymentStatus !== "paid"} onClick={() => { void downloadArtworkSvg(artworkRef.current, `artwork-${order.code}.svg`); }} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">Unduh artwork SVG pesanan</button>
           {includesProduct(order, "papercraft") && (
             <div className="mt-3 rounded-2xl bg-[#EDF2E6] p-3 ring-1 ring-[var(--border)]">
               <p className="font-display text-sm font-bold text-olive-deep">Berkas Produksi Papercraft 3D</p>
