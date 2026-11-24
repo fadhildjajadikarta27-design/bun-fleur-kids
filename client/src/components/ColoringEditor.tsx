@@ -86,7 +86,7 @@ export function ArtworkSvg({
         </clipPath>
       </defs>
       {/* Name plaque behind the artwork's label area */}
-      {showLabel && <rect
+      {showLabel && displayName && <rect
         x={template.label.x - 8}
         y={template.label.y - 4}
         width={template.label.w + 16}
@@ -176,7 +176,7 @@ export function ArtworkSvg({
           {displayName.toUpperCase()}
         </text>
       )}
-      {showLabel && displayName && message?.trim() && (
+      {showLabel && message?.trim() && (
         <text
           x={nameX}
           y={template.label.y + template.label.h - 5}

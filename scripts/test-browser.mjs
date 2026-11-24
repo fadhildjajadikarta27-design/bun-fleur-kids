@@ -29,6 +29,24 @@ try {
   console.log("PASS mobile canvas zoom and right palette");
   await page.goto(base+"/#/kreasiku");
   await artwork.getByRole("button",{name:"Jadikan Nyata — Pesan Produk"}).click();
+  const productGrid=page.getByRole("region",{name:"Pilih bentuk kreasimu"});
+  const productCards=productGrid.locator("article");
+  assert.equal(await productCards.count(),12);
+  const names=await productCards.getByRole("heading").allTextContents();
+  for(const name of names){
+    const card=productGrid.locator("article").filter({has:page.getByRole("heading",{name,exact:true})});
+    await card.getByRole("button",{name:"Pilih & Tambah ke Keranjang"}).click();
+    const preview=page.getByRole("region",{name:"Pratinjau produk"});
+    const input=page.locator("#order-child-name");
+    await input.fill("");
+    assert.ok(await preview.locator('path[fill="#AB57CC"]').count()>0,name+" artwork color missing");
+    assert.equal(await preview.locator('rect[stroke-dasharray="1 7"]').count(),0,name+" blank name frame");
+    assert.doesNotMatch(await preview.textContent(),/\bADAM\b|QA BROWSER/i,name+" unexpected name");
+    await input.fill("QA PERSONA");
+    assert.match(await preview.textContent(),/QA PERSONA/i,name+" personalized name missing");
+    await page.getByRole("button",{name:"Semua pilihan",exact:false}).click();
+  }
+  console.log("PASS all 12 product previews use artwork color, optional name, no dummy name or empty plaque");
   async function addProduct(name){
     const card=page.locator("article").filter({has:page.getByRole("heading",{name,exact:true})});
     await card.getByRole("button",{name:"Pilih & Tambah ke Keranjang"}).click();

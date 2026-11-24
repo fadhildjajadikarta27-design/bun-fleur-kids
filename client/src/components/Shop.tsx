@@ -480,7 +480,7 @@ export function Masterpiece({
         <div aria-live="polite" className="font-display font-bold text-olive-deep">Keranjang · {cartCount} barang</div>
         <button type="button" disabled={!cartCount} onClick={onCart} className="rounded-full bg-olive px-5 py-2.5 font-bold text-white disabled:opacity-40">Lihat Keranjang</button>
       </div>
-      {/* Tujuh pilihan produk */}
+      {/* Seluruh pilihan produk aktif */}
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Pilih bentuk kreasimu">
         {ACTIVE_PRODUCT_IDS.map((id) => {
           const meta = PRODUCT_META[id];
@@ -602,7 +602,7 @@ export function Customize({
 
           <div className="mt-4">
             <label htmlFor="order-child-name" className="font-display text-sm font-bold">
-              Nama anak untuk personalisasi{selection.product === "tshirt" ? " (opsional)" : ""}
+              Nama anak untuk personalisasi (opsional)
             </label>
             <input
               id="order-child-name"
@@ -610,7 +610,7 @@ export function Customize({
               value={selection.childName}
               disabled={nameLocked}
               onChange={(e) => setSelection({ ...selection, childName: e.target.value })}
-              placeholder="cth. BABA"
+              placeholder="Kosongkan jika tidak ingin nama"
               className="mt-1 w-full rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-display text-lg font-bold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
             />
             {nameLocked && <p className="mt-1 text-xs font-bold text-olive-deep">Nama dan karya yang sama digunakan untuk semua barang di keranjang ini. Kosongkan keranjang untuk memilih nama lain.</p>}
