@@ -20,7 +20,6 @@ import { NAME_FONTS, type TemplateDef } from "../lib/model";
 import { getTemplate } from "../lib/registry";
 import { buildCustomTemplate, parseCustomDef } from "../lib/custom";
 import { buildPillowPdf, downloadBlob } from "../lib/pdf";
-import { papercraftSampleUrl } from "../papercraft-sample";
 import { logoUrl } from "../assets-inline";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
@@ -241,21 +240,22 @@ export function PapercraftPreview({ project, name, large = false }: { project: S
   </div>;
 }
 
-/** Only public catalog uses example photos, never a customer's product preview.
- * If a new photo has not been installed yet, the example SVG mockup remains visible. */
 const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
   lunchbox: '/products/lunchbox.png', tumbler: '/products/tumbler.png',
   nightlamp: '/products/nightlamp.png', wallclock: '/products/wallclock.png', namestickers: '/products/namestickers.png', rewardchart: '/products/rewardchart.png', kidswatch: '/products/kidswatch.png',
   tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: "/products/papercraft.webp",
   celengan: "/products/celengan.webp", puzzle: "/products/puzzle.webp", placemat: "/products/placemat.webp", growthchart: "/products/growthchart.webp",
 };
-export function CatalogProductPreview({ product, project }: { product: ProductId; project: ShopProject }) {
-  const [failures, setFailures] = useState(0);
-  const src = failures === 0 ? CATALOG_PHOTOS[product] : failures === 1 && product === "papercraft" ? papercraftSampleUrl : undefined;
-  return src ? <figure>
-    <img src={src} alt={`Contoh produk ${PRODUCT_META[product].title}`} loading="lazy" decoding="async" onError={() => setFailures(n=>n+1)} className="mx-auto aspect-square w-full rounded-2xl object-contain" />
-    <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Foto contoh produk; desain pesanan mengikuti hasil mewarnai anak.</figcaption>
-  </figure> : <ProductPreview product={product} project={project} name={project.childName} fabric="Cream" />;
+function OriginalProductPhoto({ product }: { product: ProductId }) {
+  const [failed, setFailed] = useState(false);
+  const src = CATALOG_PHOTOS[product];
+  return <figure>
+    {src && !failed ? <img src={src} alt={`Foto produk ${PRODUCT_META[product].title}`} loading="lazy" decoding="async" onError={() => setFailed(true)} className="mx-auto aspect-square w-full rounded-2xl object-contain" /> : <div className="flex aspect-square items-center justify-center rounded-2xl bg-white p-4 text-center text-sm text-[var(--dim)]">Foto produk belum tersedia</div>}
+    <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Foto contoh produk. Desain pesanan mengikuti karya anak dan pilihan personalisasi.</figcaption>
+  </figure>;
+}
+export function CatalogProductPreview({ product }: { product: ProductId; project: ShopProject }) {
+  return <OriginalProductPhoto key={product} product={product} />;
 }
 
 /** Digital product mockups inspired by the sample photos.
@@ -307,7 +307,7 @@ export function CelenganPreview({ project, name, large = false }: { project: Sho
   </div>;
 }
 
-function FlatProductPreview({ product, project, name, large }: { product: "puzzle" | "placemat"; project: ShopProject; name: string; large: boolean }) {
+export function FlatProductPreview({ product, project, name, large }: { product: "puzzle" | "placemat"; project: ShopProject; name: string; large: boolean }) {
   const puzzle = product === "puzzle";
   return <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
     <div className="rounded-3xl bg-[#EBDCC5] p-4 sm:p-5">
@@ -326,7 +326,7 @@ function FlatProductPreview({ product, project, name, large }: { product: "puzzl
   </div>;
 }
 
-function GrowthChartPreview({ project, name, large }: { project: ShopProject; name: string; large: boolean }) {
+export function GrowthChartPreview({ project, name, large }: { project: ShopProject; name: string; large: boolean }) {
   const chartName = name.trim();
   return <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
     <div className="flex justify-center rounded-3xl bg-[#F2EAE0] p-4">
@@ -359,7 +359,7 @@ function GrowthChartPreview({ project, name, large }: { project: ShopProject; na
   </div>;
 }
 
-function NewPersonalizedPreview({product,project,name,large}:{product:"rewardchart"|"namestickers"|"wallclock"|"nightlamp"|"kidswatch"|"lunchbox"|"tumbler";project:ShopProject;name:string;large:boolean}){
+export function NewPersonalizedPreview({product,project,name,large}:{product:"rewardchart"|"namestickers"|"wallclock"|"nightlamp"|"kidswatch"|"lunchbox"|"tumbler";project:ShopProject;name:string;large:boolean}){
  const label=name.trim();
  const art=(flip=false)=><div className={flip?"-scale-x-100":""}><PersonalArtwork project={project} name="" showLabel={false}/></div>;
  const title=label?<p className="relative z-10 mx-auto max-w-full break-words rounded-full border border-[#89965A] bg-[#FFF8E8] px-2 py-1 text-center font-extrabold leading-tight" style={{color:project.nameColor,fontFamily:fontFamilyOf(project.nameFont),fontSize:large?16:10}}>{label}</p>:null;
@@ -381,18 +381,10 @@ function NewPersonalizedPreview({product,project,name,large}:{product:"rewardcha
  </div><MockupCaption>Personalisasi dari warna dan karakter karya anak</MockupCaption></div>;
 }
 
-export function ProductPreview({ product, project, name, fabric, large = false }: {
+export function ProductPreview({ product }: {
   product: ProductId; project: ShopProject; name: string; fabric: string; large?: boolean;
 }) {
-  if (product === "rewardchart" || product === "namestickers" || product === "wallclock" || product === "nightlamp" || product === "kidswatch" || product === "lunchbox" || product === "tumbler") return <NewPersonalizedPreview product={product} project={project} name={name} large={large} />;
-  if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
-  if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
-  if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
-  if (product === "puzzle" || product === "placemat") return <FlatProductPreview product={product} project={project} name={name} large={large} />;
-  if (product === "growthchart") return <GrowthChartPreview project={project} name={name} large={large} />;
-  if (product === "accessory59") return <div className="mx-auto max-w-sm rounded-3xl bg-[#EEF4E4] p-5"><PersonalArtwork project={project} name={name} /><MockupCaption>Aksesori dari pesanan lama</MockupCaption></div>;
-  if (product === "figurine") return <FigurinePreview project={project} height={large ? 320 : 210} />;
-  return <TshirtPreview project={project} name={name} fabric={fabric} large={large} />;
+  return <OriginalProductPhoto key={product} product={product} />;
 }
 
 /* ---------------------------- Masterpiece ---------------------------- */
@@ -598,7 +590,7 @@ export function Customize({
             large
           />
           <p className="mt-2 text-center text-sm font-semibold text-[var(--dim)]">
-            Pratinjau memakai warna persis dari karya anakmu — bukan contoh generik.
+            Foto produk tidak berubah saat personalisasi. Nama, background dan hasil mewarnai tetap digunakan untuk pesanan.
           </p>
         </section>
 
