@@ -74,7 +74,7 @@ export const templateQc = pgTable("template_qc", {
 // the server-computed price, and the payment / fulfilment status pair.
 // Payment status is only ever changed through the admin action after the
 // team verifies payment — there is no self-serve "paid" path.
-const ordersProductIds = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch"] as const;
+const ordersProductIds = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch", "lunchbox", "tumbler"] as const;
 export const orders = pgTable("orders", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   code: text("code").notNull().unique(),
@@ -98,7 +98,7 @@ export const orders = pgTable("orders", {
     .default("center"),
   colors: text("colors").notNull().default("{}"),
   strokes: text("strokes").notNull().default("[]"),
-  productType: text("product_type", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch"] }).notNull(),
+  productType: text("product_type", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch", "lunchbox", "tumbler"] }).notNull(),
   variant: text("variant").notNull().default(""),
   productPrice: integer("product_price").notNull(),
   // Affiliate attribution (brief Part 3): the coupon code the customer
@@ -161,7 +161,7 @@ export const orders = pgTable("orders", {
 });
 
 export const productPrices = pgTable("product_prices", {
-  productId: text("product_id", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch"] }).primaryKey(),
+  productId: text("product_id", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch", "lunchbox", "tumbler"] }).primaryKey(),
   price: integer("price").notNull(),
 });
 
@@ -307,7 +307,7 @@ export const affiliateAudit = pgTable("affiliate_audit", {
 
 // Admin-only management accounting; values are estimates, not order price snapshots.
 export const productCosts = pgTable("product_costs", {
-  productId: text("product_id", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch"] }).primaryKey(),
+  productId: text("product_id", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart", "rewardchart", "namestickers", "wallclock", "nightlamp", "kidswatch", "lunchbox", "tumbler"] }).primaryKey(),
   unitCost: integer("unit_cost").notNull(),
 });
 export const monthlyOperatingCosts = pgTable("monthly_operating_costs", {
