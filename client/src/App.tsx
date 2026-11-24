@@ -564,7 +564,7 @@ function Home({
       <section className="mt-20" aria-label="Tujuh bentuk kreasi fisik">
         <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Tujuh Cara Mewujudkan Karya</p>
         <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Satu Karya, Banyak Cara <span className="hero-word-sky">untuk Jadi Nyata.</span></h2>
-        <p className="mt-3 max-w-2xl leading-relaxed text-[var(--dim)]">Mewarnai selalu gratis. Pilih produk setelah mewarnai dan lihat bagaimana karya serta nama si kecil tampil pada produk pilihanmu. Ongkir ditampilkan terpisah.</p>
+        <p className="mt-3 max-w-2xl leading-relaxed text-[var(--dim)]">Mewarnai selalu gratis. Pilih produk setelah mewarnai dan lihat bagaimana karya serta nama si kecil tampil pada produk pilihanmu. Gratis ongkir untuk belanja minimal Rp100.000 setelah diskon; di bawahnya ongkir Rp10.000 per pesanan.</p>
         <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {ACTIVE_PRODUCT_IDS.map((id) => (
             <article key={id} className="flex flex-col overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">

@@ -119,6 +119,8 @@ try {
   assert.notEqual(order.payableTotal, another.payableTotal);
   assert.equal(order.productPrice, 258300);
   assert.equal(order.discountAmount, 25830);
+  assert.equal(order.shippingCost, 0);
+  assert.equal(order.total, 232470);
   assert.equal(order.childName, "");
   assert.deepEqual(order.colors, project.colors);
   await call("updateOrder", { id: order.id, paymentStatus: "paid" }, { ...admin, expected: 400 });
@@ -208,6 +210,8 @@ try {
   }, owner)).body.order;
   assert.equal(placemat.productPrice, 54900);
   assert.equal(placemat.discountAmount, 0);
+  assert.equal(placemat.shippingCost, 10000);
+  assert.equal(placemat.total, 64900);
   const growth = (await call("createOrder", { ...orderArgs, checkoutId: randomUUID(), quantity: 1, productType: "growthchart" }, owner)).body.order;
   assert.equal(growth.productPrice, 69000);
   assert.equal(growth.variant, "Growth chart tempel personalisasi");
@@ -227,6 +231,7 @@ try {
   assert.equal(cart.productPrice, 173700);
   assert.equal(cart.discountAmount, 18780);
   assert.equal(cart.total, 154920);
+  assert.equal(cart.shippingCost, 0);
   assert.equal((await call("createOrder", cartArgs, owner)).body.order.id, cart.id);
   const cartComms = await sql`SELECT amount FROM commissions WHERE order_id = ${cart.id}`;
   assert.equal(cartComms.length, 1);
@@ -235,7 +240,24 @@ try {
     items: [...cartArgs.items, { productType: "tshirt", quantity: 1, tshirtSize: "invalid" }] }, { ...owner, expected: 400 });
   await call("verifyOrderPayment", { id: cart.id, decision: "verify", paymentReference: "CART-" + token }, admin);
   assert.equal((await call("trackOrder", { code: cart.code, whatsapp: phone })).body.order.items.length, 3);
-  console.log("PASS multi-product cart, per-item discount, payment, commission and idempotency");
+  // Boundary and stale shipping amount; shipping is based on net product subtotal.
+  const shippingArgs = { ...orderArgs, productType: "poster", quantity: 4, couponCode: "", checkoutId: randomUUID() };
+  const below = (await call("createOrder", shippingArgs, owner)).body.order;
+  assert.equal(below.productPrice, 99600);
+  assert.equal(below.shippingCost, 10000);
+  assert.equal(below.total, 109600);
+  await call("createOrder", {...shippingArgs, checkoutId: randomUUID(), expectedShippingCost: 0}, {...owner, expected: 400});
+  await call("adminSetProductPrice", {productId: "poster", price: 100000}, admin);
+  const exact = (await call("createOrder", {...shippingArgs, quantity: 1, checkoutId: randomUUID(), expectedShippingCost: 0}, owner)).body.order;
+  assert.equal(exact.total, 100000);
+  assert.equal(exact.shippingCost, 0);
+  const discounted = (await call("createOrder", {...shippingArgs, quantity: 1, couponCode: coupon.code, checkoutId: randomUUID(), expectedShippingCost: 10000}, owner)).body.order;
+  assert.equal(discounted.discountAmount, 10000);
+  assert.equal(discounted.shippingCost, 10000);
+  assert.equal(discounted.total, 100000);
+  assert.notEqual(exact.payableTotal, discounted.payableTotal);
+  await call("adminSetProductPrice", {productId: "poster", price: 24900}, admin);
+  console.log("PASS multi-product cart, automatic shipping, per-item discount, payment, commission and idempotency");
   await call("adminSetAffiliateProductDiscount", { ...rule, discountPct: null }, admin);
   assert.equal(await rate("puzzle"), 10);
   const stale = await call("createOrder", { ...puzzle, checkoutId: randomUUID() }, { ...owner, expected: 400 });

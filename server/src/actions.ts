@@ -96,6 +96,7 @@ const productDiscounts = z.partialRecord(z.enum(PRODUCT_IDS), discountPct);
 function couponDiscountFor(affiliate: { discountPct: number; productDiscounts: Partial<Record<string, number>> }, product?: ProductId) {
   return (product ? affiliate.productDiscounts[product] : undefined) ?? affiliate.discountPct;
 }
+const SHIPPING_POLICY = { freeFrom: 100000, flatRate: 10000 } as const;
 const DEFAULT_PRICES: Record<ProductId, number> = {
   poster: 24900, papercraft: 36900, figurine: 120000, tshirt: 79000,
   celengan: 59900, accessory59: 59000, puzzle: 69000, placemat: 54900, growthchart: 69000,
@@ -794,6 +795,7 @@ export const Actions = {
       ),
       tshirtColors: z.array(z.string()),
       tshirtSizes: z.array(z.string()),
+      shippingPolicy: z.object({ freeFrom: z.number().int().positive(), flatRate: z.number().int().nonnegative() }),
       paymentGatewayConnected: z.boolean(),
     }),
     async handler(ctx) {
@@ -806,6 +808,7 @@ export const Actions = {
         })),
         tshirtColors: [...TSHIRT_COLORS],
         tshirtSizes: [...TSHIRT_SIZES],
+        shippingPolicy: SHIPPING_POLICY,
         // No Midtrans/Xendit (or other gateway) credentials exist in this
         // project yet, so online payment stays off: orders are recorded
         // as Pending Payment and the team confirms payment manually.
@@ -824,6 +827,7 @@ export const Actions = {
       expectedUnitPrice: z.number().int().positive().optional(),
       productType: purchasableProduct,
       items: z.array(cartItemRequest).min(1).max(20).optional(),
+      expectedShippingCost: z.number().int().nonnegative().optional(),
       tshirtColor: z.string().max(40).default(""),
       tshirtSize: z.string().max(40).default(""),
       childName: z.string().trim().max(24).optional(),
@@ -900,26 +904,29 @@ export const Actions = {
         const price = items.reduce((n, item) => n + item.gross, 0);
         const discountAmount = items.reduce((n, item) => n + item.discount, 0);
         const netSubtotal = price - discountAmount;
+        const shippingCost = netSubtotal >= SHIPPING_POLICY.freeFrom ? 0 : SHIPPING_POLICY.flatRate;
+        if (args.expectedShippingCost !== undefined && args.expectedShippingCost !== shippingCost) throw new Error("Ongkos kirim berubah. Periksa kembali ringkasan pesanan.");
+        const total = netSubtotal + shippingCost;
 
         // Unique QRIS payment identifier (brief Part 4.2): Rp1–999 chosen
-        // so the exact payable total (net + code, shipping still 0 at this
-        // point) does not collide with any other order still waiting to be
+        // so the exact payable total (net + shipping + unique code)
+        // does not collide with any other order still waiting to be
         // matched to a real transfer. Stored on the order and never
         // regenerated, so a page refresh keeps the same amount.
         const activeOrders = await db
           .select({ total: schema.orders.total, uniqueCode: schema.orders.uniqueCode })
           .from(schema.orders)
           .where(and(inArray(schema.orders.payState, ["awaiting", "waiting_verification", "unmatched"]),
-            sql`${schema.orders.uniqueCode} > 0 AND ${schema.orders.total} + ${schema.orders.uniqueCode} BETWEEN ${netSubtotal + 1} AND ${netSubtotal + 999}`));
+            sql`${schema.orders.uniqueCode} > 0 AND ${schema.orders.total} + ${schema.orders.uniqueCode} BETWEEN ${total + 1} AND ${total + 999}`));
         const takenTotals = new Set(activeOrders.map((o) => o.total + o.uniqueCode));
         let uniqueCode = 0;
         for (let attempt = 0; attempt < 300 && uniqueCode === 0; attempt++) {
           const candidate = 1 + Math.floor(Math.random() * 999);
-          if (!takenTotals.has(netSubtotal + candidate)) uniqueCode = candidate;
+          if (!takenTotals.has(total + candidate)) uniqueCode = candidate;
         }
         if (uniqueCode === 0) {
           for (let candidate = 1; candidate <= 999; candidate++) {
-            if (!takenTotals.has(netSubtotal + candidate)) {
+            if (!takenTotals.has(total + candidate)) {
               uniqueCode = candidate;
               break;
             }
@@ -954,8 +961,8 @@ export const Actions = {
             uniqueCode,
             payState: "awaiting",
             paymentConfirmedAt: null,
-            shippingCost: null,
-            total: netSubtotal,
+            shippingCost,
+            total,
             customerName: args.customerName,
             whatsapp: digits,
             email: args.email,

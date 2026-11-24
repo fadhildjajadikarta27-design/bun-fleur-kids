@@ -87,6 +87,7 @@ const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
   products: ACTIVE_PRODUCT_IDS.map((id) => ({ id, basePrice: PRODUCT_DEFAULT_PRICES[id], priceLabel: "fixed" as const })),
   tshirtColors: ["Cream", "Mustard", "Terracotta", "Sage Green", "Brown"],
   tshirtSizes: ["2–3 tahun", "4–5 tahun", "6–7 tahun", "8–9 tahun", "10–12 tahun"],
+  shippingPolicy: { freeFrom: 100000, flatRate: 10000 },
   paymentGatewayConnected: false,
 };
 
@@ -729,7 +730,7 @@ export function Customize({
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Ongkos kirim</dt>
-              <dd className="text-right">Dihitung terpisah — dikonfirmasi tim via WhatsApp</dd>
+              <dd className="text-right">Gratis mulai {formatIDR(cfg.shippingPolicy.freeFrom)} setelah diskon; di bawahnya {formatIDR(cfg.shippingPolicy.flatRate)} per pesanan.</dd>
             </div>
           </dl>
           {error && <p className="mt-3 text-sm font-bold text-berry" role="alert">{error}</p>}
@@ -822,6 +823,9 @@ export function Checkout({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const discount = appliedCoupon ? cart.reduce((n,line) => n + Math.floor(basePrice(cfg,line.product)*line.quantity*(appliedCoupon.rates[line.product] ?? 0)/100),0) : 0;
+  const netSubtotal = price - discount;
+  const shipping = netSubtotal >= cfg.shippingPolicy.freeFrom ? 0 : cfg.shippingPolicy.flatRate;
+  const remaining = Math.max(0, cfg.shippingPolicy.freeFrom - netSubtotal);
   const create = useMutation({
     mutationFn: async () =>
       await api.createOrder({
@@ -831,6 +835,7 @@ export function Checkout({
         items: cart.map(line => ({ productType: line.product, quantity: line.quantity,
           tshirtColor: line.tshirtColor, tshirtSize: line.tshirtSize,
           expectedUnitPrice: basePrice(cfg,line.product), expectedCouponDiscountPct: appliedCoupon ? appliedCoupon.rates[line.product] : undefined })),
+        expectedShippingCost: shipping,
         childName: childName.trim(),
         couponCode: appliedCoupon?.code ?? "",
         customerName: customerName.trim(),
@@ -887,6 +892,7 @@ export function Checkout({
           <div className="text-right"><p className="font-bold">{formatIDR(basePrice(cfg,line.product)*line.quantity)}</p><button type="button" disabled={create.isPending || validate.isPending} onClick={() => changeCart(cart.filter((_,j)=>j!==i))} className="text-xs font-bold text-berry">Hapus</button></div>
         </article>)}
         <div className="flex justify-between border-t border-[var(--border)] pt-3 font-bold"><span>Subtotal</span><span>{formatIDR(price)}</span></div>
+        <div className="rounded-2xl bg-[#EEF4E4] p-3 text-sm font-bold text-olive-deep" role="status">{remaining === 0 ? "Selamat! Pesananmu mendapatkan gratis ongkir." : "Tambah belanja " + formatIDR(remaining) + " setelah diskon untuk mendapatkan gratis ongkir."}<div className="mt-2 h-2 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-olive transition-all" style={{width: Math.min(100, netSubtotal / cfg.shippingPolicy.freeFrom * 100) + "%"}} /></div><p className="mt-1 text-xs">Ongkir {formatIDR(cfg.shippingPolicy.flatRate)} per pesanan di bawah {formatIDR(cfg.shippingPolicy.freeFrom)}.</p></div>
       </section>
 
       <div className="mt-4 grid items-start gap-4 md:grid-cols-[1fr_360px]">
@@ -924,7 +930,7 @@ export function Checkout({
                 placeholder="cth. 0812 3456 7890"
                 className="mt-1 w-full rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-semibold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
               />
-              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Tim kami menghubungimu di nomor ini untuk pembayaran, konfirmasi ongkir, dan info pengiriman.</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Tim kami menghubungimu di nomor ini untuk pembayaran dan info pengiriman.</p>
             </div>
             <div>
               <label htmlFor="co-email" className="font-display text-sm font-bold">Email</label>
@@ -1021,16 +1027,16 @@ export function Checkout({
               )}
               <div className="flex justify-between gap-3">
                 <dt className="text-[var(--dim)]">Ongkos kirim</dt>
-                <dd className="text-right">Dikonfirmasi via WhatsApp</dd>
+                <dd className="text-right">{shipping === 0 ? "GRATIS" : formatIDR(shipping)}</dd>
               </div>
               <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2 text-base">
-                <dt>Total produk</dt>
-                <dd className="font-display text-olive-deep">{formatIDR(price - discount)}</dd>
+                <dt>Total pesanan</dt>
+                <dd className="font-display text-olive-deep">{formatIDR(netSubtotal + shipping)}</dd>
               </div>
             </dl>
             <p className="mt-2 text-xs font-semibold text-[var(--dim)]">
               Harga produk dan ongkos kirim selalu ditampilkan terpisah. Di halaman pembayaran, total yang
-              ditransfer = total produk + ongkir terkonfirmasi + kode unik pembayaran (Rp1–999) yang dibuat
+              ditransfer = total produk setelah diskon + ongkir + kode unik pembayaran (Rp1–999) yang dibuat
               server untuk pesananmu.
             </p>
           </section>
@@ -1048,7 +1054,7 @@ export function Checkout({
               <p className="mt-3 font-display text-sm font-bold text-olive-deep">Bayar setelah pesanan dibuat</p>
               <p className="mt-1 text-xs font-semibold leading-relaxed text-[var(--dim)]">
                 Nominal pembayaran dan kode unik baru akan muncul setelah kamu menekan tombol
-                Buat Pesanan. Jangan scan atau bayar sebelum jumlah akhir beserta ongkir dikonfirmasi.
+                Buat Pesanan. Bayar hanya sesuai nominal akhir yang ditampilkan.
               </p>
               <div className="mt-4 rounded-2xl bg-butter-soft p-3 text-xs font-semibold leading-relaxed text-ink">
                 Setelah membayar, klik “Saya Sudah Transfer”. Tim memverifikasi transaksi secara manual sebelum produksi dimulai.
@@ -1209,7 +1215,7 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
           </div>
 
           <dl className="mt-4 space-y-2 px-1 text-sm font-semibold">
-            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Produk</dt><dd className="text-right font-display">{order.quantity} × {PRODUCT_META[order.productType].title}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Produk</dt><dd className="text-right font-display">{order.quantity} barang · {orderTitle(order)}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Subtotal Produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
             {order.discountAmount > 0 && (
               <div className="flex justify-between gap-3">
@@ -1219,7 +1225,7 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
             )}
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Ongkos Kirim</dt>
-              <dd className="text-right">{order.shippingCost == null ? "Menunggu konfirmasi" : formatIDR(order.shippingCost)}</dd>
+              <dd className="text-right">{order.shippingCost == null ? "Menunggu konfirmasi" : order.shippingCost === 0 ? "GRATIS" : formatIDR(order.shippingCost)}</dd>
             </div>
             <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2">
               <dt className="text-[var(--dim)]">Kode Unik</dt>
@@ -1356,8 +1362,8 @@ export function OrderConfirmation({
           {order.discountAmount > 0 && (
             <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Diskon kupon {order.couponCode}</dt><dd className="font-display text-olive-deep">−{formatIDR(order.discountAmount)}</dd></div>
           )}
-          <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Ongkos kirim</dt><dd className="text-right">{order.shippingCost == null ? "Dikonfirmasi via WhatsApp" : formatIDR(order.shippingCost)}</dd></div>
-          <div className="flex justify-between gap-3"><dt>Total produk</dt><dd className="font-display text-olive-deep">{formatIDR(order.total)}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Ongkos kirim</dt><dd className="text-right">{order.shippingCost == null ? "Dikonfirmasi via WhatsApp" : order.shippingCost === 0 ? "GRATIS" : formatIDR(order.shippingCost)}</dd></div>
+          <div className="flex justify-between gap-3"><dt>Total pesanan (sebelum kode unik)</dt><dd className="font-display text-olive-deep">{formatIDR(order.total)}</dd></div>
         </dl>
       </section>
 
@@ -1802,7 +1808,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
           />
         </div>
         <div>
-          <label htmlFor={`ongkir-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Ongkir terkonfirmasi (Rp)</label>
+          <label htmlFor={`ongkir-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Ongkir pesanan (Rp, otomatis untuk pesanan baru)</label>
           <input
             id={`ongkir-${order.id}`}
             {...FIELDS.updateOrder.shippingCost}
