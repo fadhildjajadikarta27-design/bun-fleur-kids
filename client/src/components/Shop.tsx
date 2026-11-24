@@ -26,7 +26,7 @@ import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 import { bestBundle } from "../../../server/src/bundles";
-import { BACKGROUNDS, backgroundUrl } from "../../../server/src/backgrounds";
+import { BACKGROUNDS } from "../../../server/src/backgrounds";
 
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 function linesOf(order: OrderOut): OrderOut["items"] {
@@ -122,18 +122,12 @@ function basePrice(cfg: ApiResponse<typeof api, "getShopConfig">, id: ProductId)
 /* ------------------------------ Previews ------------------------------ */
 
 export function PosterPreview({ project, name, large = false }: { project: ShopProject; name: string; large?: boolean }) {
-  return <div className={`mx-auto w-full ${large ? "max-w-sm" : "max-w-[250px]"}`}>
-    <div role="img" aria-label="Pratinjau poster dengan karya dan nama anak" className="rounded-xl bg-[#E7DCCB] p-3">
-      <div className="relative flex aspect-[2/3] flex-col overflow-hidden bg-[#FCF3DE] shadow-md">
-        <ProductDecor />
-        <img src={logoUrl} alt="Bun & Fleur Kids" className="absolute left-[7%] top-[5%] w-[28%] object-contain" />
-        <div className="absolute inset-x-[7%] top-[27%] bottom-[9%] flex items-center justify-center">
-          <div className="w-full"><PersonalArtwork project={project} name={name} /></div>
-        </div>
-      </div>
+  return <figure className={`mx-auto w-full ${large ? "max-w-xl" : ""}`}>
+    <div className="overflow-hidden rounded-lg bg-white ring-1 ring-black/5">
+      <ArtworkSvg landscape template={templateForSnapshot(project)} colors={project.colors} strokes={project.strokes} name={name} message={project.message} nameFont={project.nameFont} nameColor={project.nameColor} nameAlign={project.nameAlign} backgroundId={project.backgroundId} />
     </div>
-    <MockupCaption>Poster dengan karakter, warna, coretan, dan nama pilihan anak</MockupCaption>
-  </div>;
+    <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Desain poster horizontal sesuai karya dan background pilihanmu.</figcaption>
+  </figure>;
 }
 
 export function FigurinePreview({
@@ -381,9 +375,10 @@ export function NewPersonalizedPreview({product,project,name,large}:{product:"re
  </div><MockupCaption>Personalisasi dari warna dan karakter karya anak</MockupCaption></div>;
 }
 
-export function ProductPreview({ product }: {
+export function ProductPreview({ product, project, name, large }: {
   product: ProductId; project: ShopProject; name: string; fabric: string; large?: boolean;
 }) {
+  if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
   return <OriginalProductPhoto key={product} product={product} />;
 }
 
@@ -590,7 +585,7 @@ export function Customize({
             large
           />
           <p className="mt-2 text-center text-sm font-semibold text-[var(--dim)]">
-            Foto produk tidak berubah saat personalisasi. Nama, background dan hasil mewarnai tetap digunakan untuk pesanan.
+            {selection.product === "poster" ? "Desain poster mengikuti pilihan personalisasi." : "Foto produk tidak berubah saat personalisasi. Nama, background dan hasil mewarnai tetap digunakan untuk pesanan."}
           </p>
         </section>
 
@@ -627,13 +622,8 @@ export function Customize({
             </p>
           </div>
 
-          <fieldset className="mt-5" disabled={nameLocked}><legend className="font-display text-sm font-bold">Pilih background (opsional)</legend>
-            <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Pilihan background">
-              {[{id:"",label:"Tanpa background"},...BACKGROUNDS].map(b=><button key={b.id} type="button" role="radio" aria-checked={(selection.backgroundId??"")===b.id} onClick={()=>setSelection({...selection,backgroundId:b.id})} className={`overflow-hidden rounded-xl border p-1 text-xs font-bold ${(selection.backgroundId??"")===b.id?"border-olive ring-2 ring-olive":"border-[var(--border)]"}`}>
-                {b.id?<img src={backgroundUrl(b.id)} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-lg object-cover"/>:<div className="aspect-[4/3] rounded-lg bg-white ring-1 ring-black/5"/>}<span className="block py-1">{b.label}</span>
-              </button>)}
-            </div><p className="mt-2 text-xs text-[var(--dim)]">{nameLocked?"Background sama untuk seluruh isi keranjang. Kosongkan keranjang untuk menggantinya.":"Gratis. Pilihan background tidak mengubah warna karya."}</p>
-          </fieldset>
+          <p className="mt-4 text-xs font-semibold text-[var(--dim)]">Background: {BACKGROUNDS.find(b => b.id === selection.backgroundId)?.label ?? "Tanpa background"}. Dipilih sebelum masuk katalog.</p>
+
           {selection.product==="kidswatch"&&<section className="mt-4 rounded-2xl bg-[#EEF4E4] p-3 text-sm"><p className="font-bold text-olive-deep">Garansi 1 tahun ganti baru</p><p>Untuk kerusakan mesin, layar, tombol atau cacat produksi dalam 12 bulan sejak produk diterima. Hubungi admin dengan nomor pesanan dan bukti foto/video. Tidak termasuk kehilangan, benturan, salah penggunaan, atau baterai habis normal.</p></section>}
           {selection.product === "tshirt" && (
             <>
@@ -1654,6 +1644,7 @@ export function OrderTracking() {
               <div className="sr-only" aria-hidden>
                 <ArtworkSvg
                   svgRef={exportRef}
+                  landscape
                   template={templateForSnapshot(snap)}
                 backgroundId={snap.backgroundId}
                   colors={snap.colors}
@@ -1778,6 +1769,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
         <div className="w-24 shrink-0 rounded-3xl bg-white p-1.5 ring-1 ring-black/5">
           <ArtworkSvg
             svgRef={artworkRef}
+            landscape={includesProduct(order, "poster")}
             message={snap.message}
             template={templateForSnapshot(snap)}
                 backgroundId={snap.backgroundId}
