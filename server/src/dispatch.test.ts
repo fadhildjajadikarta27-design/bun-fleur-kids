@@ -4,17 +4,22 @@ import { Actions } from "./actions.js";
 import { bestBundle } from "./bundles.js";
 
 describe("Active product catalog", () => {
-  test("exactly seven active products at the approved fixed prices", async () => {
+  test("exactly twelve active products at the revised fixed prices", async () => {
     const db = () => ({ select: () => ({ from: () => Object.assign(Promise.resolve([]), {orderBy: async () => []}) }) });
     const res = await Actions.getShopConfig.handler({ db } as never, {});
     expect(res.products).toEqual([
-      { id: "poster", basePrice: 24900, priceLabel: "fixed" },
-      { id: "papercraft", basePrice: 36900, priceLabel: "fixed" },
-      { id: "placemat", basePrice: 54900, priceLabel: "fixed" },
+      { id: "poster", basePrice: 29900, priceLabel: "fixed" },
+      { id: "rewardchart", basePrice: 39900, priceLabel: "fixed" },
+      { id: "papercraft", basePrice: 39900, priceLabel: "fixed" },
+      { id: "namestickers", basePrice: 44900, priceLabel: "fixed" },
       { id: "celengan", basePrice: 59900, priceLabel: "fixed" },
       { id: "puzzle", basePrice: 69000, priceLabel: "fixed" },
-      { id: "growthchart", basePrice: 69000, priceLabel: "fixed" },
       { id: "tshirt", basePrice: 79000, priceLabel: "fixed" },
+      { id: "placemat", basePrice: 79900, priceLabel: "fixed" },
+      { id: "growthchart", basePrice: 99000, priceLabel: "fixed" },
+      { id: "wallclock", basePrice: 99000, priceLabel: "fixed" },
+      { id: "nightlamp", basePrice: 129000, priceLabel: "fixed" },
+      { id: "kidswatch", basePrice: 179000, priceLabel: "fixed" },
     ]);
     for (const productType of ["figurine", "accessory59"]) {
       expect(Actions.createOrder.request.safeParse({ projectId: 1, productType, customerName: "QA Parent",
