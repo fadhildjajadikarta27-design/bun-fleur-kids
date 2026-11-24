@@ -1176,6 +1176,13 @@ export function AffiliateAdmin() {
     return !needle || [a.name, a.whatsapp, a.email, a.couponCode, a.instagram, a.tiktok]
       .some((v) => v.toLowerCase().includes(needle));
   });
+  const [bulkPct,setBulkPct]=useState("10");
+  const [bulkProduct,setBulkProduct]=useState<ProductId|"">("");
+  const [bulkScope,setBulkScope]=useState<"all"|"filtered">("all");
+  const bulk = useMutation({
+    mutationFn:()=>api.adminBulkAffiliateDiscount({affiliateIds:(bulkScope==="filtered"?filtered:rows).map(a=>a.id),productType:bulkProduct||null,discountPct:Number(bulkPct)}),
+    onSuccess:()=>{void queryClient.invalidateQueries({queryKey:["adminAffiliates"]});void queryClient.invalidateQueries({queryKey:["affiliateAudit"]});},
+  });
   const total = (name: "netSales" | "totalOrders" | "totalCommission" | "pendingPayout") =>
     rows.reduce((sum, a) => sum + a[name], 0);
   const metrics = [
@@ -1266,6 +1273,16 @@ export function AffiliateAdmin() {
         )}
       </section>
 
+      <section className="rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]">
+        <h3 className="font-display text-lg font-bold">Edit massal diskon pembeli</h3>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm font-bold">Affiliate<select value={bulkScope} onChange={e=>setBulkScope(e.target.value as "all"|"filtered")} className="block rounded-xl border p-2"><option value="all">Semua ({rows.length})</option><option value="filtered">Sesuai filter ({filtered.length})</option></select></label>
+          <label className="text-sm font-bold">Produk<select value={bulkProduct} onChange={e=>setBulkProduct(e.target.value as ProductId|"")} className="block rounded-xl border p-2"><option value="">Semua produk (reset pengecualian)</option>{ACTIVE_PRODUCT_IDS.map(id=><option key={id} value={id}>{PRODUCT_META[id].title}</option>)}</select></label>
+          <label className="text-sm font-bold">Diskon (%)<input type="number" min={0} max={90} value={bulkPct} onChange={e=>setBulkPct(e.target.value)} className="block w-24 rounded-xl border p-2"/></label>
+          <button type="button" disabled={bulk.isPending||bulkPct.trim()===""||!Number.isInteger(Number(bulkPct))||Number(bulkPct)<0||Number(bulkPct)>90||(bulkScope==="all"?rows:filtered).length===0} onClick={()=>{if(window.confirm("Terapkan diskon ke "+(bulkScope==="all"?rows:filtered).length+" affiliate?"))bulk.mutate();}} className="rounded-full bg-olive px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Terapkan massal</button>
+        </div>
+        {bulk.isError&&<p role="alert" className="text-sm text-berry">{bulk.error.message}</p>}{bulk.isSuccess&&<p className="text-sm text-olive-deep">{bulk.data.updated} affiliate diperbarui.</p>}
+      </section>
       <div className="rounded-3xl bg-[#EEF4E4] p-5 ring-1 ring-olive/20">
         <p className="font-display text-lg font-extrabold text-olive-deep">Link Pendaftaran Affiliate Umum</p>
         <p className="mt-1 text-sm font-semibold text-[var(--dim)]">

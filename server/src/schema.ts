@@ -83,6 +83,7 @@ export const orders = pgTable("orders", {
   quantity: integer("quantity").notNull().default(1),
   // Empty for historical single-product orders. New carts snapshot every line.
   items: jsonb("items").$type<{ productType: typeof ordersProductIds[number]; variant: string; quantity: number; unitPrice: number; gross: number; discount: number }[]>().notNull().default([]),
+  archivedAt: timestamp("archived_at",{withTimezone:true,mode:"date"}),
   bundleName: text("bundle_name").notNull().default(""),
   gift: jsonb("gift").$type<{sender:string;recipient:string;message:string}>(),
   paymentReference: text("payment_reference"),

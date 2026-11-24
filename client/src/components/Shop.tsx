@@ -1717,6 +1717,11 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
       void queryClient.invalidateQueries({ queryKey: ["adminAffiliates"] });
     },
   });
+  const archive = useMutation({
+    mutationFn: () => api.adminArchiveOrder({id:order.id}),
+    onError: (e) => setError(e.message),
+    onSuccess: () => {void queryClient.invalidateQueries({queryKey:["orders"]});void queryClient.invalidateQueries({queryKey:["adminSalesReport"]});void queryClient.invalidateQueries({queryKey:["adminAffiliates"]});},
+  });
   const snap: ShopProject = {
     id: order.projectId,
     templateId: order.templateId,
@@ -1837,6 +1842,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
       </div>
       <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-dashed border-[var(--border)] pt-3">
         <p className="text-sm font-semibold">{PAYMENT_STATUS_LABELS[order.paymentStatus]}</p>
+        {order.paymentStatus !== "paid" && <button type="button" disabled={archive.isPending} onClick={()=>{if(window.confirm("Hapus pesanan dari daftar aktif? Riwayat transaksi tetap disimpan."))archive.mutate();}} className="rounded-full border border-berry px-4 py-2 text-xs font-bold text-berry disabled:opacity-50">Hapus pesanan</button>}
         <div>
           <label htmlFor={`status-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Status pesanan</label>
           <select id={`status-${order.id}`} value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value as OrderOut["orderStatus"]); setSaved(false); }} className={selectCls}>

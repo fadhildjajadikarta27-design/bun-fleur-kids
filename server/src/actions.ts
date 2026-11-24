@@ -1158,6 +1158,23 @@ export const Actions = {
     },
   }),
 
+  adminArchiveOrder: defineAction({
+    description:"Admin-only soft deletion; paid orders must be refunded first.",
+    request:z.object({id:z.number().int().positive()}),
+    response:z.object({ok:z.boolean()}),
+    async handler(ctx,args){return schemaDb(ctx).transaction(async db=>{
+      await lockCheckout(db);
+      const [row]=await db.select().from(schema.orders).where(eq(schema.orders.id,args.id)).for("update");
+      if(!row)throw new Error("Pesanan tidak ditemukan.");
+      if(row.archivedAt)return {ok:true};
+      if(row.paymentStatus==="paid"||row.payState==="verified")throw new Error("Refund pesanan lunas terlebih dahulu.");
+      if(row.payState==="waiting_verification"||row.payState==="unmatched")throw new Error("Selesaikan pemeriksaan pembayaran terlebih dahulu.");
+      const [updated]=await db.update(schema.orders).set({archivedAt:new Date(),orderStatus:"cancelled",updatedAt:new Date()}).where(eq(schema.orders.id,row.id)).returning();
+      if(!updated)throw new Error("Pesanan tidak ditemukan.");
+      await syncCommission(db,updated,"reversed");
+      return {ok:true};
+    });}
+  }),
   listOrders: defineAction({
     description: "Lists all physical-product orders for the admin dashboard, newest first.",
     request: z.object({
@@ -1171,11 +1188,12 @@ export const Actions = {
     }),
     async handler(ctx, args) {
       const db = ctx.db<typeof schema>();
-      const scope = args.scope === "payment"
+      const scopeFilter = args.scope === "payment"
         ? and(ne(schema.orders.orderStatus, "cancelled"), inArray(schema.orders.payState, ["awaiting", "waiting_verification", "unmatched", "rejected"]))
         : args.scope === "fulfillment"
           ? and(eq(schema.orders.paymentStatus, "paid"), inArray(schema.orders.orderStatus, ["paid", "confirmed", "design_review", "production", "ready_to_ship", "shipped"]))
           : undefined;
+      const scope=and(sql`${schema.orders.archivedAt} IS NULL`,scopeFilter);
       const rows = await db
         .select()
         .from(schema.orders)
@@ -1846,6 +1864,23 @@ export const Actions = {
     },
   }),
 
+  adminBulkAffiliateDiscount: defineAction({
+    description:"Admin-only atomic bulk coupon update; existing order snapshots stay unchanged.",
+    request:z.object({affiliateIds:z.array(z.number().int().positive()).min(1).max(10000),productType:purchasableProduct.nullable(),discountPct}),
+    response:z.object({updated:z.number().int()}),
+    async handler(ctx,args){return schemaDb(ctx).transaction(async db=>{
+      await lockCheckout(db);
+      const ids=[...new Set(args.affiliateIds)].sort((a,b)=>a-b);
+      const accounts=await db.select().from(schema.affiliates).where(inArray(schema.affiliates.id,ids)).orderBy(schema.affiliates.id).for("update");
+      if(accounts.length!==ids.length)throw new Error("Daftar affiliate berubah. Muat ulang dahulu.");
+      for(const a of accounts){
+        const patch=args.productType?{productDiscounts:{...a.productDiscounts,[args.productType]:args.discountPct}}:{discountPct:args.discountPct,productDiscounts:{}};
+        await db.update(schema.affiliates).set({...patch,updatedAt:new Date()}).where(eq(schema.affiliates.id,a.id));
+        await audit(db,a.id,"affiliate.bulk_discount_changed",(args.productType??"semua produk")+": "+args.discountPct+"%");
+      }
+      return {updated:accounts.length};
+    });}
+  }),
   adminSetAffiliateProductDiscount: defineAction({
     description: "Admin: sets a product-specific percentage for an affiliate coupon, or clears it to use the standard percentage.",
     request: z.object({
