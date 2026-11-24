@@ -11,6 +11,7 @@ import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import * as schema from "./schema.js";
 import { isPaymentProof } from "./payment-proof.js";
 import { bestBundle } from "./bundles.js";
+import { isBackgroundId } from "./backgrounds.js";
 
 const paint = z.string().regex(/^#[a-f0-9]{6}$/i, "Warna karya tidak valid.");
 const strokeSchema = z.object({
@@ -151,6 +152,7 @@ function productVariant(id: ProductId, color: string, size: string): string {
 }
 
 const orderOut = z.object({
+  backgroundId: z.string(),
   id: z.number(),
   code: z.string(),
   projectId: z.number().nullable(),
@@ -221,6 +223,7 @@ function orderToOut(row: OrderRow): z.infer<typeof orderOut> {
   return {
     id: row.id,
     code: row.code,
+    backgroundId: row.backgroundId,
     projectId: row.projectId,
     templateId: row.templateId,
     customDef: row.customDef,
@@ -985,6 +988,7 @@ export const Actions = {
       tshirtColor: z.string().max(40).default(""),
       tshirtSize: z.string().max(40).default(""),
       childName: z.string().trim().max(24).optional(),
+      backgroundId: z.string().refine(isBackgroundId, "Background tidak tersedia.").default(""),
       couponCode: z.string().trim().max(24).default(""),
       expectedCouponDiscountPct: discountPct.optional(),
       customerName: z.string().trim().min(2, "Nama pemesan wajib diisi.").max(80),
@@ -1105,6 +1109,7 @@ export const Actions = {
             templateId: project.templateId,
             customDef: project.customDef,
             childName: args.childName ?? project.childName,
+            backgroundId: args.backgroundId,
             message: project.message,
             nameFont: project.nameFont,
             nameColor: project.nameColor,
