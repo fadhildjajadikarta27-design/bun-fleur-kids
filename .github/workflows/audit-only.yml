@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: audit-only-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   isolated-tests:
     if: github.ref == 'refs/heads/development-audit'
@@ -39,10 +42,16 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d bfk_audit -v ON_ERROR_STOP=1 -c "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;"
       - run: bun run test:integration
+      - name: Rehearse upgrade from deployed schema with legacy records
+        env:
+          PGPASSWORD: local_test_only
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE bfk_audit_upgrade;"
+          BFK_TEST_DATABASE_URL=postgres://postgres:local_test_only@127.0.0.1:5432/bfk_audit_upgrade bun scripts/test-upgrade.mjs
       - name: Install isolated browser test runner
         run: |
           npm install --prefix "$RUNNER_TEMP/bfk-browser" --no-save --package-lock=false playwright@1.56.1
-          node "$RUNNER_TEMP/bfk-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          command -v google-chrome || command -v chromium || node "$RUNNER_TEMP/bfk-browser/node_modules/playwright/cli.js" install chromium
       - name: Browser smoke test (local only)
         env:
           DATABASE_URL: postgres://postgres:local_test_only@127.0.0.1:5432/bfk_audit
@@ -51,6 +60,7 @@ jobs:
         run: |
           export ADMIN_PASSWORD_HASH="$(node -e 'const c=require("node:crypto");const salt=c.randomBytes(16).toString("hex");process.stdout.write(salt+":"+c.scryptSync(process.env.BFK_BROWSER_PASSWORD,salt,32).toString("hex"))')"
           export BFK_PLAYWRIGHT_PATH="$RUNNER_TEMP/bfk-browser/node_modules/playwright"
+          export BFK_CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
           bun scripts/dev-server.mjs > /tmp/bfk-api.log 2>&1 & api_pid=$!
           bun x vite preview --host 127.0.0.1 --port 4173 > /tmp/bfk-vite.log 2>&1 & vite_pid=$!
           trap 'kill "$api_pid" "$vite_pid" 2>/dev/null || true' EXIT

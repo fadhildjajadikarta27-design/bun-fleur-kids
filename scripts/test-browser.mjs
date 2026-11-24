@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.BFK_PLAYWRIGHT_PATH);
 const base = "http://127.0.0.1:4173";
-const browser = await chromium.launch({headless:true});
+const browser = await chromium.launch({headless:true,...(process.env.BFK_CHROME_PATH?{executablePath:process.env.BFK_CHROME_PATH}:{})});
 try {
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const page=await context.newPage();
@@ -12,6 +12,8 @@ try {
   page.on("pageerror", e=>errors.push(e.message));
   await page.goto(base+"/#/kreasiku");
   await page.getByRole("heading",{name:"Kreasiku",exact:true}).waitFor();
+  // Ensure the server has issued the anonymous visitor cookie before seeding a project.
+  await page.request.post(base+"/api/actions",{data:{action:"listProjects",args:{}}});
   const resp=await page.request.post(base+"/api/actions",{data:{action:"createProject",args:{templateId:"pb-dino",childName:"QA Browser",nameColor:"#E4572E",nameFont:"baloo",message:"",nameAlign:"center",colors:{body:"#AB57CC"},strokes:[],customDef:"",status:"done"}}});
   assert.equal(resp.status(),200,await resp.text());
   await page.reload();
