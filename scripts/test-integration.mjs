@@ -33,7 +33,7 @@ async function call(action, args = {}, { cookie = "", ip = "127.10.1.1", expecte
 try {
   await ensureMigrations();
   const migrations = await sql`SELECT name FROM __port_migrations ORDER BY name`;
-  assert.equal(migrations.at(-1).name, "0014_affiliate_product_discounts.sql");
+  assert.equal(migrations.at(-1).name, "0015_admin_finance.sql");
   assert.equal((await sql`SELECT has_table_privilege('anon', 'public.payment_proofs', 'SELECT') AS allowed`)[0].allowed, false);
 
   const first = await call("listProjects");
@@ -220,6 +220,20 @@ try {
   assert.match(stale.body.error, /Diskon kupon berubah/);
   assert.equal((await call("createOrder", puzzle, owner)).body.order.discountAmount, 27600);
   console.log("PASS admin-only per-product coupon rates, 0%, standard fallback, quantity, commission, and stale totals");
+  const month = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit" }).format(new Date());
+  await call("adminSalesReport", { month }, { expected: 401 });
+  await call("adminSetProductCost", { productId: "papercraft", unitCost: 12000 }, { expected: 401 });
+  await call("adminSetProductCost", { productId: "papercraft", unitCost: 12000 }, admin);
+  await call("adminSetOperatingCost", { month, amount: 10000 }, admin);
+  const report = (await call("adminSalesReport", { month }, admin)).body;
+  assert.equal(report.costs.find(c => c.productId === "papercraft").unitCost, 12000);
+  assert.equal(report.operatingCost, 10000);
+  assert.ok(report.daily.some(d => d.productId === "papercraft" && d.affiliate && d.orders > 0));
+  const paymentQueue = (await call("listOrders", { scope: "payment", limit: 100 }, admin)).body;
+  assert.ok(paymentQueue.orders.every(o => o.paymentStatus !== "paid" && o.orderStatus !== "cancelled"));
+  const fulfillment = (await call("listOrders", { scope: "fulfillment", limit: 100 }, admin)).body;
+  assert.ok(fulfillment.orders.every(o => o.paymentStatus === "paid" && o.orderStatus !== "completed"));
+  console.log("PASS admin finance and scoped orders");
 
 } finally {
   await sql.end();

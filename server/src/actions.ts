@@ -997,6 +997,7 @@ export const Actions = {
     request: z.object({
       limit: z.number().int().positive().max(100).default(20),
       offset: z.number().int().min(0).max(100000).default(0),
+      scope: z.enum(["all", "payment", "fulfillment"]).default("all"),
     }),
     response: z.object({
       orders: z.array(orderOut), orderCount: z.number(), paidCount: z.number(),
@@ -1004,18 +1005,88 @@ export const Actions = {
     }),
     async handler(ctx, args) {
       const db = ctx.db<typeof schema>();
+      const scope = args.scope === "payment"
+        ? and(ne(schema.orders.orderStatus, "cancelled"), inArray(schema.orders.payState, ["awaiting", "waiting_verification", "unmatched", "rejected"]))
+        : args.scope === "fulfillment"
+          ? and(eq(schema.orders.paymentStatus, "paid"), inArray(schema.orders.orderStatus, ["paid", "confirmed", "design_review", "production", "ready_to_ship", "shipped"]))
+          : undefined;
       const rows = await db
         .select()
         .from(schema.orders)
-        .orderBy(desc(schema.orders.createdAt))
+        .where(scope)
+        .orderBy(desc(schema.orders.createdAt), desc(schema.orders.id))
         .limit(args.limit).offset(args.offset);
       const [summary] = await db.select({
         orderCount: count(),
         paidCount: sql<number>`count(*) FILTER (WHERE payment_status = 'paid')`.mapWith(Number),
         paymentReviewCount: sql<number>`count(*) FILTER (WHERE pay_state = 'waiting_verification')`.mapWith(Number),
         netProductRevenue: sql<number>`COALESCE(sum(product_price - discount_amount) FILTER (WHERE payment_status = 'paid'), 0)`.mapWith(Number),
-      }).from(schema.orders);
+      }).from(schema.orders).where(scope);
       return { orders: rows.map(orderToOut), ...summary! };
+    },
+  }),
+
+  adminSalesReport: defineAction({
+    description: "Admin-only sales analytics grouped by order date in WIB, with current paid orders, recorded affiliate commission and cost estimate settings.",
+    request: z.object({ month: z.string().regex(/^20\\d{2}-(0[1-9]|1[0-2])$/) }),
+    response: z.object({
+      daily: z.array(z.object({ day: z.string(), productId: z.enum(PRODUCT_IDS), affiliate: z.boolean(),
+        orders: z.number(), quantity: z.number(), gross: z.number(), discount: z.number(), commission: z.number() })),
+      costs: z.array(z.object({ productId: z.enum(PRODUCT_IDS), unitCost: z.number() })),
+      operatingCost: z.number().nullable(),
+    }),
+    async handler(ctx, args) {
+      const db = ctx.db<typeof schema>();
+      const o = schema.orders;
+      const c = schema.commissions;
+      const [year, month] = args.month.split("-").map(Number) as [number, number];
+      // Include the selected month and the preceding 11 calendar months.
+      const start = new Date(Date.UTC(year, month - 12, 1, -7));
+      const end = new Date(Date.UTC(year, month, 1, -7));
+      const day = sql<string>`to_char(${o.createdAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`;
+      const affiliate = sql<boolean>`${o.affiliateId} IS NOT NULL`;
+      const daily = await db.select({
+        day, productId: o.productType, affiliate, orders: count(),
+        quantity: sql<number>`coalesce(sum(${o.quantity}),0)`.mapWith(Number),
+        gross: sql<number>`coalesce(sum(${o.productPrice}),0)`.mapWith(Number),
+        discount: sql<number>`coalesce(sum(${o.discountAmount}),0)`.mapWith(Number),
+        commission: sql<number>`coalesce(sum(${c.amount}) FILTER (WHERE ${c.status} IN ('confirmed','payable','paid')),0)`.mapWith(Number),
+      }).from(o).leftJoin(c, eq(c.orderId, o.id))
+        .where(and(eq(o.paymentStatus, "paid"), sql`${o.createdAt} >= ${start.toISOString()}::timestamptz AND ${o.createdAt} < ${end.toISOString()}::timestamptz`))
+        .groupBy(day, o.productType, affiliate).orderBy(day);
+      const costs = await db.select().from(schema.productCosts);
+      const [operating] = await db.select().from(schema.monthlyOperatingCosts).where(eq(schema.monthlyOperatingCosts.month, args.month));
+      return { daily, costs, operatingCost: operating?.amount ?? null };
+    },
+  }),
+
+  adminSetProductCost: defineAction({
+    description: "Admin: sets or clears the current estimated unit production cost; does not change order history.",
+    request: z.object({ productId: z.enum(PRODUCT_IDS), unitCost: z.number().int().min(0).max(10000000).nullable() }),
+    response: z.object({ ok: z.literal(true) }),
+    async handler(ctx, args): Promise<{ ok: true }> {
+      return schemaDb(ctx).transaction(async (db) => {
+        if (args.unitCost === null) await db.delete(schema.productCosts).where(eq(schema.productCosts.productId, args.productId));
+        else await db.insert(schema.productCosts).values({ productId: args.productId, unitCost: args.unitCost })
+          .onConflictDoUpdate({ target: schema.productCosts.productId, set: { unitCost: args.unitCost } });
+        await audit(db, null, "finance.unit_cost_changed", args.productId + ": " + (args.unitCost ?? "unset"));
+        return { ok: true };
+      });
+    },
+  }),
+
+  adminSetOperatingCost: defineAction({
+    description: "Admin: sets or clears total recorded monthly operating expenses.",
+    request: z.object({ month: z.string().regex(/^20\\d{2}-(0[1-9]|1[0-2])$/), amount: z.number().int().min(0).max(2000000000).nullable() }),
+    response: z.object({ ok: z.literal(true) }),
+    async handler(ctx, args): Promise<{ ok: true }> {
+      return schemaDb(ctx).transaction(async (db) => {
+        if (args.amount === null) await db.delete(schema.monthlyOperatingCosts).where(eq(schema.monthlyOperatingCosts.month, args.month));
+        else await db.insert(schema.monthlyOperatingCosts).values({ month: args.month, amount: args.amount })
+          .onConflictDoUpdate({ target: schema.monthlyOperatingCosts.month, set: { amount: args.amount } });
+        await audit(db, null, "finance.operating_cost_changed", args.month + ": " + (args.amount ?? "unset"));
+        return { ok: true };
+      });
     },
   }),
 

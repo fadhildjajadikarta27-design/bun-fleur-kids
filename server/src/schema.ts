@@ -298,3 +298,13 @@ export const affiliateAudit = pgTable("affiliate_audit", {
     .notNull()
     .$defaultFn(() => new Date()),
 });
+
+// Admin-only management accounting; values are estimates, not order price snapshots.
+export const productCosts = pgTable("product_costs", {
+  productId: text("product_id", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart"] }).primaryKey(),
+  unitCost: integer("unit_cost").notNull(),
+});
+export const monthlyOperatingCosts = pgTable("monthly_operating_costs", {
+  month: text("month").primaryKey(),
+  amount: integer("amount").notNull(),
+});

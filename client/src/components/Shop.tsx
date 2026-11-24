@@ -1623,6 +1623,7 @@ function downloadPapercraftKit(order: OrderOut) {
 function AdminOrderCard({ order }: { order: OrderOut }) {
   const queryClient = useQueryClient();
   const [paymentReference, setPaymentReference] = useState("");
+  const artworkRef = useRef<SVGSVGElement | null>(null);
   const proof = useMutation({ mutationFn: () => api.adminGetPaymentProof({ id: order.id }) });
   const [orderStatus, setOrderStatus] = useState<OrderOut["orderStatus"]>(order.orderStatus);
   const [resi, setResi] = useState(order.trackingNumber);
@@ -1644,7 +1645,9 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
     onSuccess: () => {
       setError("");
       setSaved(true);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["adminSalesReport"] });
+      void queryClient.invalidateQueries({ queryKey: ["adminAffiliates"] });
     },
   });
   const verify = useMutation({
@@ -1655,7 +1658,9 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
       setError("");
       setPaymentReference("");
       setOrderStatus(res.order.orderStatus);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["adminSalesReport"] });
+      void queryClient.invalidateQueries({ queryKey: ["adminAffiliates"] });
     },
   });
   const snap: ShopProject = {
@@ -1678,6 +1683,8 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
       <div className="flex flex-wrap items-start gap-4">
         <div className="w-24 shrink-0 rounded-3xl bg-white p-1.5 ring-1 ring-black/5">
           <ArtworkSvg
+            svgRef={artworkRef}
+            message={snap.message}
             template={templateForSnapshot(snap)}
             colors={snap.colors}
             strokes={snap.strokes}
@@ -1716,6 +1723,10 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
               </dd>
             </div>
           </dl>
+          <button type="button" disabled={order.paymentStatus !== "paid"} onClick={() => {
+            const svg = artworkRef.current;
+            if (svg) downloadBlob(new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml;charset=utf-8" }), `artwork-${order.code}.svg`);
+          }} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">Unduh artwork SVG pesanan</button>
           {order.productType === "papercraft" && (
             <div className="mt-3 rounded-2xl bg-[#EDF2E6] p-3 ring-1 ring-[var(--border)]">
               <p className="font-display text-sm font-bold text-olive-deep">Berkas Produksi Papercraft 3D</p>
@@ -1822,14 +1833,15 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
   );
 }
 
-export function AdminOrders() {
+export function AdminOrders({ scope = "all" }: { scope?: "all" | "payment" | "fulfillment" }) {
   const [page, setPage] = useState(0);
   const orders = useQuery({
-    queryKey: ["orders", page],
-    queryFn: () => api.listOrders({ limit: 20, offset: page * 20 }),
+    queryKey: ["orders", scope, page],
+    queryFn: () => api.listOrders({ limit: 20, offset: page * 20, scope }),
+    refetchOnWindowFocus: true,
   });
   if (orders.isPending) return <p className="font-display font-bold">Memuat pesanan…</p>;
-  if (orders.error) return <p className="font-display font-bold">Pesanan tidak bisa dimuat. Coba lagi sebentar.</p>;
+  if (orders.error) return <div role="alert"><p className="font-display font-bold">Pesanan tidak bisa dimuat: {orders.error.message}</p><button type="button" onClick={() => void orders.refetch()} className="mt-2 rounded-full border px-4 py-2 text-sm font-bold">Coba lagi</button></div>;
   const { orders: list, orderCount, paidCount, paymentReviewCount, netProductRevenue } = orders.data;
   return (
     <div className="space-y-4">
@@ -1846,6 +1858,7 @@ export function AdminOrders() {
           </div>
         ))}
       </dl>
+      <div className="flex justify-end"><button type="button" disabled={orders.isFetching} onClick={() => void orders.refetch()} className="rounded-full border px-4 py-2 text-sm font-bold">Muat ulang pesanan</button></div>
       {list.length === 0 && <p className="text-sm text-[var(--dim)]">Belum ada pesanan pada halaman ini.</p>}
       {list.map((order) => <AdminOrderCard key={order.id} order={order} />)}
       {orderCount > 20 && (

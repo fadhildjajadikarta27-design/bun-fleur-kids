@@ -28,15 +28,13 @@ import type { OrderOut, ShopSelection } from "./components/Shop";
 import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
 import { logoUrl } from "./assets-inline";
 
-const AdminProductPrices = lazy(() => import("./components/Shop").then((m) => ({ default: m.AdminProductPrices })));
-const AdminOrders = lazy(() => import("./components/Shop").then((m) => ({ default: m.AdminOrders })));
+const AdminCenter = lazy(() => import("./components/AdminCenter").then((m) => ({ default: m.AdminCenter })));
 const Checkout = lazy(() => import("./components/Shop").then((m) => ({ default: m.Checkout })));
 const Customize = lazy(() => import("./components/Shop").then((m) => ({ default: m.Customize })));
 const Masterpiece = lazy(() => import("./components/Shop").then((m) => ({ default: m.Masterpiece })));
 const OrderConfirmation = lazy(() => import("./components/Shop").then((m) => ({ default: m.OrderConfirmation })));
 const OrderTracking = lazy(() => import("./components/Shop").then((m) => ({ default: m.OrderTracking })));
 const ProductPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.ProductPreview })));
-const AffiliateAdmin = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateAdmin })));
 const AffiliateDashboard = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateDashboard })));
 const AffiliateInvitePage = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateInvitePage })));
 const AffiliateLoginPage = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateLoginPage })));
@@ -114,8 +112,8 @@ function parseHashRoute(): Route | null {
   // Rute khusus admin untuk Manajemen Afiliasi: SENGAJA tidak ditautkan
   // dari menu, header, footer, Dasbor Orang Tua, atau halaman publik mana
   // pun — admin membukanya langsung lewat potongan alamat ini.
-  if (h === "#/admin" || h === "#/admin/" || h === "#/admin/affiliate" || h === "#/kelola-afiliasi-4821") return { view: "aff-admin" };
-  if (h === "#/admin/orders" || h === "#/orang-tua") return { view: "parents" };
+  if (h === "#/admin" || h === "#/admin/" || h === "#/admin/affiliate" || h === "#/admin/orders" || h === "#/kelola-afiliasi-4821") return { view: "aff-admin" };
+  if (h === "#/orang-tua") return { view: "parents" };
   if (h === "#/koleksi") return { view: "explore" };
   if (h === "#/kreasiku") return { view: "creations" };
   return null;
@@ -2097,57 +2095,13 @@ function Creations({
   );
 }
 
-/* --------------------- Manajemen Afiliasi (admin) --------------------- */
-// Halaman admin mandiri yang HANYA bisa dibuka lewat rute khusus
-// #/admin (rute lama tetap kompatibel; lihat parseHashRoute). Tidak ada tautan ke
-// halaman ini di header, footer, tab bar, Dasbor Orang Tua, atau halaman
-// publik mana pun. Seluruh fungsi manajemennya sama persis seperti
-// sebelumnya — yang berubah hanya lokasi aksesnya.
-function AffiliateAdminPage() {
-  return (
-    <div className="mx-auto max-w-4xl px-4 pb-16">
-      <div className="band-sage mt-4 rounded-[2rem] px-6 py-8 sm:px-8">
-        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Khusus Admin</p>
-        <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">Manajemen <span className="band-accent">Afiliasi</span></h1>
-        <p className="band-dim mt-2 max-w-2xl leading-relaxed">Dasbor pribadi admin: ringkasan performa, seluruh mitra, kode referral, KPI, komisi, pencairan, dan log aktivitas.</p>
-      </div>
-
-      <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Program afiliasi">
-        <h2 className="font-display text-lg font-extrabold">Program Afiliasi (Admin)</h2>
-        <p className="text-sm font-semibold text-[var(--dim)]">
-          Bagikan satu link pendaftaran umum ke semua KOL. Mitra langsung mendaftarkan
-          nomor HP dan data diri, membuat PIN 4 digit, kemudian mendapat akses dashboard sendiri
-          tanpa OTP atau konfirmasi WhatsApp. Login berikutnya hanya nomor HP + PIN.
-          Komisi awal 30% dihitung dari subtotal produk setelah diskon, tidak termasuk ongkir
-          dan kode unik QRIS. Komisi tercatat otomatis: menunggu saat pesanan belum lunas,
-          terkonfirmasi saat pembayaran QRIS terverifikasi, siap dicairkan saat pesanan selesai, dan
-          dibalikkan bila pesanan direfund.
-        </p>
-        <div className="mt-3">
-          <AffiliateAdmin />
-        </div>
-      </section>
-    </div>
-  );
-}
-
 /* ------------------------------ Parents ------------------------------ */
 
-function Parents({ brandName }: { brandName: string }) {
+function Parents() {
   const queryClient = useQueryClient();
   const projects = useQuery({
     queryKey: ["projects"],
     queryFn: () => api.listProjects({ limit: 50 }),
-  });
-  const [brand, setBrand] = useState(brandName);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => setBrand(brandName), [brandName]);
-  const saveBrand = useMutation({
-    mutationFn: async (name: string) => await api.updateSettings({ brandName: name }),
-    onSuccess: () => {
-      setSaved(true);
-      queryClient.invalidateQueries({ queryKey: ["settings"] });
-    },
   });
   const del = useMutation({
     mutationFn: async (id: number) => await api.deleteProject({ id }),
@@ -2198,48 +2152,7 @@ function Parents({ brandName }: { brandName: string }) {
       </section>
 
 
-      <AdminGate>
-      <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pengaturan merek">
-        <h2 className="font-display text-lg font-extrabold">Nama studio</h2>
-        <p className="text-sm font-semibold text-[var(--dim)]">Nama merek muncul di header dan di setiap PDF cetakan.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <label htmlFor="brand-name" className="sr-only">Nama merek</label>
-          <input
-            id="brand-name"
-            {...FIELDS.updateSettings.brandName}
-            value={brand}
-            onChange={(e) => { setBrand(e.target.value); setSaved(false); }}
-            className="min-w-52 flex-1 rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-display font-bold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
-          />
-          <button
-            type="button"
-            disabled={!brand.trim() || saveBrand.isPending}
-            onClick={() => saveBrand.mutate(brand.trim())}
-            className="rounded-full bg-sky-deep px-5 py-2.5 font-display font-semibold text-white disabled:opacity-50"
-          >
-            Simpan nama
-          </button>
-          {saved && <span className="self-center font-display text-sm font-bold text-[#2E7D46]">Tersimpan ✓</span>}
-          {saveBrand.error && <span className="self-center text-sm font-bold text-berry">{saveBrand.error.message}</span>}
-        </div>
-      </section>
 
-      <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pesanan masuk">
-        <h2 className="font-display text-lg font-extrabold">Pesanan masuk (Admin)</h2>
-        <p className="text-sm font-semibold text-[var(--dim)]">
-          Semua pesanan produk dari “Jadikan Nyata”. Tandai pembayaran
-          sebagai Lunas hanya setelah pembayaran benar-benar diterima &amp; terverifikasi — tahap
-          Design Review, Produksi, dan seterusnya terkunci sampai pembayaran lunas, dan status
-          Dikirim mensyaratkan nomor resi. Ongkir yang sudah dikonfirmasi ke pelanggan bisa
-          dicatat di sini; total pesanan terhitung ulang otomatis.
-        </p>
-        <div className="mt-3">
-          <AdminOrders />
-        </div>
-      </section>
-      <AdminProductPrices />
-
-      </AdminGate>
 
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Lacak pesanan">
         <h2 className="font-display text-lg font-extrabold">Lacak pesanan</h2>
@@ -2265,7 +2178,7 @@ function Parents({ brandName }: { brandName: string }) {
           </div>
           <div>
             <h3 className="font-display text-base font-semibold">Produk fisiknya</h3>
-            <p className="mt-1 leading-relaxed text-[var(--dim)]">Enam produk fisik bisa dipesan dari karya anak: Poster berbingkai (Rp49.000), Papercraft 3D custom (Rp49.000), Figurine 3D custom (mulai Rp120.000), Kaos custom (mulai Rp79.000), aksesori Celengan Custom (Rp29.000), serta Aksesori Custom Premium (Rp59.000). Pola DIY gratis tetap tersedia di Studio Cetak. Kami tidak menampilkan janji waktu produksi yang belum bisa kami tepati — estimasi diberikan tim saat mengkonfirmasi pesananmu via WhatsApp.</p>
+            <p className="mt-1 leading-relaxed text-[var(--dim)]">Tujuh produk fisik bisa dipesan dari karya anak: Poster, Papercraft 3D, Alas Makan, Celengan, Puzzle, Growth Chart, dan Kaos. Harga terbaru tersedia di katalog. Pola DIY gratis tetap tersedia di Studio Cetak. Kami tidak menampilkan janji waktu produksi yang belum bisa kami tepati — estimasi diberikan tim saat mengkonfirmasi pesananmu via WhatsApp.</p>
           </div>
           <div>
             <h3 className="font-display text-base font-semibold">Bahan & batasan, sejujurnya</h3>
@@ -2283,7 +2196,7 @@ function Parents({ brandName }: { brandName: string }) {
         <h3 className="mt-6 font-display text-base font-semibold">Sering ditanyakan</h3>
         <div className="mt-2 space-y-2">
           {[
-            { q: "Apakah produknya saya cetak sendiri?", a: "Tidak. Poster, Papercraft 3D custom, Figurine 3D, Kaos, dan Celengan Custom dipesan sebagai produk fisik yang diproduksi dan dikirim oleh tim kami. Pola DIY gratis di Studio Cetak tetap bisa diunduh untuk dirakit sendiri." },
+            { q: "Apakah produknya saya cetak sendiri?", a: "Tidak. Ketujuh produk di katalog dipesan sebagai produk fisik yang diproduksi dan dikirim oleh tim kami. Pola DIY gratis di Studio Cetak tetap bisa diunduh untuk dirakit sendiri." },
             { q: "Bisakah warna anak saya berubah di hasil jadi?", a: "Tidak. Editor, pratinjau 3D, dan file cetak membaca peta warna tersimpan yang sama, jadi bagian yang diwarnai biru di layar tetap biru di kertas." },
             { q: "Bagaimana cara membayar pesanannya?", a: "Lewat QRIS statis resmi BUN AND FLEUR, PAKAIAN (NMID ID1026626210169) di halaman pembayaran pesananmu. Setiap pesanan punya kode unik Rp1–999 dari server, jadi total yang kamu transfer selalu khas (mis. Rp49.137) dan tidak berubah walau halaman dimuat ulang. Setelah transfer, tekan tombol “Saya Sudah Transfer” — pesanan masuk status Menunggu Verifikasi, BUKAN langsung lunas. Tim kami mencocokkan transfer masuk secara manual; hanya setelah cocok statusnya menjadi Terverifikasi/Lunas dan produksi dimulai. File poster resolusi produksi terkunci sampai status itu tercapai." },
             { q: "Berapa lama produksinya?", a: "Kami tidak menampilkan perkiraan yang belum bisa kami tepati. Estimasi produksi & pengiriman diberikan tim kami via WhatsApp saat mengkonfirmasi pesananmu, sebelum kamu membayar." },
@@ -2692,7 +2605,7 @@ export function App() {
             onCustomNew={startCustomNew}
           />
         )}
-        {route.view === "parents" && <Parents brandName={brandName} />}
+        {route.view === "parents" && <Parents />}
         {route.view === "aff-register" && <AffiliateRegistrationPage />}
         {route.view === "aff-invite" && (
           <AffiliateInvitePage
@@ -2713,7 +2626,7 @@ export function App() {
         {route.view === "aff-reset" && (
           <AffiliateResetPage token={route.token} goDashboard={() => goAffiliate({ view: "aff-dashboard" })} />
         )}
-        {route.view === "aff-admin" && <AdminGate><AffiliateAdminPage /></AdminGate>}
+        {route.view === "aff-admin" && <AdminGate><AdminCenter brandName={brandName} /></AdminGate>}
         </Suspense>
       </main>
       <footer className="bg-[#F1EBDD] px-4 pb-24 pt-10 text-center text-sm font-semibold sm:pb-10">
