@@ -27,6 +27,7 @@ import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 import { bestBundle } from "../../../server/src/bundles";
+import { BACKGROUNDS, backgroundUrl } from "../../../server/src/backgrounds";
 
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 function linesOf(order: OrderOut): OrderOut["items"] {
@@ -46,6 +47,7 @@ function OrderedItems({ order }: { order: OrderOut }) {
 }
 
 export interface ShopProject {
+  backgroundId?: string;
   id: number | null;
   templateId: string;
   childName: string;
@@ -62,6 +64,7 @@ export interface ShopProject {
 export interface CartLine { product: ProductId; tshirtColor: string; tshirtSize: string; quantity: number }
 
 export interface ShopSelection {
+  backgroundId?: string;
   product: ProductId;
   tshirtColor: string;
   tshirtSize: string;
@@ -241,6 +244,7 @@ export function PapercraftPreview({ project, name, large = false }: { project: S
 /** Only public catalog uses example photos, never a customer's product preview.
  * If a new photo has not been installed yet, the example SVG mockup remains visible. */
 const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
+  lunchbox: '/products/lunchbox.png', tumbler: '/products/tumbler.png',
   nightlamp: '/products/nightlamp.png', wallclock: '/products/wallclock.png', namestickers: '/products/namestickers.png', rewardchart: '/products/rewardchart.png', kidswatch: '/products/kidswatch.png',
   tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: "/products/papercraft.webp",
   celengan: "/products/celengan.webp", puzzle: "/products/puzzle.webp", placemat: "/products/placemat.webp", growthchart: "/products/growthchart.webp",
@@ -261,7 +265,7 @@ function PersonalArtwork({ project, name, showLabel = true }: { project: ShopPro
   return <ArtworkSvg template={templateForSnapshot(project)} colors={project.colors}
     strokes={project.strokes} name={name} message={project.message}
     nameFont={project.nameFont} nameColor={project.nameColor}
-    nameAlign={project.nameAlign} showLabel={showLabel} />;
+    nameAlign={project.nameAlign} showLabel={showLabel} backgroundId={project.backgroundId} />;
 }
 
 function ProductDecor() {
@@ -355,7 +359,7 @@ function GrowthChartPreview({ project, name, large }: { project: ShopProject; na
   </div>;
 }
 
-function NewPersonalizedPreview({product,project,name,large}:{product:"rewardchart"|"namestickers"|"wallclock"|"nightlamp"|"kidswatch";project:ShopProject;name:string;large:boolean}){
+function NewPersonalizedPreview({product,project,name,large}:{product:"rewardchart"|"namestickers"|"wallclock"|"nightlamp"|"kidswatch"|"lunchbox"|"tumbler";project:ShopProject;name:string;large:boolean}){
  const label=name.trim();
  const art=(flip=false)=><div className={flip?"-scale-x-100":""}><PersonalArtwork project={project} name="" showLabel={false}/></div>;
  const title=label?<p className="relative z-10 mx-auto max-w-full break-words rounded-full border border-[#89965A] bg-[#FFF8E8] px-2 py-1 text-center font-extrabold leading-tight" style={{color:project.nameColor,fontFamily:fontFamilyOf(project.nameFont),fontSize:large?16:10}}>{label}</p>:null;
@@ -363,6 +367,8 @@ function NewPersonalizedPreview({product,project,name,large}:{product:"rewardcha
  const habits=["Bangun tepat waktu","Sikat gigi","Berpakaian sendiri","Makan dengan baik","Belajar / bermain","Menolong orang lain"];
  return <div className={`mx-auto w-full ${large?"max-w-lg":"max-w-sm"}`}>
  <div className="rounded-3xl bg-[#F1E5D4] p-3">
+ {product==="lunchbox"&&<div role="img" aria-label="Lunchbox personalisasi" className="relative mx-auto aspect-[4/3] w-[94%] rounded-[18%] border-[9px] border-[#859951] bg-[#B9C88B] p-3 shadow-lg"><div className="absolute -left-3 top-[39%] h-[22%] w-4 rounded-md bg-[#859951]"/><div className="absolute -right-3 top-[39%] h-[22%] w-4 rounded-md bg-[#859951]"/><div className="flex h-full flex-col items-center justify-center overflow-hidden rounded-[14%] border-2 border-[#E0E6BC] bg-[#FFF7E6] px-3 py-2">{logo}<div className="min-h-0 w-[76%] flex-1 overflow-hidden">{art()}</div>{title}</div></div>}
+ {product==="tumbler"&&<div role="img" aria-label="Tumbler personalisasi" className="mx-auto w-[54%]"><div className="mx-auto h-8 w-[72%] rounded-t-full border-4 border-[#859951] bg-[#B9C88B]"/><div className="h-9 rounded-t-2xl border-b-4 border-[#70853D] bg-[#9AAC65]"/><div className="relative flex aspect-[0.53] flex-col items-center justify-center overflow-hidden rounded-b-[20%] border-x-2 border-[#D8CBAF] bg-gradient-to-r from-[#E7DCC5] via-[#FFF8E9] to-[#E7DCC5] p-3 shadow-lg">{logo}<div className="my-3 w-full">{art()}</div>{title}</div></div>}
  {product==="nightlamp"&&<div className="mx-auto w-[80%]"><div className="relative overflow-hidden rounded-t-3xl border-2 border-[#FBD77C] bg-[#FFF7DDB0] p-3 shadow-[0_0_16px_#F9C963]"><ProductDecor/>{logo}<div className="relative z-10 mx-auto w-[85%]">{art()}{title}</div></div><div className="h-12 rounded-md border border-[#B58B60] bg-gradient-to-b from-[#EBC08D] to-[#BE8F59] shadow-md"/></div>}
  {product==="wallclock"&&<div className="relative mx-auto aspect-square w-full rounded-full border-[10px] border-[#FFF9EC] bg-[#FCF3DE] shadow-lg">
  <div className="absolute inset-[5%] overflow-hidden rounded-full"><ProductDecor/></div>
@@ -378,7 +384,7 @@ function NewPersonalizedPreview({product,project,name,large}:{product:"rewardcha
 export function ProductPreview({ product, project, name, fabric, large = false }: {
   product: ProductId; project: ShopProject; name: string; fabric: string; large?: boolean;
 }) {
-  if (product === "rewardchart" || product === "namestickers" || product === "wallclock" || product === "nightlamp" || product === "kidswatch") return <NewPersonalizedPreview product={product} project={project} name={name} large={large} />;
+  if (product === "rewardchart" || product === "namestickers" || product === "wallclock" || product === "nightlamp" || product === "kidswatch" || product === "lunchbox" || product === "tumbler") return <NewPersonalizedPreview product={product} project={project} name={name} large={large} />;
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
   if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
   if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
@@ -586,7 +592,7 @@ export function Customize({
         <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pratinjau produk">
           <ProductPreview
             product={selection.product}
-            project={project}
+            project={{...project,backgroundId:selection.backgroundId}}
             name={selection.childName}
             fabric={selection.tshirtColor}
             large
@@ -629,6 +635,14 @@ export function Customize({
             </p>
           </div>
 
+          <fieldset className="mt-5" disabled={nameLocked}><legend className="font-display text-sm font-bold">Pilih background (opsional)</legend>
+            <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Pilihan background">
+              {[{id:"",label:"Tanpa background"},...BACKGROUNDS].map(b=><button key={b.id} type="button" role="radio" aria-checked={(selection.backgroundId??"")===b.id} onClick={()=>setSelection({...selection,backgroundId:b.id})} className={`overflow-hidden rounded-xl border p-1 text-xs font-bold ${(selection.backgroundId??"")===b.id?"border-olive ring-2 ring-olive":"border-[var(--border)]"}`}>
+                {b.id?<img src={backgroundUrl(b.id)} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-lg object-cover"/>:<div className="aspect-[4/3] rounded-lg bg-white ring-1 ring-black/5"/>}<span className="block py-1">{b.label}</span>
+              </button>)}
+            </div><p className="mt-2 text-xs text-[var(--dim)]">{nameLocked?"Background sama untuk seluruh isi keranjang. Kosongkan keranjang untuk menggantinya.":"Gratis. Pilihan background tidak mengubah warna karya."}</p>
+          </fieldset>
+          {selection.product==="kidswatch"&&<section className="mt-4 rounded-2xl bg-[#EEF4E4] p-3 text-sm"><p className="font-bold text-olive-deep">Garansi 1 tahun ganti baru</p><p>Untuk kerusakan mesin, layar, tombol atau cacat produksi dalam 12 bulan sejak produk diterima. Hubungi admin dengan nomor pesanan dan bukti foto/video. Tidak termasuk kehilangan, benturan, salah penggunaan, atau baterai habis normal.</p></section>}
           {selection.product === "tshirt" && (
             <>
               <div className="mt-4">
@@ -868,6 +882,7 @@ export function Checkout({
         expectedBundleDiscount:bundle?.savings??0,
         gift:isGift?{sender:giftSender.trim(),recipient:giftRecipient.trim(),message:giftMessage.trim()}:null,
         childName: childName.trim(),
+        backgroundId: project.backgroundId ?? "",
         couponCode: appliedCoupon?.code ?? "",
         customerName: customerName.trim(),
         whatsapp: whatsapp.trim(),
@@ -1371,6 +1386,7 @@ export function OrderConfirmation({
       id: order.projectId,
       templateId: order.templateId,
       childName: order.childName,
+      backgroundId: order.backgroundId,
       message: order.message,
       nameFont: order.nameFont,
       nameColor: order.nameColor,
@@ -1448,9 +1464,21 @@ export function OrderConfirmation({
 
 /* ------------------------- Tracking + download ------------------------- */
 
-function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
+async function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
   if (!svg) return;
-  const xml = new XMLSerializer().serializeToString(svg);
+  const copy=svg.cloneNode(true) as SVGSVGElement;
+  try {
+    for(const image of copy.querySelectorAll("image[data-background]")){
+      const path=image.getAttribute("href");
+      if(!path)continue;
+      const response=await fetch(path);
+      if(!response.ok)throw new Error("Background gagal dimuat");
+      const blob=await response.blob();
+      const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsDataURL(blob);});
+      image.setAttribute("href",data);
+    }
+  }catch{window.alert("Background belum berhasil dimuat. Coba unduh kembali.");return;}
+  const xml = new XMLSerializer().serializeToString(copy);
   const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
   const img = new Image();
   img.onload = () => {
@@ -1499,6 +1527,7 @@ export function OrderTracking() {
         id: order.projectId,
         templateId: order.templateId,
         childName: order.childName,
+      backgroundId: order.backgroundId,
         message: order.message,
         nameFont: order.nameFont,
         nameColor: order.nameColor,
@@ -1562,6 +1591,7 @@ export function OrderTracking() {
             <div className="w-28 shrink-0 rounded-3xl bg-white p-1.5 ring-1 ring-black/5">
               <ArtworkSvg
                 template={templateForSnapshot(snap)}
+                backgroundId={snap.backgroundId}
                 colors={snap.colors}
                 strokes={snap.strokes}
                 name={snap.childName}
@@ -1623,6 +1653,7 @@ export function OrderTracking() {
                 <ArtworkSvg
                   svgRef={exportRef}
                   template={templateForSnapshot(snap)}
+                backgroundId={snap.backgroundId}
                   colors={snap.colors}
                   strokes={snap.strokes}
                   name={snap.childName}
@@ -1727,6 +1758,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
     id: order.projectId,
     templateId: order.templateId,
     childName: order.childName,
+      backgroundId: order.backgroundId,
     message: order.message,
     nameFont: order.nameFont,
     nameColor: order.nameColor,
@@ -1746,6 +1778,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
             svgRef={artworkRef}
             message={snap.message}
             template={templateForSnapshot(snap)}
+                backgroundId={snap.backgroundId}
             colors={snap.colors}
             strokes={snap.strokes}
             name={snap.childName}
