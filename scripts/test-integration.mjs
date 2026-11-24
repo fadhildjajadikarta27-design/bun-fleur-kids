@@ -316,9 +316,9 @@ try {
   assert.ok(fulfillment.orders.every(o => o.paymentStatus === "paid" && o.orderStatus !== "completed"));
   await call("adminBulkAffiliateDiscount",{affiliateIds:[rule.affiliateId],productType:"kidswatch",discountPct:10},{expected:401});
   await call("adminBulkAffiliateDiscount",{affiliateIds:[rule.affiliateId],productType:"kidswatch",discountPct:10},admin);
-  const watch=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,productType:"kidswatch",childName:""},owner)).body.order;
-  assert.equal(watch.productPrice,179000);assert.equal(watch.childName,"");assert.equal(watch.discountAmount,17900);
-  assert.equal((await sql`SELECT amount FROM commissions WHERE order_id=${watch.id}`)[0].amount,48330);
+  const watch=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,productType:"kidswatch",childName:"",backgroundId:"05_Luar_Angkasa"},owner)).body.order;
+  assert.equal(watch.productPrice,239000);assert.equal(watch.childName,"");assert.equal(watch.discountAmount,23900);assert.equal(watch.backgroundId,"05_Luar_Angkasa");
+  assert.equal((await sql`SELECT amount FROM commissions WHERE order_id=${watch.id}`)[0].amount,64530);
   await call("adminArchiveOrder",{id:watch.id},{expected:401});
   await call("adminArchiveOrder",{id:order.id},{...admin,expected:400});
   await call("adminArchiveOrder",{id:watch.id},admin);
