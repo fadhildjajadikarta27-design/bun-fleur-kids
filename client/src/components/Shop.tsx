@@ -241,6 +241,7 @@ export function PapercraftPreview({ project, name, large = false }: { project: S
 /** Only public catalog uses example photos, never a customer's product preview.
  * If a new photo has not been installed yet, the example SVG mockup remains visible. */
 const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
+  nightlamp: '/products/nightlamp.png', wallclock: '/products/wallclock.png', namestickers: '/products/namestickers.png', rewardchart: '/products/rewardchart.png', kidswatch: '/products/kidswatch.png',
   tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: "/products/papercraft.webp",
   celengan: "/products/celengan.webp", puzzle: "/products/puzzle.webp", placemat: "/products/placemat.webp", growthchart: "/products/growthchart.webp",
 };
