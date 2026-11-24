@@ -31,8 +31,8 @@ try {
   await artwork.getByRole("button",{name:"Jadikan Nyata — Pesan Produk"}).click();
   const productGrid=page.getByRole("region",{name:"Pilih bentuk kreasimu"});
   const productCards=productGrid.locator("article");
-  await productCards.nth(11).waitFor({state:"visible"});
-  assert.equal(await productCards.count(),12);
+  await productCards.nth(13).waitFor({state:"visible"});
+  assert.equal(await productCards.count(),14);
   const names=await productCards.getByRole("heading").allTextContents();
   for(const name of names){
     const card=productGrid.locator("article").filter({has:page.getByRole("heading",{name,exact:true})});
@@ -44,15 +44,22 @@ try {
     assert.ok(await preview.locator('path[fill="#AB57CC"]').count()>0,name+" artwork color missing");
     assert.equal(await preview.locator('rect[stroke-dasharray="1 7"]').count(),0,name+" blank name frame");
     assert.doesNotMatch(await preview.textContent(),/\bADAM\b|QA BROWSER/i,name+" unexpected name");
+    const backgrounds=page.getByRole("radiogroup",{name:"Pilihan background"});
+    assert.equal(await backgrounds.getByRole("radio").count(),10);
+    await backgrounds.getByRole("radio",{name:"Luar Angkasa",exact:true}).click();
+    assert.ok(await preview.locator('image[data-background][href="/backgrounds/05_Luar_Angkasa.png"]').count()>0,name+" background missing");
+    await backgrounds.getByRole("radio",{name:"Tanpa background",exact:true}).click();
+    assert.equal(await preview.locator('image[data-background]').count(),0,name+" background removal failed");
     await input.fill("QA PERSONA");
     assert.match(await preview.textContent(),/QA PERSONA/i,name+" personalized name missing");
     await page.getByRole("button",{name:"Semua pilihan",exact:false}).click();
-    await productCards.nth(11).waitFor({state:"visible"});
+    await productCards.nth(13).waitFor({state:"visible"});
   }
-  console.log("PASS all 12 product previews use artwork color, optional name, no dummy name or empty plaque");
+  console.log("PASS all 14 product previews use artwork color, optional name, no dummy name or empty plaque");
   async function addProduct(name){
     const card=page.locator("article").filter({has:page.getByRole("heading",{name,exact:true})});
     await card.getByRole("button",{name:"Pilih & Tambah ke Keranjang"}).click();
+    if(name==="Poster")await page.getByRole("radio",{name:"Taman",exact:true}).click();
     await page.getByRole("button",{name:"Tambah ke Keranjang",exact:true}).click();
   }
   await addProduct("Poster");
@@ -78,6 +85,7 @@ try {
   assert.equal(response.status(),200,await response.text());
   const order=(await response.json()).order;
   assert.equal(order.bundleName,"Little Artist");
+  assert.equal(order.backgroundId,"02_Taman");
   assert.equal(order.total,74900);
   assert.equal(order.items.length,2);
   assert.equal(order.gift.recipient,"QA Penerima");
