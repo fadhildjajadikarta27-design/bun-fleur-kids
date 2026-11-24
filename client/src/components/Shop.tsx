@@ -1468,7 +1468,7 @@ async function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
   if (!svg) return;
   const copy=svg.cloneNode(true) as SVGSVGElement;
   try {
-    for(const image of copy.querySelectorAll("image[data-background]")){
+    for(const image of Array.from(copy.querySelectorAll("image[data-background]"))){
       const path=image.getAttribute("href");
       if(!path)continue;
       const response=await fetch(path);
