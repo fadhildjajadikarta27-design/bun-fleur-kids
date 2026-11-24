@@ -16,10 +16,10 @@ export const PRODUCT_META: Record<
 > = {
   poster: {
     title: "Poster",
-    tagline: "Poster Berbingkai",
-    description: "Turn their artwork into a beautiful keepsake for their room.",
-    cta: "Create My Poster",
-    see: "See My Poster",
+    tagline: "Poster Personalisasi",
+    description: "Abadikan karya mewarnai si kecil dalam poster personalisasi. Karakter, warna, coretan, dan namanya menjadi hiasan kamar yang istimewa.",
+    cta: "Buat Poster-ku",
+    see: "Lihat Desain Poster",
   },
   puzzle: {
     title: "Puzzle",
@@ -30,21 +30,21 @@ export const PRODUCT_META: Record<
   },
   placemat: {
     title: "Alas Makan",
-    tagline: "Personalized Placemat",
+    tagline: "Alas Makan Personalisasi",
     description: "Hadirkan karya si kecil di meja makan, dengan warna dan nama pilihannya.",
     cta: "Buat Alas Makan",
     see: "Lihat Desain Alas Makan",
   },
   growthchart: {
-    title: "Growth Chart",
+    title: "Pengukur Tinggi Badan (Growth Chart)",
     tagline: "Pengukur Tinggi Badan",
     description: "Pengukur tinggi badan tempel yang menampilkan karakter, warna, dan nama dari karya si kecil.",
-    cta: "Buat Growth Chart",
-    see: "Lihat Growth Chart-ku",
+    cta: "Buat Pengukur Tinggi Badan",
+    see: "Lihat Desain Pengukur Tinggi Badan",
   },
   accessory59: {
     title: "Aksesori Custom Premium",
-    tagline: "Accessories",
+    tagline: "Aksesori",
     description: "Aksesori personal dari hasil mewarnai si kecil — karakter, pilihan warna, serta namanya menjadi desain produk miliknya sendiri.",
     cta: "Buat Aksesori-ku",
     see: "Lihat Desain-ku",
@@ -52,7 +52,7 @@ export const PRODUCT_META: Record<
   celengan: {
     title: "Celengan",
     tagline: "Aksesori Celengan",
-    description: "Celengan tabung bergambar karya si kecil, lengkap dengan warna dan namanya. Souvenir personal yang bisa digunakan sehari-hari.",
+    description: "Celengan tabung bergambar karya si kecil, lengkap dengan warna dan namanya. Kenang-kenangan pribadi yang bisa digunakan sehari-hari.",
     cta: "Buat Celengan-ku",
     see: "Lihat Celengan-ku",
   },
@@ -66,15 +66,15 @@ export const PRODUCT_META: Record<
   figurine: {
     title: "Custom 3D Figurine",
     tagline: "Figurine 3D Custom",
-    description: "Watch their imagination come to life in 3D.",
-    cta: "Create My Figurine",
-    see: "See My 3D Figurine",
+    description: "Kenang-kenangan berbentuk figur tiga dimensi dari karya anak (produk lama).",
+    cta: "Buat Figur 3D",
+    see: "Lihat Figur 3D",
   },
   tshirt: {
     title: "Kaos",
-    tagline: "Kaos Custom",
-    description: "Wear your imagination, made just for you.",
-    cta: "Create My T-Shirt",
-    see: "See My T-Shirt",
+    tagline: "Kaos Personalisasi",
+    description: "Kenakan karya si kecil pada kaos pilihannya. Gambar dan warna asli anak tercetak di depan, dengan logo kecil Bun & Fleur Kids di belakang. Nama anak dapat ditambahkan.",
+    cta: "Buat Kaos-ku",
+    see: "Lihat Desain Kaos",
   },
 };

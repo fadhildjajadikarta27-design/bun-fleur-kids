@@ -99,38 +99,19 @@ function basePrice(cfg: ApiResponse<typeof api, "getShopConfig">, id: ProductId)
 
 /* ------------------------------ Previews ------------------------------ */
 
-export function PosterPreview({
-  project,
-  name,
-  large = false,
-}: {
-  project: ShopProject;
-  name: string;
-  large?: boolean;
-}) {
-  const template = templateForSnapshot(project);
-  return (
-    <div
-      className={`mx-auto w-full ${large ? "max-w-sm" : "max-w-[220px]"}`}
-      role="img"
-      aria-label="Pratinjau karya pada poster berbingkai"
-    >
-      <div className="rounded-md bg-[#8A6642] p-2 shadow-lg ring-1 ring-black/25">
-        <div className="bg-[#FDFBF5] p-3">
-          <ArtworkSvg
-            template={template}
-            colors={project.colors}
-            strokes={project.strokes}
-            name={name}
-            nameFont={project.nameFont}
-            nameColor={project.nameColor}
-            nameAlign={project.nameAlign}
-          />
+export function PosterPreview({ project, name, large = false }: { project: ShopProject; name: string; large?: boolean }) {
+  return <div className={`mx-auto w-full ${large ? "max-w-sm" : "max-w-[250px]"}`}>
+    <div role="img" aria-label="Pratinjau poster dengan karya dan nama anak" className="rounded-xl bg-[#E7DCCB] p-3">
+      <div className="relative flex aspect-[2/3] flex-col overflow-hidden bg-[#FCF3DE] shadow-md">
+        <ProductDecor />
+        <img src={logoUrl} alt="Bun & Fleur Kids" className="absolute left-[7%] top-[5%] w-[28%] object-contain" />
+        <div className="absolute inset-x-[7%] top-[27%] bottom-[9%] flex items-center justify-center">
+          <div className="w-full"><PersonalArtwork project={project} name={name} /></div>
         </div>
       </div>
-      <p className="pt-2 text-center text-xs font-bold text-[var(--dim)]">Poster berbingkai — karya persis seperti yang diwarnai anak</p>
     </div>
-  );
+    <MockupCaption>Poster dengan karakter, warna, coretan, dan nama pilihan anak</MockupCaption>
+  </div>;
 }
 
 export function FigurinePreview({
@@ -180,97 +161,75 @@ export function FigurinePreview({
   );
 }
 
-export function TshirtPreview({
-  project,
-  name,
-  fabric,
-  large = false,
-}: {
-  project: ShopProject;
-  name: string;
-  fabric: string;
-  large?: boolean;
-}) {
-  const template = templateForSnapshot(project);
+const FABRIC_LABELS: Record<string, string> = {
+  Cream: "Krem", Mustard: "Kuning mustard", Terracotta: "Terakota", "Sage Green": "Hijau sage", Brown: "Cokelat",
+};
+export function TshirtPreview({ project, name, fabric, large = false }: { project: ShopProject; name: string; fabric: string; large?: boolean }) {
   const hex = TSHIRT_FABRIC_HEX[fabric] ?? "#F1E6CE";
-  const dark = fabric === "Brown" || fabric === "Terracotta";
-  return (
-    <div
-      className={`relative mx-auto w-full ${large ? "max-w-sm" : "max-w-[220px]"}`}
-      role="img"
-      aria-label={`Pratinjau karya pada kaos warna ${fabric}`}
-    >
-      <svg viewBox="0 0 240 240" className="h-auto w-full drop-shadow-md" aria-hidden>
-        <path
-          d="M95 26 C108 42 132 42 145 26 L188 44 L218 92 L180 110 L180 214 Q180 221 173 221 L67 221 Q60 221 60 214 L60 110 L22 92 L52 44 Z"
-          fill={hex}
-          stroke="#3B2A22"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M95 26 C108 42 132 42 145 26 C136 34 104 34 95 26 Z"
-          fill={dark ? "#00000022" : "#3B2A2214"}
-        />
-      </svg>
-      <div className="absolute left-1/2 top-[31%] w-[34%] -translate-x-1/2 rounded-lg bg-white/95 p-1 shadow-sm ring-1 ring-black/10">
-        <ArtworkSvg
-          template={template}
-          colors={project.colors}
-          strokes={project.strokes}
-          name={name}
-          nameFont={project.nameFont}
-          nameColor={project.nameColor}
-          nameAlign={project.nameAlign}
-        />
-      </div>
-      <p className="pt-1 text-center text-xs font-bold text-[var(--dim)]">Kaos {fabric} — desain di bagian depan</p>
+  const label = FABRIC_LABELS[fabric] ?? fabric;
+  const outline = "M95 26 C108 42 132 42 145 26 L188 44 L218 92 L180 110 L180 214 Q180 221 173 221 L67 221 Q60 221 60 214 L60 110 L22 92 L52 44 Z";
+  return <div className={`mx-auto w-full ${large ? "max-w-lg" : "max-w-sm"}`}>
+    <div role="img" aria-label={`Kaos ${label}, tampak depan dan belakang dengan karya pribadi`} className="grid grid-cols-2 gap-2 rounded-3xl bg-[#F5EBDD] p-2">
+      {[false, true].map(back => <div key={String(back)} className="min-w-0">
+        <div className="relative aspect-square">
+          <svg viewBox="0 0 240 240" className="h-auto w-full drop-shadow-md" aria-hidden="true">
+            <path d={outline} fill={hex} stroke="#756451" strokeWidth="2" strokeLinejoin="round" />
+            <path d={back ? "M95 26 Q120 44 145 26 Q120 35 95 26Z" : "M95 26 C108 42 132 42 145 26 C136 34 104 34 95 26Z"} fill="#3B2A2220" />
+            <path d="M65 208H175" stroke="#756451" strokeOpacity=".4" fill="none" />
+          </svg>
+          {back ? <img src={logoUrl} alt="Logo Bun & Fleur Kids" className="absolute left-1/2 top-[21%] w-[17%] -translate-x-1/2 object-contain" /> :
+            <div className="absolute left-1/2 top-[32%] w-[44%] -translate-x-1/2">
+              <div className="relative"><PersonalArtwork project={project} name={name} showLabel={false} /></div>
+              {name.trim() && <p className="break-words text-center font-bold leading-tight" style={{fontFamily: fontFamilyOf(project.nameFont), color: project.nameColor, fontSize: large ? 12 : 9}}>{name.toUpperCase()}</p>}
+              {project.message.trim() && <p className="break-words text-center text-[8px] font-bold" style={{color: project.nameColor}}>{project.message}</p>}
+            </div>}
+        </div>
+        <p className="text-center text-xs font-bold text-olive-deep">{back ? "Belakang" : "Depan"}</p>
+      </div>)}
     </div>
-  );
+    <MockupCaption>{`Kaos ${label} dengan karya anak di depan dan logo kecil di belakang`}</MockupCaption>
+  </div>;
 }
 
-/** A real owner-supplied product photo alongside the artwork actually being ordered.
- * The photo always depicts the example dinosaur, not a false render of the
- * customer's custom character. The artwork below is dynamic and exact. */
-export function PapercraftPreview({
-  project, name, large = false,
-}: { project: ShopProject; name: string; large?: boolean }) {
-  const template = templateForSnapshot(project);
-  return (
-    <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
-      <div className="overflow-hidden rounded-2xl bg-[#F0E8DD] ring-1 ring-[var(--border)]">
-        <img
-          src={papercraftSampleUrl}
-          alt="Foto contoh kit papercraft kertas 3D: gambar dinosaurus warna hijau-biru, lembar gunting-lipat, dan hasil rakitan berdiri"
-          loading="lazy"
-          className="aspect-[1600/1325] w-full object-cover"
-        />
+export function PapercraftPreview({ project, name, large = false }: { project: ShopProject; name: string; large?: boolean }) {
+  return <div className={`mx-auto w-full ${large ? "max-w-lg" : "max-w-sm"}`}>
+    <div role="img" aria-label="Simulasi kit papercraft dengan panel depan, panel belakang, strip sambungan, dan hasil rakitan karya anak" className="rounded-3xl bg-[#E7D5BA] p-3">
+      <div className="grid grid-cols-2 gap-3">
+        {["Panel depan", "Panel belakang"].map((label, i) => <div key={label} className={`bg-white p-2 shadow-md ${i ? "rotate-2" : "-rotate-2"}`}>
+          <div className="border border-dashed border-[#B5A48C] p-1">
+            <PersonalArtwork project={project} name={name} />
+          </div>
+          <p className="mt-1 text-center text-[9px] font-bold text-[#665944]">{label} · gunting &amp; lipat</p>
+        </div>)}
       </div>
-      <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white p-2.5 ring-1 ring-[var(--border)]">
-        <div className="w-20 shrink-0 overflow-hidden rounded-xl bg-white">
-          <ArtworkSvg
-            template={template}
-            colors={project.colors}
-            strokes={project.strokes}
-            name={name}
-            message={project.message}
-            nameFont={project.nameFont}
-            nameColor={project.nameColor}
-            nameAlign={project.nameAlign}
-          />
+      <div className="mx-auto mt-3 w-[80%] border border-dashed border-[#9AA56D] bg-[#FDFBF5] p-1 text-center text-[9px] font-bold text-olive-deep">Strip sambungan · lipat &amp; rekatkan</div>
+      <div className="relative mx-auto mt-4 flex w-[64%] flex-col items-center">
+        <div className="relative w-[85%] rounded-md bg-[#FDFBF5] p-1 shadow-[6px_5px_0_#ADB78D,8px_8px_10px_#82765F44]">
+          <PersonalArtwork project={project} name="" showLabel={false} />
         </div>
-        <div className="min-w-0">
-          <p className="font-display text-xs font-extrabold text-olive-deep">Desain punyamu</p>
-          <p className="text-xs font-semibold leading-snug text-[var(--dim)]">
-            Warna, karakter, dan nama dari gambar yang sudah kamu warnai dipakai pada pesananmu.
-          </p>
+        <div className="w-full rounded-b-md border border-[#89965A] bg-[#B7C583] px-2 py-2 text-center">
+          <p className="break-words font-extrabold" style={{fontFamily:fontFamilyOf(project.nameFont), color:project.nameColor, fontSize:large ? 17 : 11}}>{name.trim().toUpperCase()}</p>
+          {project.message.trim() && <p className="break-words text-[9px] font-bold">{project.message}</p>}
         </div>
+        <p className="mt-1 text-xs font-bold text-[#665944]">Ilustrasi rakitan berdiri</p>
       </div>
-      <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">
-        Foto dinosaurus hanya contoh bentuk kit. Setiap pesanan dicetak sesuai karya anak sendiri.
-      </p>
     </div>
-  );
+    <MockupCaption>Kit papercraft dari karya anak; pola produksi mengikuti geometri aslinya</MockupCaption>
+  </div>;
+}
+
+/** Only public catalog uses example photos, never a customer's product preview.
+ * If a new photo has not been installed yet, the example SVG mockup remains visible. */
+const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
+  tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: papercraftSampleUrl,
+};
+export function CatalogProductPreview({ product, project }: { product: ProductId; project: ShopProject }) {
+  const [failed, setFailed] = useState(false);
+  const src = CATALOG_PHOTOS[product];
+  return src && !failed ? <figure>
+    <img src={src} alt={`Contoh produk ${PRODUCT_META[product].title}`} loading="lazy" decoding="async" onError={() => setFailed(true)} className="mx-auto aspect-square w-full rounded-2xl object-contain" />
+    <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Foto contoh produk; desain pesanan mengikuti hasil mewarnai anak.</figcaption>
+  </figure> : <ProductPreview product={product} project={project} name={project.childName} fabric="Cream" />;
 }
 
 /** Digital product mockups inspired by the sample photos.
@@ -416,7 +375,7 @@ export function Masterpiece({
         </button>
         <div className="clear-both pt-2">
           <h1 className="font-display text-3xl font-semibold leading-tight sm:text-[2.6rem]">
-            Your Little Masterpiece <span className="band-accent">Is Ready!</span>
+            Karya Si Kecil <span className="band-accent">Sudah Siap!</span>
           </h1>
           <p className="band-dim mx-auto mt-2 max-w-lg font-semibold">
             Turn your little one&rsquo;s imagination into something real.
@@ -480,10 +439,10 @@ export function Masterpiece({
       {/* CTA konversi */}
       <section className="band-olive mt-6 rounded-[2rem] px-6 py-8 text-center" aria-label="Jadikan nyata">
         <h2 className="mx-auto max-w-xl font-display text-2xl font-semibold leading-snug sm:text-3xl">
-          Don&rsquo;t Let Their Imagination Stay on Screen.
+          Jangan Biarkan Imajinasi Si Kecil Hanya di Layar.
         </h2>
         <p className="band-dim mx-auto mt-2 max-w-md font-semibold">
-          Make their little masterpiece a memory they can keep.
+          Wujudkan karya kecilnya menjadi kenangan yang bisa disimpan.
         </p>
       </section>
 
@@ -511,7 +470,7 @@ export function Masterpiece({
               )}
               {id === "celengan" && (
                 <p className="mt-1 text-xs font-bold text-olive-deep">
-                  Custom sesuai gambar yang diwarnai · ongkir terpisah.
+                  Personalisasi sesuai gambar yang diwarnai · ongkir terpisah.
                 </p>
               )}
               {id === "papercraft" && (
@@ -649,7 +608,7 @@ export function Customize({
                         style={{ background: TSHIRT_FABRIC_HEX[c] ?? "#EEE" }}
                         aria-hidden
                       />
-                      {c}
+                      {FABRIC_LABELS[c] ?? c}
                     </button>
                   ))}
                 </div>
@@ -702,7 +661,7 @@ export function Customize({
           )}
           {selection.product === "celengan" && (
             <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
-              <p className="font-display font-extrabold">Accessories — Celengan Custom · Rp29.000</p>
+              <p className="font-display font-extrabold">Celengan Personalisasi · {formatIDR(price)}</p>
               <p className="mt-1">
                 Celengan tabung dengan lubang uang pada tutupnya. Desain depan berisi gambar, warna
                 dan nama dari hasil mewarnai anak; logo Bun & Fleur Kids di belakang.
@@ -712,7 +671,7 @@ export function Customize({
           )}
           {selection.product === "papercraft" && (
             <div className="mt-4 rounded-2xl bg-[#EDF2E6] px-4 py-3 text-sm font-semibold leading-relaxed text-olive-deep ring-1 ring-[var(--border)]">
-              <p className="font-display font-extrabold">Kit Papercraft 3D · Rp49.000</p>
+              <p className="font-display font-extrabold">Kit Papercraft 3D · {formatIDR(price)}</p>
               <p className="mt-1">
                 Tim mencetak lembar depan-belakang karakter dan strip pembentuk volume dari warna,
                 coretan, serta nama hasil kreasimu. Kit dikirim untuk digunting, dilipat dan direkatkan sendiri.
@@ -724,7 +683,7 @@ export function Customize({
 
           {selection.product === "poster" && (
             <p className="mt-4 rounded-2xl bg-sky-soft px-4 py-3 text-sm font-semibold leading-relaxed ring-1 ring-[var(--border)]">
-              Poster dicetak dari file karya anakmu dan dipasang pada bingkai, siap digantung di kamarnya.
+              Poster dicetak dari karya anakmu, dengan ornamen dan identitas Bun &amp; Fleur Kids, untuk dipajang di kamarnya.
               Harga poster tetap — tidak berubah oleh pilihan apa pun di halaman ini.
             </p>
           )}
@@ -751,7 +710,7 @@ export function Customize({
             }}
             className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink shadow transition hover:bg-tang-deep"
           >
-            Lanjut ke Checkout
+            Lanjut ke Pemesanan
           </button>
         </section>
       </div>
@@ -864,7 +823,7 @@ export function Checkout({
         <button type="button" onClick={onBack} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
           ← Kembali ke pengaturan
         </button>
-        <h1 className="font-display text-2xl font-semibold">Checkout</h1>
+        <h1 className="font-display text-2xl font-semibold">Pemesanan</h1>
       </div>
       <div className="mt-4 flex items-center gap-3 px-2">
         <label htmlFor="checkout-quantity" className="font-display text-sm font-bold">Jumlah</label>

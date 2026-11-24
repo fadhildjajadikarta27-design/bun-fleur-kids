@@ -2386,7 +2386,7 @@ export const Actions = {
         if (series.length > 366) break;
       }
       const productLabel = (t: string) =>
-        t === "poster" ? "Printed Poster" : t === "papercraft" ? "3D Papercraft Kit" : t === "celengan" ? "Celengan Custom" : t === "accessory59" ? "Aksesori Custom 59K" : t === "puzzle" ? "Puzzle" : t === "placemat" ? "Personalized Placemat" : t === "growthchart" ? "Growth Chart" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
+        t === "poster" ? "Poster" : t === "papercraft" ? "Papercraft 3D" : t === "celengan" ? "Celengan" : t === "accessory59" ? "Aksesori Personalisasi (lama)" : t === "puzzle" ? "Puzzle" : t === "placemat" ? "Alas Makan" : t === "growthchart" ? "Pengukur Tinggi Badan (Growth Chart)" : t === "figurine" ? "Figur 3D (lama)" : "Kaos Personalisasi";
       const orders = comms.slice(0, 50).map((c) => {
         const o = orderById.get(c.orderId);
         return {

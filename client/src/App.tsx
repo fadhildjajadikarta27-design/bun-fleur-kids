@@ -34,7 +34,7 @@ const Customize = lazy(() => import("./components/Shop").then((m) => ({ default:
 const Masterpiece = lazy(() => import("./components/Shop").then((m) => ({ default: m.Masterpiece })));
 const OrderConfirmation = lazy(() => import("./components/Shop").then((m) => ({ default: m.OrderConfirmation })));
 const OrderTracking = lazy(() => import("./components/Shop").then((m) => ({ default: m.OrderTracking })));
-const ProductPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.ProductPreview })));
+const CatalogProductPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.CatalogProductPreview })));
 const AffiliateDashboard = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateDashboard })));
 const AffiliateInvitePage = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateInvitePage })));
 const AffiliateLoginPage = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateLoginPage })));
@@ -465,7 +465,7 @@ function Home({
       <section className="grid items-center gap-10 pt-8 sm:pt-12 lg:grid-cols-2">
         <div>
           <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-tang-ink">
-            Creative Play, Made Personal
+            Bermain Kreatif, Karya Milik Sendiri
           </p>
           <h1 className="mt-3 font-display text-[clamp(2.5rem,6vw,4.25rem)] font-semibold leading-[1.04] text-[var(--text)]">
             <span className="text-olive">Warnai Sendiri.</span>
@@ -569,7 +569,7 @@ function Home({
           {ACTIVE_PRODUCT_IDS.map((id) => (
             <article key={id} className="flex flex-col overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">
               <div className="bg-[#EEF4E4] p-4">
-                <DeferredPreview><ProductPreview product={id} project={demoProject} name="Adam" fabric="Sage Green" /></DeferredPreview>
+                <DeferredPreview><CatalogProductPreview key={id} product={id} project={demoProject} /></DeferredPreview>
                 <p className="pt-2 text-center text-xs font-semibold text-[var(--dim)]">Contoh personalisasi</p>
               </div>
               <div className="flex flex-1 flex-col p-6">
@@ -1706,14 +1706,11 @@ function Magic({
               className={`relative rounded-[1.75rem] p-5 text-left ring-1 transition ${product === "figure" ? "bg-olive text-white shadow-md ring-2 ring-olive-deep" : "bg-[var(--surface)] ring-[var(--border)] hover:shadow"}`}
             >
               <span className="absolute right-4 top-4 rounded-full bg-tang px-2.5 py-0.5 font-display text-xs font-semibold text-ink">Premium</span>
-              <span className="font-display text-lg font-semibold">Figurine 3D Printed</span>
+              <span className="font-display text-lg font-semibold">Model Figur 3D Digital</span>
               <span className={`mt-1 block leading-relaxed ${product === "figure" ? "text-[#EDF3E2]" : "text-[var(--dim)]"}`}>
-                Figurine padat made-to-order dari geometri terverifikasi yang sama — bukan sulap
-                otomatis dari gambar 2D: setiap warna bagian dipetakan dari pilihan anak ke model
-                3D-nya, lalu diproduksi &amp; dikirim oleh tim kami. Pilih kartu ini untuk melihat
-                pratinjau digitalnya sebagai model 3D.
+                Model figur digital dari geometri karakter yang tersedia. Warna setiap bagian mengikuti pilihan anak. Pilih kartu ini untuk menjelajahi model digital 3D; figur fisik tidak tersedia dalam katalog.
               </span>
-              <span className={`mt-2 block font-display text-sm font-semibold ${product === "figure" ? "text-white" : "text-olive"}`}>Mulai {formatIDR(120000)} · pesan lewat tombol Jadikan Nyata di bawah — setiap pesanan melewati Design Review dulu</span>
+              <span className={`mt-2 block font-display text-sm font-semibold ${product === "figure" ? "text-white" : "text-olive"}`}>Hanya visualisasi digital — produk figur ini tidak dijual.</span>
             </button>
           </div>
           {product === "paper" && (
@@ -2190,7 +2187,7 @@ function Parents() {
           </div>
           <div>
             <h3 className="font-display text-base font-semibold">Produksi & pengiriman</h3>
-            <p className="mt-1 leading-relaxed text-[var(--dim)]">Setiap karya fisik bersifat made-to-order: ditinjau dulu warnanya, diproduksi, dicek kualitasnya, lalu dikemas dan dikirim. Status pesananmu nyata dan bisa dilacak di bagian Lacak Pesanan di halaman ini dengan kode pesanan + nomor WhatsApp — tahapnya: Menunggu Pembayaran → Lunas → Design Review → Produksi → Dikirim → Selesai. Pembayaran lewat QRIS statis resmi dengan kode unik per pesanan, diverifikasi manual oleh tim sebelum produksi dimulai; kupon afiliasi tervalidasi di server dan komisinya tercatat otomatis mengikuti status pesanan.</p>
+            <p className="mt-1 leading-relaxed text-[var(--dim)]">Setiap karya fisik bersifat made-to-order: ditinjau dulu warnanya, diproduksi, dicek kualitasnya, lalu dikemas dan dikirim. Status pesananmu nyata dan bisa dilacak di bagian Lacak Pesanan di halaman ini dengan kode pesanan + nomor WhatsApp — tahapnya: Menunggu Pembayaran → Lunas → Peninjauan Desain → Produksi → Dikirim → Selesai. Pembayaran lewat QRIS statis resmi dengan kode unik per pesanan, diverifikasi manual oleh tim sebelum produksi dimulai; kupon afiliasi tervalidasi di server dan komisinya tercatat otomatis mengikuti status pesanan.</p>
           </div>
         </div>
         <h3 className="mt-6 font-display text-base font-semibold">Sering ditanyakan</h3>
