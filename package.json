@@ -27,7 +27,7 @@
     "dev:api": "bun scripts/dev-server.mjs",
     "gen:fields": "bun scripts/gen-fields.mjs",
     "test": "bun test",
-    "typecheck": "bun x tsc --noEmit -p client/tsconfig.json && bun x tsc --noEmit -p server/tsconfig.json",
+    "typecheck": "bun run gen:fields && bun x tsc --noEmit -p client/tsconfig.json && bun x tsc --noEmit -p server/tsconfig.json",
     "test:integration": "bun scripts/test-integration.mjs"
   },
   "type": "module"
