@@ -11,6 +11,7 @@ export interface Collection {
 }
 
 export const COLLECTIONS: Collection[] = [
+  {id:"little-people",name:"Teman Manusia",tagline:"Bayi, keluarga dan profesi",color:"#F2762E",soft:"#FFE8D6"},
   { id: "dino-world", name: "Dunia Dino", tagline: "Raksasa lembut dari zaman dulu", color: "#2F9E44", soft: "#DFF3D8" },
   { id: "animal-friends", name: "Teman Hewan", tagline: "Berbulu, lucu, dan ramah", color: "#F2762E", soft: "#FFE8D6" },
   { id: "little-vehicles", name: "Kendaraan Kecil", tagline: "Tit tit, wus, dan brum", color: "#1E88C7", soft: "#D6F0FD" },

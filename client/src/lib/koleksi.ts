@@ -3317,4 +3317,29 @@ const L5B: TemplateDef[] = [
     [], [{ el: Ci(150, 104, 4), fill: "#FFC93C", stroke: INK, sw: 2 }, { el: Ci(268, 79, 3.2), fill: "#FFC93C", stroke: INK, sw: 2 }]),
 ];
 
-export const KOLEKSI_TEMPLATES: TemplateDef[] = [...L1, ...L2, ...L3, ...L4, ...L5, ...L5B];
+// Human characters share the same region data and paper craft renderer.
+function humanArt(kind:string,level:number):BuiltArt {
+ const baby=kind.startsWith("baby"), longHair=["girl","mother","baby-girl"].includes(kind);
+ const regions:RegionDef[]=[
+  {id:"hair",label:"Rambut",els:[E(240,111,78,81),...(longHair?[E(178,155,25,55),E(302,155,25,55)]:[])]},
+  {id:"clothes",label:"Baju",els:[Rc(181,175,118,83,24)]},
+  {id:"skin",label:"Wajah dan tangan",els:[E(240,125,65,64),E(174,211,19,26),E(306,211,19,26)]},
+  {id:"pants",label:baby?"Popok":"Celana",els:[Rc(193,244,42,44,13),Rc(245,244,42,44,13)]},
+ ];
+ const parts:CraftPart[]=[
+  ballPart({id:"head",label:"Kepala",assembly:"Rakit kepala.",r:.46,region:"skin",transform:{t:[0,.57,0]}}),
+  ballPart({id:"hair",label:"Rambut",assembly:"Rakit rambut.",r:.48,region:"hair",transform:{s:[1,.55,1],t:[0,.83,-.04]}}),
+  boxPart({id:"body",label:"Baju",assembly:"Lipat badan.",w:.69,h:.5,d:.35,region:"clothes",transform:{t:[0,-.22,0]}}),
+  ...[-1,1].map(i=>boxPart({id:"leg"+i,label:"Kaki",assembly:"Lipat kaki.",w:.22,h:.29,d:.25,region:"pants",transform:{t:[i*.16,-.61,0]}})),
+ ];
+ const details:DetailEl[]=[...eyesAt(240,120,24,6),smileAt(240,145,24)];
+ if(level>=2){regions.push({id:"shoes",label:"Sepatu",els:[E(211,286,24,12),E(269,286,24,12)]});parts.push(...[-1,1].map(i=>boxPart({id:"shoe"+i,label:"Sepatu",assembly:"Lipat sepatu.",w:.27,h:.12,d:.32,region:"shoes",transform:{t:[i*.16,-.82,.04]}})));}
+ if(level>=3){regions.push({id:"badge",label:"Lencana",els:[Ci(240,208,16)]});parts.push(flatPart({id:"badge",label:"Lencana",assembly:"Tempel lencana.",poly:discPoly(.10),region:"badge",transform:{t:[0,-.16,.19]}}));}
+ if(level>=4||["chef","doctor","pilot","police","astronaut"].includes(kind)){regions.push({id:"accessory",label:"Aksesori",els:kind==="chef"?[E(210,48,24,25),E(240,40,28,30),E(270,48,24,25),Rc(183,60,114,25,5)]:kind==="doctor"?[Rc(195,52,90,30,8)]:kind==="astronaut"?[E(240,125,79,78)]:[E(240,57,54,21)]});if(kind==="astronaut"){const a=regions.pop()!;regions.unshift(a);}parts.push(boxPart({id:"accessory",label:"Aksesori",assembly:"Lipat aksesori.",w:.54,h:.16,d:.22,region:"accessory",transform:{t:[0,1.02,0]}}));}
+ if(level>=5){regions.push({id:"pocket",label:"Saku",els:[Rc(252,224,24,18,4)]},{id:"ball",label:"Bola",els:[Ci(351,270,27)]});parts.push(flatPart({id:"pocket",label:"Saku",assembly:"Tempel saku.",poly:[[-.08,-.06],[.08,-.06],[.08,.06],[-.08,.06]],region:"pocket",transform:{t:[.16,-.31,.19]}}),ballPart({id:"ball",label:"Bola",assembly:"Rakit bola.",r:.16,region:"ball",transform:{t:[.7,-.75,0]}}));}
+ return {regions,details,parts};
+}
+const humanKinds=[["baby-boy","Bayi Laki-laki"],["baby-girl","Bayi Perempuan"],["boy","Anak Laki-laki"],["girl","Anak Perempuan"],["mother","Mama"],["father","Papa"],["doctor","Dokter"],["chef","Koki"],["teacher","Guru"],["pilot","Pilot"],["astronaut","Astronaut"],["police","Polisi"]];
+const humanBands:Meta["band"][]=["9-18bln","1-2th","2-3th","3-4th","4-5th"];
+const HUMAN_TEMPLATES=humanBands.flatMap((band,i)=>humanKinds.map(([kind,name])=>finish({id:"human-"+kind+"-"+(i+1),name:name!,collection:"little-people",blurb:"Warnai tokoh kecil dengan warna pilihanmu.",band,who:name!},humanArt(kind!,i+1))));
+export const KOLEKSI_TEMPLATES: TemplateDef[] = [...L1, ...L2, ...L3, ...L4, ...L5, ...L5B,...HUMAN_TEMPLATES];
