@@ -2252,6 +2252,14 @@ function Celebration({ name }: { name: string }) {
 
 /* ------------------------------ App root ------------------------------ */
 
+type SavedCart={projectId:number;name:string;lines:CartLine[];checkoutId:string;expires:number};
+const CART_KEY="bfk-cart-v1", CART_TTL=30*24*60*60*1000;
+function loadCart():SavedCart|null{
+ try{
+ const v=JSON.parse(localStorage.getItem(CART_KEY)??"null") as SavedCart|null;
+ if(!v||!Number.isFinite(v.expires)||v.expires<=Date.now()||!Number.isInteger(v.projectId)||v.projectId<1||typeof v.name!=="string"||typeof v.checkoutId!=="string"||!Array.isArray(v.lines)||!v.lines.length||v.lines.length>20||v.lines.some(l=>!l||!ACTIVE_PRODUCT_IDS.includes(l.product)||!Number.isInteger(l.quantity)||l.quantity<1||l.quantity>20||typeof l.tshirtColor!=="string"||typeof l.tshirtSize!=="string")||v.lines.reduce((n,l)=>n+l.quantity,0)>140){localStorage.removeItem(CART_KEY);return null;}return v;
+ }catch{return null;}
+}
 export function App() {
   const queryClient = useQueryClient();
   const settings = useQuery({
@@ -2463,19 +2471,45 @@ export function App() {
     childName: "",
   });
   const [lastOrder, setLastOrder] = useState<OrderOut | null>(null);
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [cartProject, setCartProject] = useState<number | null>(null);
-  const [cartName, setCartName] = useState("");
-  const cartCheckoutId = useRef<string | null>(null);
+  const [savedCart]=useState(loadCart);
+  const [cart, setCart] = useState<CartLine[]>(savedCart?.lines??[]);
+  const [cartProject, setCartProject] = useState<number | null>(savedCart?.projectId??null);
+  const [cartName, setCartName] = useState(savedCart?.name??"");
+  const cartCheckoutId = useRef<string | null>(savedCart?.checkoutId??null);
+  const cartExpires=useRef(savedCart?.expires??0);
+  const [cartError,setCartError]=useState("");
+  const [cartRestoring,setCartRestoring]=useState(false);
+  useEffect(()=>{
+    try{
+      if(!cart.length||cartProject===null){localStorage.removeItem(CART_KEY);return;}
+      const checkoutId=cartCheckoutId.current??=crypto.randomUUID();
+      localStorage.setItem(CART_KEY,JSON.stringify({projectId:cartProject,name:cartName,lines:cart,checkoutId,expires:cartExpires.current}));
+    }catch{/* storage unavailable */}
+  },[cart,cartProject,cartName]);
+  const resumeCart=async()=>{
+    if(cartProject===null||!cart.length)return;
+    if(cartExpires.current<=Date.now()){changeCart([]);setCartError("Keranjang sudah kedaluwarsa.");return;}
+    if(cartProject===projectRef.current.id){go({view:"checkout"});return;}
+    setCartRestoring(true);setCartError("");
+    try{
+      const res=await api.listProjects({});
+      const found=res.projects.find(p=>p.id===cartProject);
+      if(!found){setCartError("Karya keranjang tidak ditemukan pada sesi browser ini.");return;}
+      switchDraft(toWork(found));go({view:"checkout"});
+    }catch{setCartError("Keranjang belum dapat dibuka. Coba lagi.");}finally{setCartRestoring(false);}
+  };
   const cartLines = cartProject === project.id ? cart : [];
   const cartCount = cartLines.reduce((n, line) => n + line.quantity, 0);
   const changeCart = (lines: CartLine[]) => {
     setCart(lines);
-    cartCheckoutId.current = null;
+    cartCheckoutId.current=lines.length?crypto.randomUUID():null;
+    cartExpires.current=Date.now()+CART_TTL;
+    setCartError("");
   };
   const addToCart = () => {
     const pid = projectRef.current.id;
     if (pid == null) return;
+    if(cart.length&&cartProject!==pid&&!window.confirm("Ganti keranjang tersimpan dengan karya yang ini? Keranjang lama akan dikosongkan."))return;
     const current = cartProject === pid ? cart : [];
     const line = { product: shopSel.product, tshirtColor: shopSel.product === "tshirt" ? shopSel.tshirtColor : "",
       tshirtSize: shopSel.product === "tshirt" ? shopSel.tshirtSize : "", quantity: 1 };
@@ -2544,6 +2578,8 @@ export function App() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:z-50 focus:rounded-xl focus:bg-white focus:p-3">Lewati ke konten utama</a>
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <Header brandName={brandName} route={route} go={go} onCustom={startCustomNew} />
+      {cart.length>0&&!["aff-admin","checkout","ordered"].includes(route.view)&&!route.view.startsWith("aff-")&&<div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-2 text-sm"><button type="button" disabled={cartRestoring} onClick={()=>void resumeCart()} className="rounded-full bg-olive px-4 py-2 font-bold text-white">{cartRestoring?"Membuka…":"Lanjutkan Keranjang ("+cart.reduce((n,l)=>n+l.quantity,0)+")"}</button><button type="button" onClick={()=>{if(window.confirm("Kosongkan keranjang?"))changeCart([]);}} className="text-xs font-bold">Kosongkan</button></div>}
+      {cartError&&<p role="alert" className="mx-auto max-w-6xl px-4 text-sm text-berry">{cartError}</p>}
       <main id="main-content" style={route.view === "studio" ? { overflowAnchor: "none" } : undefined}>
         <Suspense fallback={<p role="status" className="p-6 text-center">Memuat halaman…</p>}>
         {route.view === "home" && (

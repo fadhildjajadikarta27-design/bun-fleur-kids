@@ -26,6 +26,7 @@ import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
+import { bestBundle } from "../../../server/src/bundles";
 
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 function linesOf(order: OrderOut): OrderOut["items"] {
@@ -87,6 +88,7 @@ const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
   products: ACTIVE_PRODUCT_IDS.map((id) => ({ id, basePrice: PRODUCT_DEFAULT_PRICES[id], priceLabel: "fixed" as const })),
   tshirtColors: ["Cream", "Mustard", "Terracotta", "Sage Green", "Brown"],
   tshirtSizes: ["2–3 tahun", "4–5 tahun", "6–7 tahun", "8–9 tahun", "10–12 tahun"],
+  bundles: [],
   shippingPolicy: { freeFrom: 100000, flatRate: 10000 },
   paymentGatewayConnected: false,
 };
@@ -782,6 +784,12 @@ export function Checkout({
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
+  const [isGift,setIsGift]=useState(false);
+  const [giftSender,setGiftSender]=useState("");
+  const [giftRecipient,setGiftRecipient]=useState("");
+  const [giftMessage,setGiftMessage]=useState("");
+  const [extraColor,setExtraColor]=useState("Cream");
+  const [extraSize,setExtraSize]=useState("");
   const [error, setError] = useState("");
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; rates: Partial<Record<ProductId, number>> } | null>(null);
@@ -822,7 +830,23 @@ export function Checkout({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const discount = appliedCoupon ? cart.reduce((n,line) => n + Math.floor(basePrice(cfg,line.product)*line.quantity*(appliedCoupon.rates[line.product] ?? 0)/100),0) : 0;
+  const bundle=appliedCoupon?null:bestBundle(cfg.bundles,cart.map(l=>({productType:l.product,quantity:l.quantity,unitPrice:basePrice(cfg,l.product)})));
+  const discount = appliedCoupon ? cart.reduce((n,line) => n + Math.floor(basePrice(cfg,line.product)*line.quantity*(appliedCoupon.rates[line.product] ?? 0)/100),0) : bundle?.savings??0;
+  const addSuggested=(ids:readonly ProductId[])=>{
+    const missing=ids.filter(id=>!cart.some(l=>l.product===id));
+    if(!missing.length)return;
+    if(missing.includes("tshirt")&&(!extraSize||!cfg.tshirtSizes.includes(extraSize))){setError("Pilih ukuran kaos untuk paket atau produk tambahan.");return;}
+    if(cart.length+missing.length>20||quantity+missing.length>140){setError("Keranjang mencapai batas jumlah barang.");return;}
+    setError("");setAppliedCoupon(null);setCouponMsg(couponInput?"Periksa ulang kupon untuk barang tambahan.":"");
+    changeCart([...cart,...missing.map(product=>({product,quantity:1,tshirtColor:product==="tshirt"?extraColor:"",tshirtSize:product==="tshirt"?extraSize:""}))]);
+  };
+  const missingProducts=ACTIVE_PRODUCT_IDS.filter(id=>!cart.some(l=>l.product===id));
+  const suggestions=[...missingProducts].sort((a,b)=>{
+    const gap=Math.max(0,cfg.shippingPolicy.freeFrom-(price-discount));
+    const pa=basePrice(cfg,a),pb=basePrice(cfg,b);
+    const score=(p:number)=>gap>0&&p>=gap?p-gap:gap>0?1000000+gap-p:p;
+    return score(pa)-score(pb);
+  }).slice(0,3);
   const netSubtotal = price - discount;
   const shipping = netSubtotal >= cfg.shippingPolicy.freeFrom ? 0 : cfg.shippingPolicy.flatRate;
   const remaining = Math.max(0, cfg.shippingPolicy.freeFrom - netSubtotal);
@@ -836,6 +860,8 @@ export function Checkout({
           tshirtColor: line.tshirtColor, tshirtSize: line.tshirtSize,
           expectedUnitPrice: basePrice(cfg,line.product), expectedCouponDiscountPct: appliedCoupon ? appliedCoupon.rates[line.product] : undefined })),
         expectedShippingCost: shipping,
+        expectedBundleDiscount:bundle?.savings??0,
+        gift:isGift?{sender:giftSender.trim(),recipient:giftRecipient.trim(),message:giftMessage.trim()}:null,
         childName: childName.trim(),
         couponCode: appliedCoupon?.code ?? "",
         customerName: customerName.trim(),
@@ -859,6 +885,7 @@ export function Checkout({
       return;
     }
     if (couponInput.trim() && !appliedCoupon) return setError("Pakai atau kosongkan kode kupon terlebih dahulu.");
+    if(isGift&&(giftSender.trim().length<2||giftRecipient.trim().length<2))return setError("Isi nama pengirim dan penerima hadiah.");
     if (customerName.trim().length < 2) return setError("Isi nama pemesan dulu ya.");
     if (whatsapp.replace(/\D/g, "").length < 9) return setError("Nomor WhatsApp perlu 9–15 digit angka.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Format email belum benar.");
@@ -895,6 +922,18 @@ export function Checkout({
         <div className="rounded-2xl bg-[#EEF4E4] p-3 text-sm font-bold text-olive-deep" role="status">{remaining === 0 ? "Selamat! Pesananmu mendapatkan gratis ongkir." : "Tambah belanja " + formatIDR(remaining) + " setelah diskon untuk mendapatkan gratis ongkir."}<div className="mt-2 h-2 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-olive transition-all" style={{width: Math.min(100, netSubtotal / cfg.shippingPolicy.freeFrom * 100) + "%"}} /></div><p className="mt-1 text-xs">Ongkir {formatIDR(cfg.shippingPolicy.flatRate)} per pesanan di bawah {formatIDR(cfg.shippingPolicy.freeFrom)}.</p></div>
       </section>
 
+      <section className="mt-4 space-y-3 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
+        <h2 className="font-display text-lg font-bold">Paket hemat &amp; lengkapi karyamu</h2>
+        <p className="text-xs text-[var(--dim)]">Satu diskon paket terbaik per transaksi, tidak digabung dengan kupon affiliate. Ongkir dihitung setelah diskon.</p>
+        {bundle&&<p className="rounded-xl bg-[#EEF4E4] p-3 font-bold text-olive-deep">Paket {bundle.name} aktif · hemat {formatIDR(bundle.savings)}</p>}
+        {cfg.bundles.filter(b=>b.productIds.reduce((n,id)=>n+basePrice(cfg,id),0)>b.price).map(b=>{
+          const normal=b.productIds.reduce((n,id)=>n+basePrice(cfg,id),0);
+          const missing=b.productIds.filter(id=>!cart.some(l=>l.product===id));
+          return <article key={b.id} className="flex flex-wrap items-center gap-2 rounded-xl border p-3"><div className="min-w-0 flex-1"><p className="font-bold">{b.name}</p><p className="text-xs">{b.productIds.map(id=>PRODUCT_META[id].title).join(" + ")}</p><p className="text-sm"><del>{formatIDR(normal)}</del> <strong>{formatIDR(b.price)}</strong></p></div><button type="button" disabled={create.isPending||validate.isPending||!missing.length} onClick={()=>addSuggested(b.productIds)} className="rounded-full bg-olive px-4 py-2 text-sm font-bold text-white disabled:opacity-40">{missing.length?"Lengkapi paket":"Sudah di keranjang"}</button></article>;
+        })}
+        {missingProducts.includes("tshirt")&&<div className="grid gap-2 sm:grid-cols-2"><label className="text-xs font-bold">Warna kaos tambahan<select className="block w-full rounded-xl border p-2" value={extraColor} onChange={e=>setExtraColor(e.target.value)}>{cfg.tshirtColors.map(c=><option key={c} value={c}>{FABRIC_LABELS[c]??c}</option>)}</select></label><label className="text-xs font-bold">Ukuran kaos tambahan<select className="block w-full rounded-xl border p-2" value={extraSize} onChange={e=>setExtraSize(e.target.value)}><option value="">Pilih ukuran</option>{cfg.tshirtSizes.map(v=><option key={v}>{v}</option>)}</select></label></div>}
+        {suggestions.length>0&&<><h3 className="font-bold">{remaining>0?"Produk tambahan untuk mengejar gratis ongkir":"Produk lain dari karya si kecil"}</h3>{suggestions.map(id=><div key={id} className="flex items-center gap-3 border-t pt-2"><div className="w-20 shrink-0"><ProductPreview product={id} project={project} name={childName} fabric={extraColor}/></div><div className="flex-1"><p className="font-bold">{PRODUCT_META[id].title}</p><p className="text-sm">{formatIDR(basePrice(cfg,id))}</p></div><button type="button" disabled={create.isPending||validate.isPending} onClick={()=>addSuggested([id])} className="rounded-full border border-olive px-3 py-2 text-xs font-bold text-olive-deep">+ Tambah</button></div>)}</>}
+      </section>
       <div className="mt-4 grid items-start gap-4 md:grid-cols-[1fr_360px]">
         <form
           className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]"
@@ -958,6 +997,15 @@ export function Checkout({
               />
             </div>
             <div>
+              <fieldset className="mb-4 space-y-2 rounded-2xl border border-[var(--border)] p-3">
+                <legend className="font-display font-bold">Pesanan hadiah</legend>
+                <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={isGift} onChange={e=>setIsGift(e.target.checked)}/> Jadikan hadiah</label>
+                {isGift&&<><p className="text-xs text-[var(--dim)]">Isi alamat pengiriman di atas dengan alamat penerima. Harga tidak dicantumkan di dalam paket.</p>
+                <label className="block text-sm font-bold">Nama pengirim<input required maxLength={80} className="block w-full rounded-xl border p-2" value={giftSender} onChange={e=>setGiftSender(e.target.value)}/></label>
+                <label className="block text-sm font-bold">Nama penerima<input required maxLength={80} className="block w-full rounded-xl border p-2" value={giftRecipient} onChange={e=>setGiftRecipient(e.target.value)}/></label>
+                <label className="block text-sm font-bold">Kartu ucapan<textarea maxLength={250} className="block w-full rounded-xl border p-2" value={giftMessage} onChange={e=>setGiftMessage(e.target.value)}/></label>
+                <div className="rounded-xl bg-[#FCF3DE] p-4 text-center text-[#53682F]"><p className="font-bold">Hadiah kecil, kenangan besar.</p><p className="mt-2">Untuk {giftRecipient||"Si Kecil"}</p><p className="my-2 whitespace-pre-wrap break-words italic">{giftMessage||"Sebuah hadiah istimewa untukmu."}</p><p>Dari {giftSender||"Pengirim"}</p><p className="mt-3 text-xs font-bold">Bun &amp; Fleur Kids</p></div></>}
+              </fieldset>
               <label htmlFor="co-notes" className="font-display text-sm font-bold">Catatan untuk tim kami (opsional)</label>
               <input
                 id="co-notes"
@@ -1019,6 +1067,7 @@ export function Checkout({
                 <dt className="text-[var(--dim)]">Harga produk</dt>
                 <dd className="font-display">{formatIDR(price)}</dd>
               </div>
+              {bundle&&<div className="flex justify-between gap-3"><dt>Diskon paket {bundle.name}</dt><dd className="font-bold text-olive-deep">−{formatIDR(bundle.savings)}</dd></div>}
               {appliedCoupon && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-[var(--dim)]">Diskon kupon {appliedCoupon.code}</dt>
@@ -1219,7 +1268,7 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
             <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Subtotal Produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
             {order.discountAmount > 0 && (
               <div className="flex justify-between gap-3">
-                <dt className="text-[var(--dim)]">Diskon {order.couponCode}</dt>
+                <dt className="text-[var(--dim)]">Diskon {order.bundleName||order.couponCode}</dt>
                 <dd className="font-display text-olive-deep">−{formatIDR(order.discountAmount)}</dd>
               </div>
             )}
@@ -1358,9 +1407,10 @@ export function OrderConfirmation({
         <dl className="mx-auto mt-4 max-w-md space-y-1.5 text-sm font-semibold">
           {order.childName.trim() && <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Nama anak</dt><dd className="text-right">{order.childName.trim()}</dd></div>}
           <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Pemesan</dt><dd className="text-right">{order.customerName}</dd></div>
+          {order.gift&&<div className="rounded-xl bg-[#EEF4E4] p-3 text-olive-deep">Pesanan hadiah · Untuk {order.gift.recipient} · Dari {order.gift.sender}</div>}
           <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2"><dt className="text-[var(--dim)]">Harga produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
           {order.discountAmount > 0 && (
-            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Diskon kupon {order.couponCode}</dt><dd className="font-display text-olive-deep">−{formatIDR(order.discountAmount)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Diskon {order.bundleName||order.couponCode}</dt><dd className="font-display text-olive-deep">−{formatIDR(order.discountAmount)}</dd></div>
           )}
           <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Ongkos kirim</dt><dd className="text-right">{order.shippingCost == null ? "Dikonfirmasi via WhatsApp" : order.shippingCost === 0 ? "GRATIS" : formatIDR(order.shippingCost)}</dd></div>
           <div className="flex justify-between gap-3"><dt>Total pesanan (sebelum kode unik)</dt><dd className="font-display text-olive-deep">{formatIDR(order.total)}</dd></div>
@@ -1709,9 +1759,10 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
             <div><dt className="inline text-[var(--dim)]">Nama anak: </dt><dd className="inline">{order.childName.trim() || "—"}</dd></div>
             <div className="sm:col-span-2"><dt className="inline text-[var(--dim)]">Alamat: </dt><dd className="inline">{order.address}</dd></div>
             {order.notes && <div className="sm:col-span-2"><dt className="inline text-[var(--dim)]">Catatan: </dt><dd className="inline">{order.notes}</dd></div>}
+            {order.gift&&<div className="sm:col-span-2 rounded-xl bg-[#FCF3DE] p-3 text-[#53682F]"><p className="font-extrabold">Pesanan hadiah — jangan sertakan harga dalam paket.</p><p>Untuk {order.gift.recipient} · Dari {order.gift.sender}</p><p className="whitespace-pre-wrap break-words">{order.gift.message}</p><button type="button" className="mt-2 rounded-full border px-3 py-2 text-xs font-bold" onClick={()=>{const g=order.gift;if(!g)return;const w=window.open("","_blank","width=650,height=500");if(!w)return;w.opener=null;const doc=w.document;doc.title="Kartu hadiah "+order.code;const body=doc.body;body.style.cssText="font-family:system-ui;text-align:center;color:#53682f;background:#fcf3de;padding:32px";for(const [tag,value] of [["h1","Hadiah kecil, kenangan besar."],["h2","Untuk "+g.recipient],["p",g.message],["p","Dari "+g.sender],["h3","Bun & Fleur Kids"]]){const el=doc.createElement(tag!);el.textContent=value!;el.style.whiteSpace="pre-wrap";body.appendChild(el);}w.print();}}>Cetak kartu ucapan</button></div>}
             <div><dt className="inline text-[var(--dim)]">Harga produk: </dt><dd className="inline">{formatIDR(order.productPrice)}</dd></div>
             {order.discountAmount > 0 && (
-              <div><dt className="inline text-[var(--dim)]">Diskon kupon {order.couponCode}: </dt><dd className="inline">−{formatIDR(order.discountAmount)}</dd></div>
+              <div><dt className="inline text-[var(--dim)]">Diskon {order.bundleName||order.couponCode}: </dt><dd className="inline">−{formatIDR(order.discountAmount)}</dd></div>
             )}
             <div><dt className="inline text-[var(--dim)]">Ongkir: </dt><dd className="inline">{order.shippingCost == null ? "belum dikonfirmasi" : formatIDR(order.shippingCost)}</dd></div>
             <div><dt className="inline text-[var(--dim)]">Total: </dt><dd className="inline font-display text-olive-deep">{formatIDR(order.total)}</dd></div>

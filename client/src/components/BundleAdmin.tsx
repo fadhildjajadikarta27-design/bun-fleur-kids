@@ -1,0 +1,16 @@
+import {useState} from "react";
+import {useMutation,useQuery,useQueryClient} from "@tanstack/react-query";
+import {api,type ApiResponse} from "../api";
+import {ACTIVE_PRODUCT_IDS,PRODUCT_META,formatIDR} from "../lib/shop";
+type Offer=ApiResponse<typeof api,"adminListBundles">["bundles"][number];
+const panel="rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]";
+const field="w-full rounded-xl border bg-[var(--bg)] p-2";
+function Editor({offer,onSaved}:{offer:Offer;onSaved?:()=>void}){
+ const qc=useQueryClient();const [name,setName]=useState(offer.name);const [price,setPrice]=useState(String(offer.price));const [ids,setIds]=useState(offer.productIds);const [active,setActive]=useState(offer.active);
+ const save=useMutation({mutationFn:()=>api.adminSaveBundle({id:offer.id,name,price:Number(price),productIds:ids,active}),onSuccess:()=>{void qc.invalidateQueries({queryKey:["adminBundles"]});void qc.invalidateQueries({queryKey:["shopConfig"]});onSaved?.();}});
+ return <form className={panel+" grid gap-3"} onSubmit={e=>{e.preventDefault();save.mutate();}}><label>Nama paket<input className={field} required minLength={2} maxLength={80} value={name} onChange={e=>setName(e.target.value)}/></label><label>Harga paket (Rp)<input className={field} required type="number" min={1000} max={70000000} value={price} onChange={e=>setPrice(e.target.value)}/></label><fieldset className="grid gap-1"><legend className="font-bold">Isi paket (masing-masing satu unit)</legend>{ACTIVE_PRODUCT_IDS.map(id=><label key={id} className="flex gap-2"><input type="checkbox" checked={ids.includes(id as Offer["productIds"][number])} onChange={e=>{const p=id as Offer["productIds"][number];setIds(old=>e.target.checked?[...old,p]:old.filter(x=>x!==p));}}/>{PRODUCT_META[id].title}</label>)}</fieldset><label className="flex gap-2"><input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)}/>Aktif di keranjang</label><button disabled={save.isPending||ids.length<2} className="rounded-full bg-olive px-4 py-2 font-bold text-white disabled:opacity-50">Simpan {formatIDR(Number(price)||0)}</button>{save.isError&&<p role="alert">{save.error.message}</p>}{save.isSuccess&&<p role="status">Paket tersimpan.</p>}</form>;
+}
+export function BundleAdmin(){
+ const q=useQuery({queryKey:["adminBundles"],queryFn:()=>api.adminListBundles({})});const [fresh,setFresh]=useState<Offer|null>(null);
+ return <div className="space-y-3"><section className={panel}><h2 className="font-display text-2xl font-bold">Paket Hemat & Promo</h2><p className="text-sm">Paket berlaku otomatis bila semua produk tersedia dalam keranjang. Satu paket terbaik per transaksi, tidak digabung dengan diskon kupon affiliate. Harga paket yang tidak lebih murah dari harga satuan tidak ditawarkan.</p><button type="button" className="mt-3 rounded-full bg-olive px-4 py-2 font-bold text-white" onClick={()=>setFresh({id:crypto.randomUUID(),name:"",price:1000,productIds:[],active:true})}>Buat paket baru</button></section>{fresh&&<Editor key={fresh.id} offer={fresh} onSaved={()=>setFresh(null)}/>}<div className="grid gap-3 lg:grid-cols-2">{q.data?.bundles.map(b=><Editor key={b.id} offer={b}/>)}</div>{q.isPending&&<p>Memuat paket…</p>}{q.isError&&<button onClick={()=>void q.refetch()}>Muat ulang paket</button>}</div>;
+}

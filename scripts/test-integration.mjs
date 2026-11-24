@@ -34,6 +34,7 @@ try {
   await ensureMigrations();
   const migrations = await sql`SELECT name FROM __port_migrations ORDER BY name`;
   assert.ok(migrations.some(m=>m.name==="0017_birthday_events.sql"));
+  assert.ok(migrations.some(m=>m.name==="0018_bundles_gifts.sql"));
   assert.equal((await sql`SELECT has_table_privilege('anon', 'public.payment_proofs', 'SELECT') AS allowed`)[0].allowed, false);
 
   const first = await call("listProjects");
@@ -271,6 +272,23 @@ try {
   assert.notEqual(exact.payableTotal, discounted.payableTotal);
   await call("adminSetProductPrice", {productId: "poster", price: 24900}, admin);
   console.log("PASS multi-product cart, automatic shipping, per-item discount, payment, commission and idempotency");
+  const packageArgs={...orderArgs,checkoutId:randomUUID(),productType:"poster",couponCode:"",
+    items:[{productType:"poster",quantity:1,expectedUnitPrice:24900},{productType:"papercraft",quantity:1,expectedUnitPrice:36900}],
+    expectedBundleDiscount:6900,expectedShippingCost:10000,gift:{sender:"QA Parent",recipient:"QA Friend",message:"Selamat ulang tahun!"}};
+  const packaged=(await call("createOrder",packageArgs,owner)).body.order;
+  assert.equal(packaged.bundleName,"Little Artist");
+  assert.equal(packaged.productPrice,61800);
+  assert.equal(packaged.discountAmount,6900);
+  assert.equal(packaged.total,64900);
+  assert.equal(packaged.items.reduce((n,i)=>n+i.discount,0),6900);
+  assert.equal(packaged.gift.recipient,"QA Friend");
+  assert.equal((await call("trackOrder",{code:packaged.code,whatsapp:phone})).body.order.gift,null);
+  await call("adminListBundles",{},{expected:401});
+  await call("adminSaveBundle",{id:"little-artist",name:"Little Artist",productIds:["poster","papercraft"],price:54900,active:false},admin);
+  await call("createOrder",{...packageArgs,checkoutId:randomUUID()},{...owner,expected:400});
+  await call("adminSaveBundle",{id:"little-artist",name:"Little Artist",productIds:["poster","papercraft"],price:54900,active:true},admin);
+  console.log("PASS bundle server pricing, gifts and admin access");
+
   await call("adminSetAffiliateProductDiscount", { ...rule, discountPct: null }, admin);
   assert.equal(await rate("puzzle"), 10);
   const stale = await call("createOrder", { ...puzzle, checkoutId: randomUUID() }, { ...owner, expected: 400 });

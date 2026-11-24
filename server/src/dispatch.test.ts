@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { dispatchAction } from "./dispatch.js";
 import { Actions } from "./actions.js";
+import { bestBundle } from "./bundles.js";
 
 describe("Active product catalog", () => {
   test("exactly seven active products at the approved fixed prices", async () => {
-    const db = () => ({ select: () => ({ from: async () => [] }) });
+    const db = () => ({ select: () => ({ from: () => Object.assign(Promise.resolve([]), {orderBy: async () => []}) }) });
     const res = await Actions.getShopConfig.handler({ db } as never, {});
     expect(res.products).toEqual([
       { id: "poster", basePrice: 24900, priceLabel: "fixed" },
@@ -158,4 +159,16 @@ describe("Affiliate input validation", () => {
     const result = await dispatchAction("actionDoesNotExist", {});
     expect(result.status).toBe(404);
   });
+});
+
+describe("Bundle discount",()=>{
+ test("allocates a single best bundle, never discounts extra units",()=>{
+  const offers=[{id:"a",name:"Little Artist",productIds:["poster","papercraft"],price:54900,active:true}];
+  const items=[{productType:"poster",quantity:2,unitPrice:24900},{productType:"papercraft",quantity:1,unitPrice:36900}];
+  const match=bestBundle(offers,items);
+  expect(match?.savings).toBe(6900);
+  expect(match?.allocations.reduce((n,x)=>n+x,0)).toBe(6900);
+  expect(bestBundle(offers,items.slice(0,1))).toBeNull();
+  expect(bestBundle([{...offers[0]!,active:false}],items)).toBeNull();
+ });
 });

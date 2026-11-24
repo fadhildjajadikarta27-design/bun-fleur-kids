@@ -10,6 +10,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import * as schema from "./schema.js";
 import { isPaymentProof } from "./payment-proof.js";
+import { bestBundle } from "./bundles.js";
 
 const paint = z.string().regex(/^#[a-f0-9]{6}$/i, "Warna karya tidak valid.");
 const strokeSchema = z.object({
@@ -112,6 +113,9 @@ async function catalogPrices(db: Database): Promise<Record<ProductId, number>> {
   return { ...DEFAULT_PRICES, ...Object.fromEntries(overrides.map(({ productId, price }) => [productId, price])) };
 }
 
+const bundleOut=z.object({id:z.string().min(1).max(60),name:z.string().trim().min(2).max(80),productIds:z.array(z.enum(ACTIVE_PRODUCT_IDS)).min(2).max(7).refine(ids=>new Set(ids).size===ids.length),price:z.number().int().min(1000).max(70000000),active:z.boolean()});
+const giftOut=z.object({sender:z.string().trim().min(2).max(80),recipient:z.string().trim().min(2).max(80),message:z.string().trim().max(250)});
+async function shopBundles(db:Database){const rows=await db.select().from(schema.shopBundles).orderBy(schema.shopBundles.id);return rows.map(r=>bundleOut.parse({...r,active:r.active===1}));}
 const orderItem = z.object({ productType: z.enum(PRODUCT_IDS), variant: z.string(), quantity: z.number().int().positive(), unitPrice: z.number(), gross: z.number(), discount: z.number() });
 const cartItemRequest = z.object({
   productType: purchasableProduct, quantity: z.number().int().min(1).max(20),
@@ -158,6 +162,8 @@ const orderOut = z.object({
   productPrice: z.number(),
   quantity: z.number(),
   items: z.array(orderItem),
+  bundleName:z.string(),
+  gift:giftOut.nullable(),
   couponCode: z.string(),
   affiliateId: z.number().nullable(),
   discountAmount: z.number(),
@@ -224,6 +230,8 @@ function orderToOut(row: OrderRow): z.infer<typeof orderOut> {
     productPrice: row.productPrice,
     quantity: row.quantity,
     items: orderItems(row),
+    bundleName:row.bundleName,
+    gift:row.gift,
     couponCode: row.couponCode,
     affiliateId: row.affiliateId,
     discountAmount: row.discountAmount,
@@ -901,6 +909,22 @@ export const Actions = {
     },
   }),
 
+  adminListBundles: defineAction({
+    request:z.object({}),response:z.object({bundles:z.array(bundleOut)}),
+    async handler(ctx){return {bundles:await shopBundles(schemaDb(ctx))};},
+  }),
+  adminSaveBundle: defineAction({
+    request:bundleOut,response:z.object({ok:z.literal(true)}),
+    async handler(ctx,args):Promise<{ok:true}>{
+      return schemaDb(ctx).transaction(async db=>{
+        await lockCheckout(db);
+        const values={...args,active:args.active?1:0};
+        await db.insert(schema.shopBundles).values(values).onConflictDoUpdate({target:schema.shopBundles.id,set:{name:values.name,productIds:values.productIds,price:values.price,active:values.active}});
+        await audit(db,null,"bundle.updated",args.id);
+        return {ok:true};
+      });
+    },
+  }),
   getShopConfig: defineAction({
     description:
       "Returns the centralized shop configuration: the six physical products with their base prices in IDR, the t-shirt fabric colors and sizes, and whether an online payment gateway is connected.",
@@ -915,6 +939,7 @@ export const Actions = {
       ),
       tshirtColors: z.array(z.string()),
       tshirtSizes: z.array(z.string()),
+      bundles:z.array(bundleOut),
       shippingPolicy: z.object({ freeFrom: z.number().int().positive(), flatRate: z.number().int().nonnegative() }),
       paymentGatewayConnected: z.boolean(),
     }),
@@ -928,6 +953,7 @@ export const Actions = {
         })),
         tshirtColors: [...TSHIRT_COLORS],
         tshirtSizes: [...TSHIRT_SIZES],
+        bundles:(await shopBundles(schemaDb(ctx))).filter(b=>b.active),
         shippingPolicy: SHIPPING_POLICY,
         // No Midtrans/Xendit (or other gateway) credentials exist in this
         // project yet, so online payment stays off: orders are recorded
@@ -948,6 +974,8 @@ export const Actions = {
       productType: purchasableProduct,
       items: z.array(cartItemRequest).min(1).max(20).optional(),
       expectedShippingCost: z.number().int().nonnegative().optional(),
+      expectedBundleDiscount:z.number().int().nonnegative().optional(),
+      gift:giftOut.nullable().optional(),
       tshirtColor: z.string().max(40).default(""),
       tshirtSize: z.string().max(40).default(""),
       childName: z.string().trim().max(24).optional(),
@@ -1020,6 +1048,9 @@ export const Actions = {
           return { productType: item.productType, quantity: item.quantity, unitPrice, gross,
             discount: Math.floor(gross * pct / 100), variant: productVariant(item.productType, item.tshirtColor, item.tshirtSize) };
         });
+        const bundle = affiliate ? null : bestBundle(await shopBundles(db),items);
+        if(args.expectedBundleDiscount!==undefined&&args.expectedBundleDiscount!==(bundle?.savings??0))throw new Error("Promo paket berubah. Periksa kembali keranjang.");
+        if(bundle)items.forEach((item,i)=>{item.discount+=bundle.allocations[i]??0;});
         const first = items[0]!;
         const price = items.reduce((n, item) => n + item.gross, 0);
         const discountAmount = items.reduce((n, item) => n + item.discount, 0);
@@ -1062,6 +1093,8 @@ export const Actions = {
             checkoutKey,
             quantity: totalQuantity,
             items,
+            bundleName:bundle?.name??"",
+            gift:args.gift??null,
             projectId: project.id,
             templateId: project.templateId,
             customDef: project.customDef,
@@ -1336,7 +1369,7 @@ export const Actions = {
       const row = rows[0];
       if (!row) return { order: null };
       if (normalizeWa(row.whatsapp) !== normalizeWa(args.whatsapp)) return { order: null };
-      return { order: orderToOut({ ...row, customerName: "", email: "", address: "", notes: "", affiliateId: null }) };
+      return { order: orderToOut({ ...row, customerName: "", email: "", address: "", notes: "", gift:null, affiliateId: null }) };
     },
   }),
 

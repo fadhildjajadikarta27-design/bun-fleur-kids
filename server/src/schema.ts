@@ -83,6 +83,8 @@ export const orders = pgTable("orders", {
   quantity: integer("quantity").notNull().default(1),
   // Empty for historical single-product orders. New carts snapshot every line.
   items: jsonb("items").$type<{ productType: typeof ordersProductIds[number]; variant: string; quantity: number; unitPrice: number; gross: number; discount: number }[]>().notNull().default([]),
+  bundleName: text("bundle_name").notNull().default(""),
+  gift: jsonb("gift").$type<{sender:string;recipient:string;message:string}>(),
   paymentReference: text("payment_reference"),
   templateId: text("template_id").notNull(),
   customDef: text("custom_def").notNull().default(""),
@@ -339,4 +341,8 @@ export const birthdayEvents = pgTable("birthday_events", {
   trackingNumber: text("tracking_number").notNull().default(""),
   createdAt: timestamp("created_at",{withTimezone:true,mode:"date"}).notNull(),
   updatedAt: timestamp("updated_at",{withTimezone:true,mode:"date"}).notNull(),
+});
+
+export const shopBundles=pgTable("shop_bundles",{
+ id:text("id").primaryKey(),name:text("name").notNull(),productIds:jsonb("product_ids").$type<string[]>().notNull(),price:integer("price").notNull(),active:integer("active").notNull().default(1),
 });
