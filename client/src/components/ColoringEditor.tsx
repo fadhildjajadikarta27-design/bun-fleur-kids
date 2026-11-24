@@ -3,6 +3,7 @@
 // artwork, undo/redo, zoom & pan, and the personalized name plaque.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { backgroundUrl } from "../../../server/src/backgrounds";
 import { MIN_ART_ZOOM, clampArtPan, clampArtZoom, pointToArt, scribbleGoal, zoomArtAt } from "../lib/editor-touch";
 import {
 INK,
@@ -41,6 +42,7 @@ export function ArtworkSvg({
   nameAlign = "center",
   svgRef,
   showLabel = true,
+  backgroundId,
   onRegionTap,
   children,
 }: {
@@ -54,6 +56,7 @@ export function ArtworkSvg({
   nameAlign?: "left" | "center" | "right";
   svgRef?: React.RefObject<SVGSVGElement | null>;
   showLabel?: boolean;
+  backgroundId?: string;
   onRegionTap?: (regionId: string) => void;
   children?: React.ReactNode;
 }) {
@@ -85,6 +88,7 @@ export function ArtworkSvg({
           )}
         </clipPath>
       </defs>
+      {backgroundUrl(backgroundId) && <image data-background="true" href={backgroundUrl(backgroundId)} x={0} y={0} width={vw} height={vh} preserveAspectRatio="xMidYMid slice" pointerEvents="none" />}
       {/* Name plaque behind the artwork's label area */}
       {showLabel && displayName && <rect
         x={template.label.x - 8}
