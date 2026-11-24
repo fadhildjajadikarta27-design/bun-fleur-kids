@@ -1340,59 +1340,61 @@ export const Actions = {
       if (isTrivialPin(args.pin)) {
         throw new Error("PIN terlalu mudah ditebak. Hindari 0000, 1111, 1234, dan urutan angka.");
       }
-      const db = ctx.db<typeof schema>();
-      const email = args.email.trim().toLowerCase();
-      const whatsapp = normalizeWa(args.whatsapp);
-      const intlWa = whatsapp.startsWith("0") ? `62${whatsapp.slice(1)}` : whatsapp;
-      const customCoupon = args.couponCode.trim().toUpperCase();
-
-      const known = await db.select({ id: schema.affiliates.id })
-        .from(schema.affiliates)
-        .where(or(
-          eq(schema.affiliates.email, email),
-          eq(schema.affiliates.whatsapp, whatsapp),
-          eq(schema.affiliates.whatsapp, intlWa),
-        ))
-        .limit(1);
-      if (known.length) {
-        throw new Error("Nomor HP atau email sudah terdaftar. Silakan masuk dengan nomor HP dan PIN, atau hubungi admin.");
-      }
-      if (customCoupon) {
-        const clash = await db.select({ id: schema.affiliates.id })
-          .from(schema.affiliates)
-          .where(eq(schema.affiliates.couponCode, customCoupon))
-          .limit(1);
-        if (clash.length) throw new Error("Kode kupon tersebut sudah digunakan. Coba kode lain.");
-      }
       const pinHash = await hashPin(args.pin);
-      const now = new Date();
-      // Database has a unique index for normalized phone numbers to prevent
-      // a concurrent duplicate registration with a different email address.
-      const inserted = await db.insert(schema.affiliates).values({
-        name: args.fullName.trim(),
-        email,
-        whatsapp,
-        instagram: args.instagram.trim().replace(/^@/, ""),
-        tiktok: args.tiktok.trim().replace(/^@/, ""),
-        couponCode: customCoupon || `BFK${randomToken(8).toUpperCase()}`,
-        discountPct: 10,
-        commissionPct: 30,
-        pinHash,
-        status: "active",
-        failedAttempts: 0,
-        lockedUntil: null,
-        createdAt: now,
-        updatedAt: now,
-      }).onConflictDoNothing().returning();
-      const affiliate = inserted[0];
-      if (!affiliate) {
-        throw new Error("Nomor HP, email, atau kode kupon sudah digunakan. Coba kode lain atau login.");
-      }
-      await audit(db, affiliate.id, "affiliate.self_registered",
-        "Akun didaftarkan mandiri dengan nomor HP dan PIN; tanpa OTP/konfirmasi WhatsApp.");
-      const sessionToken = await createAffiliateSession(db, affiliate.id);
+      const result = await ctx.db<typeof schema>().transaction(async (db) => {
+        const email = args.email.trim().toLowerCase();
+        const whatsapp = normalizeWa(args.whatsapp);
+        const intlWa = whatsapp.startsWith("0") ? `62${whatsapp.slice(1)}` : whatsapp;
+        const customCoupon = args.couponCode.trim().toUpperCase();
+
+        const known = await db.select({ id: schema.affiliates.id })
+          .from(schema.affiliates)
+          .where(or(
+            eq(schema.affiliates.email, email),
+            eq(schema.affiliates.whatsapp, whatsapp),
+            eq(schema.affiliates.whatsapp, intlWa),
+          ))
+          .limit(1);
+        if (known.length) {
+          throw new Error("Nomor HP atau email sudah terdaftar. Silakan masuk dengan nomor HP dan PIN, atau hubungi admin.");
+        }
+        if (customCoupon) {
+          const clash = await db.select({ id: schema.affiliates.id })
+            .from(schema.affiliates)
+            .where(eq(schema.affiliates.couponCode, customCoupon))
+            .limit(1);
+          if (clash.length) throw new Error("Kode kupon tersebut sudah digunakan. Coba kode lain.");
+        }
+        const now = new Date();
+        // Database has a unique index for normalized phone numbers to prevent
+        // a concurrent duplicate registration with a different email address.
+        const inserted = await db.insert(schema.affiliates).values({
+          name: args.fullName.trim(),
+          email,
+          whatsapp,
+          instagram: args.instagram.trim().replace(/^@/, ""),
+          tiktok: args.tiktok.trim().replace(/^@/, ""),
+          couponCode: customCoupon || `BFK${randomToken(8).toUpperCase()}`,
+          discountPct: 10,
+          commissionPct: 30,
+          pinHash,
+          status: "active",
+          failedAttempts: 0,
+          lockedUntil: null,
+          createdAt: now,
+          updatedAt: now,
+        }).onConflictDoNothing().returning();
+        const affiliate = inserted[0];
+        if (!affiliate) {
+          throw new Error("Nomor HP, email, atau kode kupon sudah digunakan. Coba kode lain atau login.");
+        }
+        const sessionToken = await createAffiliateSession(db, affiliate.id);
+        await audit(db, affiliate.id, "affiliate.self_registered",
+          "Akun didaftarkan mandiri dengan nomor HP dan PIN; tanpa OTP/konfirmasi WhatsApp.");
+        return { sessionToken, affiliate: toAffiliatePublic(affiliate) };
+      });
       ctx.invalidateQueries();
-      return { sessionToken, affiliate: toAffiliatePublic(affiliate) };
+      return result;
     },
   }),
 

@@ -80,6 +80,13 @@ try {
   assert.equal(invitedRow.inviteToken, regenerated.inviteToken);
   assert.equal(invitedRow.hasPin, false);
   assert.notEqual(invitedRow.inviteToken, invited.inviteToken);
+  const allAccountIds = (await sql`SELECT id FROM affiliates ORDER BY id`).map(({ id }) => id);
+  assert.deepEqual(affiliateList.map(({ id }) => id).sort((a, b) => a - b), allAccountIds);
+  const selfRow = affiliateList.find(({ id }) => id === registered.affiliate.id);
+  assert.equal(selfRow.status, "active");
+  assert.equal(selfRow.inviteState, "none");
+  const registrationEvents = await sql`SELECT affiliate_id FROM affiliate_audit WHERE action = 'affiliate.self_registered' AND affiliate_id = ${registered.affiliate.id}`;
+  assert.equal(registrationEvents.length, 1);
   console.log("PASS self-registration appears in admin list; latest legacy invite stays visible");
   await call("affiliateApply", { ...affiliateArgs, whatsapp: phone, email: `duplicate-${token}@example.test`, couponCode: "DUP" + token }, { expected: 400 });
   const coupon = (await call("validateCoupon", { code: affiliateArgs.couponCode })).body;

@@ -1157,6 +1157,10 @@ export function AffiliateAdmin() {
   const affiliates = useQuery({
     queryKey: ["adminAffiliates"],
     queryFn: () => api.adminListAffiliates({}),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: true,
     retry: false,
   });
   const listUnavailable = affiliates.isError || affiliates.isPaused;
@@ -1285,7 +1289,8 @@ export function AffiliateAdmin() {
         <h3 className="font-display text-lg font-extrabold">Affiliate Teratas</h3>
         <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Urutan berdasarkan nilai penjualan bersih yang sudah terbayar.</p>
         <div className="mt-3 space-y-2">
-          {leaders.length === 0 && <p className="text-sm font-semibold text-[var(--dim)]">Belum ada mitra terdaftar.</p>}
+          {!affiliates.data && <p className="text-sm font-semibold text-[var(--dim)]">Data mitra belum tersedia.</p>}
+          {affiliates.data && leaders.length === 0 && <p className="text-sm font-semibold text-[var(--dim)]">Belum ada mitra terdaftar.</p>}
           {leaders.map((a, index) => (
             <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[var(--bg)] px-4 py-3">
               <p className="text-sm font-bold"><span className="mr-3 font-display text-olive-deep">#{index + 1}</span>{a.name}</p>
@@ -1389,7 +1394,11 @@ export function AffiliateAdmin() {
             <h3 className="font-display text-lg font-extrabold">Kelola Seluruh Affiliate</h3>
             <p className="text-sm font-semibold text-[var(--dim)]">Cari berdasarkan nama, HP, email, Instagram, TikTok, atau kode kupon. Atur status, komisi, diskon, dan KPI di tiap kartu.</p>
           </div>
-          {affiliates.data && <p className="font-display text-sm font-bold text-olive-deep">{filtered.length} dari {rows.length} akun</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            {affiliates.data && <p className="font-display text-sm font-bold text-olive-deep">{filtered.length} dari {rows.length} akun</p>}
+            {(search || statusFilter !== "all") && <button type="button" onClick={() => { setSearch(""); setStatusFilter("all"); }} className="rounded-full bg-[var(--surface-alt)] px-3 py-2 text-xs font-bold ring-1 ring-[var(--border)]">Tampilkan semua</button>}
+            <button type="button" disabled={affiliates.isFetching} onClick={() => void affiliates.refetch()} className="rounded-full bg-[var(--surface-alt)] px-3 py-2 text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">{affiliates.isFetching ? "Memuat…" : "Muat ulang affiliate"}</button>
+          </div>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
