@@ -20,7 +20,6 @@ import { NAME_FONTS, type TemplateDef } from "../lib/model";
 import { getTemplate } from "../lib/registry";
 import { buildCustomTemplate, parseCustomDef } from "../lib/custom";
 import { buildPillowPdf, downloadBlob } from "../lib/pdf";
-import { papercraftSampleUrl } from "../papercraft-sample";
 import { logoUrl } from "../assets-inline";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
