@@ -3329,13 +3329,13 @@ function humanArt(kind:string,level:number):BuiltArt {
  const parts:CraftPart[]=[
   ballPart({id:"head",label:"Kepala",assembly:"Rakit kepala.",r:.46,region:"skin",transform:{t:[0,.57,0]}}),
   ballPart({id:"hair",label:"Rambut",assembly:"Rakit rambut.",r:.48,region:"hair",transform:{s:[1,.55,1],t:[0,.83,-.04]}}),
-  boxPart({id:"body",label:"Baju",assembly:"Lipat badan.",w:.69,h:.5,d:.35,region:"clothes",transform:{t:[0,-.22,0]}}),
-  ...[-1,1].map(i=>boxPart({id:"leg"+i,label:"Kaki",assembly:"Lipat kaki.",w:.22,h:.29,d:.25,region:"pants",transform:{t:[i*.16,-.61,0]}})),
+  boxPart({id:"body",label:"Baju",assembly:"Lipat badan.",w:.69,h:.5,d:.35,regions:{front:"clothes",back:"clothes",left:"clothes",right:"clothes",top:"clothes",bottom:"clothes"},transform:{t:[0,-.22,0]}}),
+  ...[-1,1].map(i=>boxPart({id:"leg"+i,label:"Kaki",assembly:"Lipat kaki.",w:.22,h:.29,d:.25,regions:{front:"pants",back:"pants",left:"pants",right:"pants",top:"pants",bottom:"pants"},transform:{t:[i*.16,-.61,0]}})),
  ];
  const details:DetailEl[]=[...eyesAt(240,120,24,6),smileAt(240,145,24)];
- if(level>=2){regions.push({id:"shoes",label:"Sepatu",els:[E(211,286,24,12),E(269,286,24,12)]});parts.push(...[-1,1].map(i=>boxPart({id:"shoe"+i,label:"Sepatu",assembly:"Lipat sepatu.",w:.27,h:.12,d:.32,region:"shoes",transform:{t:[i*.16,-.82,.04]}})));}
+ if(level>=2){regions.push({id:"shoes",label:"Sepatu",els:[E(211,286,24,12),E(269,286,24,12)]});parts.push(...[-1,1].map(i=>boxPart({id:"shoe"+i,label:"Sepatu",assembly:"Lipat sepatu.",w:.27,h:.12,d:.32,regions:{front:"shoes",back:"shoes",left:"shoes",right:"shoes",top:"shoes",bottom:"shoes"},transform:{t:[i*.16,-.82,.04]}})));}
  if(level>=3){regions.push({id:"badge",label:"Lencana",els:[Ci(240,208,16)]});parts.push(flatPart({id:"badge",label:"Lencana",assembly:"Tempel lencana.",poly:discPoly(.10),region:"badge",transform:{t:[0,-.16,.19]}}));}
- if(level>=4||["chef","doctor","pilot","police","astronaut"].includes(kind)){regions.push({id:"accessory",label:"Aksesori",els:kind==="chef"?[E(210,48,24,25),E(240,40,28,30),E(270,48,24,25),Rc(183,60,114,25,5)]:kind==="doctor"?[Rc(195,52,90,30,8)]:kind==="astronaut"?[E(240,125,79,78)]:[E(240,57,54,21)]});if(kind==="astronaut"){const a=regions.pop()!;regions.unshift(a);}parts.push(boxPart({id:"accessory",label:"Aksesori",assembly:"Lipat aksesori.",w:.54,h:.16,d:.22,region:"accessory",transform:{t:[0,1.02,0]}}));}
+ if(level>=4||["chef","doctor","pilot","police","astronaut"].includes(kind)){regions.push({id:"accessory",label:"Aksesori",els:kind==="chef"?[E(210,48,24,25),E(240,40,28,30),E(270,48,24,25),Rc(183,60,114,25,5)]:kind==="doctor"?[Rc(195,52,90,30,8)]:kind==="astronaut"?[E(240,125,79,78)]:[E(240,57,54,21)]});if(kind==="astronaut"){const a=regions.pop()!;regions.unshift(a);}parts.push(boxPart({id:"accessory",label:"Aksesori",assembly:"Lipat aksesori.",w:.54,h:.16,d:.22,regions:{front:"accessory",back:"accessory",left:"accessory",right:"accessory",top:"accessory",bottom:"accessory"},transform:{t:[0,1.02,0]}}));}
  if(level>=5){regions.push({id:"pocket",label:"Saku",els:[Rc(252,224,24,18,4)]},{id:"ball",label:"Bola",els:[Ci(351,270,27)]});parts.push(flatPart({id:"pocket",label:"Saku",assembly:"Tempel saku.",poly:[[-.08,-.06],[.08,-.06],[.08,.06],[-.08,.06]],region:"pocket",transform:{t:[.16,-.31,.19]}}),ballPart({id:"ball",label:"Bola",assembly:"Rakit bola.",r:.16,region:"ball",transform:{t:[.7,-.75,0]}}));}
  return {regions,details,parts};
 }
