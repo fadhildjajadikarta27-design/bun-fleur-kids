@@ -1840,12 +1840,12 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
             {["awaiting", "waiting_verification", "unmatched", "rejected"].includes(order.payState) && order.orderStatus !== "cancelled" && (
               <>
                 <label className="text-xs font-semibold">
-                  Referensi mutasi QRIS
+                  Nomor referensi pembayaran (wajib)
                   <input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)}
-                    maxLength={80} autoComplete="off" className="ml-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2" />
+                    maxLength={80} placeholder="Contoh: QRIS123456" autoComplete="off" className="ml-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2" />
                 </label>
-                <button type="button" disabled={verify.isPending || paymentReference.trim().length < 4} onClick={() => verify.mutate("verify")} className="rounded-full bg-olive px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
-                  Verifikasi Pembayaran
+                <button type="button" disabled={verify.isPending || !/^[A-Z0-9-]{4,80}$/i.test(paymentReference.trim())} onClick={() => { if (window.confirm(`Tandai pesanan ${order.code} sebagai LUNAS? Pastikan pembayaran ${formatIDR(order.payableTotal)} benar-benar diterima. Komisi affiliate akan dikonfirmasi jika berlaku.`)) verify.mutate("verify"); }} className="rounded-full bg-olive px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
+                  Tandai Paid / Lunas
                 </button>
                 <button type="button" disabled={verify.isPending} onClick={() => verify.mutate("reject")} className="rounded-full bg-berry px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
                   Tolak Pembayaran
@@ -1880,7 +1880,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
           <label htmlFor={`status-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Status pesanan</label>
           <select id={`status-${order.id}`} value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value as OrderOut["orderStatus"]); setSaved(false); }} className={selectCls}>
             <option value="pending_payment">Menunggu Pembayaran</option>
-            <option value="paid">Lunas</option>
+            <option value="paid" disabled={order.paymentStatus !== "paid"}>Lunas</option>
             <option value="confirmed">Terkonfirmasi</option>
             <option value="design_review">Design Review</option>
             <option value="production">Produksi</option>
