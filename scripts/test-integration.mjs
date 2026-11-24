@@ -138,10 +138,10 @@ try {
   assert.equal(order.childName, "");
   assert.deepEqual(order.colors, project.colors);
   await call("updateOrder", { id: order.id, paymentStatus: "paid" }, { ...admin, expected: 400 });
-  await call("updateOrder", { id: order.id, shippingCost: 12000 }, admin);
+  await call("updateOrder", { id: order.id, shippingCost: 12000 }, {...admin, expected:400});
   assert.equal((await call("trackOrder", { code: order.code, whatsapp: "089000000000" })).body.order, null);
   const tracked = (await call("trackOrder", { code: order.code, whatsapp: "+62" + digits })).body.order;
-  assert.equal(tracked.shippingCost, 12000);
+  assert.equal(tracked.shippingCost, 0);
   assert.equal(tracked.address, "");
   const data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR7sAAAAASUVORK5CYII=";
   await call("confirmTransfer", { code: order.code, whatsapp: phone, proof: { mime: "image/jpeg", data } }, { expected: 400 });

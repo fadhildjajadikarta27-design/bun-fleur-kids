@@ -28,6 +28,12 @@ describe("coloring editor gesture geometry", () => {
     expect(zoomArtAt(original, 999, 400, 350, box, size).zoom).toBe(4);
   });
 
+  test("zoom out below original scale keeps the artwork centered", () => {
+    const smaller = zoomArtAt(original, 0.1, 400, 350, box, size);
+    expect(smaller).toEqual({ zoom: 0.5, pan: {x:0,y:0} });
+    expect(pointToArt(400,350,box,smaller,size)).toEqual({x:300,y:300});
+  });
+
   test("the same view is preserved through zoom in and zoom out", () => {
     const bigger = zoomArtAt(original, 2.5, 520, 440, box, size);
     const originalAgain = zoomArtAt(bigger, 1, 520, 440, box, size);

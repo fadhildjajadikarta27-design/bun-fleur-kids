@@ -4,10 +4,11 @@ export type Point = { x: number; y: number };
 export type CanvasView = { zoom: number; pan: Point };
 export type CanvasBounds = { left: number; top: number; width: number; height: number };
 
+export const MIN_ART_ZOOM = 0.5;
 export const MAX_ART_ZOOM = 4;
 
 export function clampArtZoom(value: number): number {
-  return Math.min(MAX_ART_ZOOM, Math.max(1, value));
+  return Math.min(MAX_ART_ZOOM, Math.max(MIN_ART_ZOOM, value));
 }
 
 export function clampArtPan(pan: Point, zoom: number, viewBox: readonly [number, number]): Point {

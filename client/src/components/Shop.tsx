@@ -245,10 +245,10 @@ const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
   celengan: "/products/celengan.webp", puzzle: "/products/puzzle.webp", placemat: "/products/placemat.webp", growthchart: "/products/growthchart.webp",
 };
 export function CatalogProductPreview({ product, project }: { product: ProductId; project: ShopProject }) {
-  const [failed, setFailed] = useState(false);
-  const src = failed && product === "papercraft" ? papercraftSampleUrl : CATALOG_PHOTOS[product];
-  return src && (!failed || product === "papercraft") ? <figure>
-    <img src={src} alt={`Contoh produk ${PRODUCT_META[product].title}`} loading="lazy" decoding="async" onError={() => setFailed(true)} className="mx-auto aspect-square w-full rounded-2xl object-contain" />
+  const [failures, setFailures] = useState(0);
+  const src = failures === 0 ? CATALOG_PHOTOS[product] : failures === 1 && product === "papercraft" ? papercraftSampleUrl : undefined;
+  return src ? <figure>
+    <img src={src} alt={`Contoh produk ${PRODUCT_META[product].title}`} loading="lazy" decoding="async" onError={() => setFailures(n=>n+1)} className="mx-auto aspect-square w-full rounded-2xl object-contain" />
     <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Foto contoh produk; desain pesanan mengikuti hasil mewarnai anak.</figcaption>
   </figure> : <ProductPreview product={product} project={project} name={project.childName} fabric="Cream" />;
 }
@@ -1859,9 +1859,10 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
           />
         </div>
         <div>
-          <label htmlFor={`ongkir-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Ongkir pesanan (Rp, otomatis untuk pesanan baru)</label>
+          <label htmlFor={`ongkir-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Ongkir pesanan (otomatis untuk pesanan baru)</label>
           <input
             id={`ongkir-${order.id}`}
+            disabled={order.shippingCost !== null}
             {...FIELDS.updateOrder.shippingCost}
             type="number"
             value={ongkir}

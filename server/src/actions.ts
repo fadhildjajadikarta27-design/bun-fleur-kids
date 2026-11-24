@@ -1306,6 +1306,7 @@ export const Actions = {
         if (paymentStatus !== row.paymentStatus) {
           throw new Error("Gunakan verifikasi QRIS untuk mengubah status pembayaran.");
         }
+        if (orderStatus === "cancelled" && paymentStatus === "paid") throw new Error("Gunakan proses refund sebelum membatalkan pesanan lunas.");
         if (orderStatus === "paid" && paymentStatus !== "paid") {
           throw new Error("Pembayaran belum terverifikasi.");
         }
@@ -1316,6 +1317,9 @@ export const Actions = {
         const trackingNumber = args.trackingNumber ?? row.trackingNumber;
         if (orderStatus === "shipped" && !trackingNumber) {
           throw new Error("Nomor resi wajib diisi sebelum status diubah ke Dikirim.");
+        }
+        if (row.items.length && args.shippingCost !== undefined && args.shippingCost !== row.shippingCost) {
+          throw new Error("Ongkir pesanan baru sudah ditetapkan saat checkout.");
         }
         const shippingCost = args.shippingCost !== undefined ? args.shippingCost : row.shippingCost;
         const total = row.productPrice - row.discountAmount + (shippingCost ?? 0);

@@ -2510,7 +2510,7 @@ export function App() {
     const pid = projectRef.current.id;
     if (pid == null) return;
     if(cart.length&&cartProject!==pid&&!window.confirm("Ganti keranjang tersimpan dengan karya yang ini? Keranjang lama akan dikosongkan."))return;
-    const current = cartProject === pid ? cart : [];
+    const current = cartProject === pid && cartExpires.current > Date.now() ? cart : [];
     const line = { product: shopSel.product, tshirtColor: shopSel.product === "tshirt" ? shopSel.tshirtColor : "",
       tshirtSize: shopSel.product === "tshirt" ? shopSel.tshirtSize : "", quantity: 1 };
     const same = current.findIndex(x => x.product === line.product && x.tshirtColor === line.tshirtColor && x.tshirtSize === line.tshirtSize);
@@ -2713,7 +2713,7 @@ export function App() {
         {route.view === "aff-admin" && <AdminGate><AdminCenter brandName={brandName} /></AdminGate>}
         </Suspense>
       </main>
-      <footer className="bg-[#F1EBDD] px-4 pb-24 pt-10 text-center text-sm font-semibold sm:pb-10">
+      <footer className="bg-[#F1EBDD] px-4 pb-24 pt-10 text-center text-sm font-semibold lg:pb-10">
         <img src={logoUrl} alt="" className="mx-auto h-12 w-12 rounded-2xl object-cover ring-1 ring-black/10" />
         <p className="mt-3">{brandName} · Warnai → Personalisasi → 3D → Cetak → Rakit</p>
         <p className="mt-1 text-[var(--dim)]">Orang dewasa, mohon dampingi saat menggunting &amp; melipat.</p>

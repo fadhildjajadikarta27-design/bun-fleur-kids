@@ -3,7 +3,7 @@
 // artwork, undo/redo, zoom & pan, and the personalized name plaque.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { clampArtPan, clampArtZoom, pointToArt, scribbleGoal, zoomArtAt } from "../lib/editor-touch";
+import { MIN_ART_ZOOM, clampArtPan, clampArtZoom, pointToArt, scribbleGoal, zoomArtAt } from "../lib/editor-touch";
 import {
 INK,
 NAME_FONTS,
@@ -755,7 +755,8 @@ export function ColoringEditor({
   const activeRegion = liveScribble ? template.regions.find((r) => r.id === liveScribble.regionId) : undefined;
 
   return (
-    <div>
+    <div className="grid grid-cols-[minmax(0,1fr)_64px] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_116px] sm:gap-3">
+      <div className="min-w-0">
       <div
         ref={wrapRef}
         className="relative w-full select-none touch-none overflow-hidden rounded-3xl bg-white shadow-inner ring-1 ring-[var(--border)]"
@@ -808,7 +809,7 @@ export function ColoringEditor({
             )}
           </ArtworkSvg>
         </div>
-        {zoom > 1 && (
+        {zoom !== 1 && (
           <span className="absolute left-3 top-3 rounded-full bg-ink/70 px-3 py-1 text-xs font-bold text-white">
             {Math.round(zoom * 100)}%
           </span>
@@ -872,7 +873,7 @@ export function ColoringEditor({
           </button>
         </div>
         <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Zoom kanvas">
-          <button type="button" aria-label="Perkecil gambar" disabled={zoom <= 1}
+          <button type="button" aria-label="Perkecil gambar" disabled={zoom <= MIN_ART_ZOOM}
             onClick={() => zoomAt(zoom - 0.25)}
             className="min-h-11 min-w-11 touch-manipulation rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-lg font-bold ring-1 ring-[var(--border)] disabled:opacity-40">−</button>
           <span className="min-w-12 text-center font-display text-xs font-bold text-[var(--dim)]" aria-live="polite">{Math.round(zoom * 100)}%</span>
@@ -882,7 +883,7 @@ export function ColoringEditor({
           <button type="button" aria-label="Tampilkan keseluruhan gambar"
             onClick={() => applyView({ zoom: 1, pan: { x: 0, y: 0 } })}
             className="min-h-11 touch-manipulation rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)]">
-            Fit
+            Paskan
           </button>
         </div>
         <button
@@ -924,15 +925,17 @@ export function ColoringEditor({
         </div>
       )}
 
+
+      </div>
       {/* Palettes */}
-      <div className="mt-4">
-        <div className="mb-2 flex justify-center gap-2" role="tablist" aria-label="Palet warna">
+      <aside className="min-w-0 rounded-2xl bg-[var(--surface)] p-1.5 sm:p-2" aria-label="Pilihan warna">
+        <div className="mb-2 flex flex-col gap-1" role="tablist" aria-label="Palet warna">
           <button
             type="button"
             role="tab"
             aria-selected={palette === "vibrant"}
             onClick={() => setPalette("vibrant")}
-            className={`rounded-full px-4 py-1.5 font-display text-sm font-bold ${palette === "vibrant" ? "bg-tang-deep text-ink" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
+            className={`rounded-xl px-1 py-2 font-display text-[10px] sm:text-xs font-bold ${palette === "vibrant" ? "bg-tang-deep text-ink" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
           >
             Krayon cerah
           </button>
@@ -941,12 +944,12 @@ export function ColoringEditor({
             role="tab"
             aria-selected={palette === "pastel"}
             onClick={() => setPalette("pastel")}
-            className={`rounded-full px-4 py-1.5 font-display text-sm font-bold ${palette === "pastel" ? "bg-tang-deep text-ink" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
+            className={`rounded-xl px-1 py-2 font-display text-[10px] sm:text-xs font-bold ${palette === "pastel" ? "bg-tang-deep text-ink" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
           >
             Pastel lembut
           </button>
         </div>
-        <div className="flex flex-wrap justify-center gap-2" role="radiogroup" aria-label="Warna krayon">
+        <div className="grid grid-cols-1 justify-items-center gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Warna krayon">
           {paletteColors.map((c) => (
             <button
               key={c.hex}
@@ -959,18 +962,18 @@ export function ColoringEditor({
                 setColor(c.hex);
                 if (tool === "eraser" || tool === "move") setTool("scribble");
               }}
-              className={`h-11 w-11 rounded-full shadow-sm transition-transform ${color === c.hex ? "scale-110 ring-4 ring-ink/70" : "ring-1 ring-black/15"}`}
+              className={`h-10 w-10 rounded-full sm:h-11 sm:w-11 shadow-sm transition-transform ${color === c.hex ? "scale-110 ring-4 ring-ink/70" : "ring-1 ring-black/15"}`}
               style={{ background: c.hex }}
             />
           ))}
         </div>
-        <p className="mt-2 text-center text-sm font-semibold text-[var(--dim)]">
+        <p className="mt-2 hidden text-center text-[11px] font-semibold text-[var(--dim)] sm:block">
           {tool === "scribble" && `Gosok bidang gambar sampai cukup terisi — untuk detail kecil lebih mudah dengan gosokan pendek. Kelompok ${params.group} menggunakan target dasar sekitar ${Math.round(params.threshold * 100)}% untuk bidang besar.`}
           {tool === "brush" && "Gambar dengan jarimu — krayon tetap di dalam garis."}
           {tool === "eraser" && "Ketuk bagian untuk membersihkannya, atau gosok garis krayon untuk menghapusnya."}
           {tool === "move" && "Seret untuk menggerakkan gambar."}
         </p>
-      </div>
+      </aside>
     </div>
   );
 }
