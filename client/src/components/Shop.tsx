@@ -26,7 +26,7 @@ import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 import { bestBundle } from "../../../server/src/bundles";
-import { BACKGROUNDS, backgroundUrl } from "../../../server/src/backgrounds";
+import { BACKGROUNDS } from "../../../server/src/backgrounds";
 
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 function linesOf(order: OrderOut): OrderOut["items"] {
