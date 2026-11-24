@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { scryptSync } from "node:crypto";
+import { handleActions } from "./http.js";
 import netlifyHandler from "../../netlify/functions/actions.js";
 
 const savedHash = process.env.ADMIN_PASSWORD_HASH;
 const savedSecret = process.env.ADMIN_SESSION_SECRET;
-const savedSkip = process.env.BFK_SKIP_MIGRATIONS;
 
 function request(action: string, args: unknown = {}, extras: Record<string, string> = {}) {
   return new Request("https://bun-fleur-kids.netlify.app/api/actions", {
@@ -27,8 +27,6 @@ afterEach(() => {
   else process.env.ADMIN_PASSWORD_HASH = savedHash;
   if (savedSecret === undefined) delete process.env.ADMIN_SESSION_SECRET;
   else process.env.ADMIN_SESSION_SECRET = savedSecret;
-  if (savedSkip === undefined) delete process.env.BFK_SKIP_MIGRATIONS;
-  else process.env.BFK_SKIP_MIGRATIONS = savedSkip;
 });
 
 describe("Netlify API compatibility", () => {
@@ -36,7 +34,7 @@ describe("Netlify API compatibility", () => {
     const getRes = await netlifyHandler(new Request("https://bun-fleur-kids.netlify.app/api/actions"));
     expect(getRes.status).toBe(405);
     const invalid = await netlifyHandler(new Request("https://bun-fleur-kids.netlify.app/api/actions", {
-      method: "POST", body: "not-json",
+      method: "POST", headers: { "content-type": "application/json" }, body: "not-json",
     }));
     expect(invalid.status).toBe(400);
   });
@@ -45,7 +43,7 @@ describe("Netlify API compatibility", () => {
     const status = await netlifyHandler(request("adminStatus"));
     expect(status.status).toBe(200);
     expect((await body(status)).authenticated).toBe(false);
-    expect(status.headers.getSetCookie().some((v) => v.startsWith("bfk_visitor="))).toBe(true);
+    expect(status.headers.get("cache-control")).toBe("no-store");
     const denied = await netlifyHandler(request("adminListAffiliates"));
     expect(denied.status).toBe(401);
   });
@@ -55,7 +53,7 @@ describe("Netlify API compatibility", () => {
       origin: "https://external.example",
     }));
     expect(forbidden.status).toBe(403);
-    const login = await netlifyHandler(request("adminLogin", { password: "sample-passphrase" }));
+    const login = await handleActions(request("adminLogin", { password: "sample-passphrase" }), { limit: async () => true });
     expect(login.status).toBe(200);
     const cookies = login.headers.getSetCookie();
     const admin = cookies.find((v) => v.startsWith("bfk_admin="));
@@ -73,11 +71,25 @@ describe("Netlify API compatibility", () => {
       fullName: "Mitra Contoh", email: "mitra@example.com", whatsapp: "081234567890", consent: false,
     }));
     expect(refused.status).toBe(400);
-    expect(process.env.BFK_SKIP_MIGRATIONS).toBe("1");
   });
 
-  test("unknown action is blocked for unauthenticated callers", async () => {
+  test("unknown actions return 404", async () => {
     const res = await netlifyHandler(request("unknownAction"));
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(404);
+  });
+
+  test("applies the login rate limit before checking the password", async () => {
+    const response = await handleActions(request("adminLogin", { password: "sample-passphrase" }), { limit: async () => false });
+    expect(response.status).toBe(429);
+    expect(response.headers.getSetCookie()).toHaveLength(0);
+  });
+
+  test("rejects unsupported content types and oversized streamed bodies", async () => {
+    const type = await netlifyHandler(new Request("https://bun-fleur-kids.netlify.app/api/actions", {
+      method: "POST", body: JSON.stringify({ action: "adminStatus" }),
+    }));
+    expect(type.status).toBe(415);
+    const large = await netlifyHandler(request("adminStatus", { padding: "x".repeat(2 * 1024 * 1024) }));
+    expect(large.status).toBe(413);
   });
 });

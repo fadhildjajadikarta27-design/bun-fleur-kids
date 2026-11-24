@@ -78,6 +78,9 @@ export const orders = pgTable("orders", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   code: text("code").notNull().unique(),
   projectId: integer("project_id"),
+  checkoutKey: text("checkout_key"),
+  quantity: integer("quantity").notNull().default(1),
+  paymentReference: text("payment_reference"),
   templateId: text("template_id").notNull(),
   customDef: text("custom_def").notNull().default(""),
   childName: text("child_name").notNull().default(""),
@@ -89,7 +92,7 @@ export const orders = pgTable("orders", {
     .default("center"),
   colors: text("colors").notNull().default("{}"),
   strokes: text("strokes").notNull().default("[]"),
-  productType: text("product_type", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59"] }).notNull(),
+  productType: text("product_type", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat"] }).notNull(),
   variant: text("variant").notNull().default(""),
   productPrice: integer("product_price").notNull(),
   // Affiliate attribution (brief Part 3): the coupon code the customer
@@ -151,6 +154,18 @@ export const orders = pgTable("orders", {
     .$defaultFn(() => new Date()),
 });
 
+export const productPrices = pgTable("product_prices", {
+  productId: text("product_id", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat"] }).primaryKey(),
+  price: integer("price").notNull(),
+});
+
+export const paymentProofs = pgTable("payment_proofs", {
+  orderId: integer("order_id").primaryKey().references(() => orders.id, { onDelete: "cascade" }),
+  mime: text("mime", { enum: ["image/jpeg", "image/png"] }).notNull(),
+  data: text("data").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+});
+
 export const templateVersions = pgTable("template_versions", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   templateId: text("template_id").notNull(),
@@ -194,6 +209,7 @@ export const affiliates = pgTable("affiliates", {
   // expiring reset token the admin shares through a verified channel.
   pinResetRequestedAt: timestamp("pin_reset_requested_at", { withTimezone: true, mode: "date" }),
   resetToken: text("reset_token").notNull().default(""),
+  resetTokenEncrypted: text("reset_token_encrypted").notNull().default(""),
   resetExpiresAt: timestamp("reset_expires_at", { withTimezone: true, mode: "date" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
@@ -207,6 +223,7 @@ export const affiliateInvitations = pgTable("affiliate_invitations", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   affiliateId: integer("affiliate_id").notNull(),
   token: text("token").notNull().unique(),
+  encryptedToken: text("encrypted_token").notNull().default(""),
   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }),
   revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
@@ -241,6 +258,7 @@ export const commissions = pgTable("commissions", {
     .notNull()
     .default("pending"),
   payoutId: integer("payout_id"),
+  paidAmount: integer("paid_amount").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$defaultFn(() => new Date()),

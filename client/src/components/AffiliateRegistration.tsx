@@ -124,7 +124,7 @@ export function AffiliateRegistrationPage() {
             </p>
           </div>
           {error && <p role="alert" className="text-sm font-bold text-berry">{error}</p>}
-          <button type="submit" className="w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-bold text-white">
+          <button type="submit" className="w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-bold text-ink">
             Lanjut Buat PIN
           </button>
           <p className="text-center text-sm font-semibold text-[var(--dim)]">
@@ -168,7 +168,7 @@ export function AffiliateRegistrationPage() {
           </div>
           {error && <p role="alert" className="text-sm font-bold text-berry">{error}</p>}
           <button type="submit" disabled={submit.isPending}
-            className="w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-bold text-white disabled:cursor-wait disabled:opacity-50">
+            className="w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-bold text-ink disabled:cursor-wait disabled:opacity-50">
             {submit.isPending ? "Membuat akun…" : "Buat Akun & Masuk Dasbor"}
           </button>
           <button type="button" onClick={() => { setError(""); setStep("identity"); }}

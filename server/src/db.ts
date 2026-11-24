@@ -20,6 +20,8 @@
 // schema migrations through a coordinated migration job before production
 // traffic, not concurrent serverless requests on a transaction pooler.
 
+import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -41,10 +43,17 @@ export function getDb(): Db {
           "(in production: the Supabase transaction-pooler URL, port 6543).",
       );
     }
-    client = postgres(url, { prepare: false, max: 1 });
+    client = postgres(url, { prepare: false, max: 1, idle_timeout: 30, connect_timeout: 5 });
     dbInstance = drizzle(client, { schema });
   }
   return dbInstance;
+}
+
+export async function closeDatabase(): Promise<void> {
+  await client?.end({ timeout: 3 });
+  client = undefined;
+  dbInstance = undefined;
+  migrationsPromise = undefined;
 }
 
 function migrationsDir(): string {
@@ -62,13 +71,6 @@ let migrationsPromise: Promise<void> | undefined;
 
 /** Applies any not-yet-applied drizzle/*.sql files. Safe to call often. */
 export function ensureMigrations(): Promise<void> {
-  // Production schema was fully bootstrapped (0001 through 0009).
-  // A serverless request must not run DDL: multiple Vercel cold starts
-  // can block each other and exhaust the function's 300-second duration.
-  // Apply future migrations via a coordinated database release step.
-  if (process.env.VERCEL_ENV === "production" || process.env.BFK_SKIP_MIGRATIONS === "1") {
-    return Promise.resolve();
-  }
   if (!migrationsPromise) {
     migrationsPromise = applyMigrations().catch((err) => {
       // Allow a later call to retry if the first attempt failed.
@@ -83,33 +85,40 @@ async function applyMigrations(): Promise<void> {
   getDb();
   if (!client) throw new Error("postgres client not initialized");
   const sql = client;
-  // applied_at is bigint: Date.now() epoch milliseconds exceed int4.
-  await sql.unsafe(
-    "CREATE TABLE IF NOT EXISTS __port_migrations (name text PRIMARY KEY, applied_at bigint NOT NULL)",
-  );
-  const appliedRows = await sql<{ name: string }[]>`SELECT name FROM __port_migrations`;
-  const applied = new Set(appliedRows.map((r) => r.name));
-
-  const dir = migrationsDir();
-  const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-  for (const file of files) {
-    if (applied.has(file)) continue;
-    const text = readFileSync(join(dir, file), "utf8");
-    const statements = text
-      .split("--> statement-breakpoint")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    try {
-      for (const statement of statements) {
-        await sql.unsafe(statement);
+  const files = readdirSync(migrationsDir()).filter((file) => file.endsWith(".sql")).sort();
+  await sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(82134790)`;
+    await tx`CREATE TABLE IF NOT EXISTS __port_migrations (name text PRIMARY KEY, applied_at bigint NOT NULL)`;
+    const rows = await tx<{ name: string }[]>`SELECT name FROM __port_migrations`;
+    const applied = new Set(rows.map(({ name }) => name));
+    for (const file of files) {
+      if (applied.has(file)) continue;
+      const statements = readFileSync(join(migrationsDir(), file), "utf8").split("--> statement-breakpoint");
+      try {
+        for (const statement of statements) {
+          if (statement.trim()) await tx.unsafe(statement);
+        }
+        await tx`INSERT INTO __port_migrations (name, applied_at) VALUES (${file}, ${Date.now()})`;
+      } catch (cause) {
+        throw new Error(`Failed to apply migration ${file}`, { cause });
       }
-      await sql`INSERT INTO __port_migrations (name, applied_at) VALUES (${file}, ${Date.now()})`;
-    } catch (err) {
-      throw new Error(
-        `Failed to apply migration ${file}: ${err instanceof Error ? err.message : String(err)}`,
-      );
     }
-  }
+  });
+}
+
+export async function consumeRateLimit(action: string, ip: string | undefined, limit: number, seconds: number): Promise<boolean> {
+  getDb();
+  const secret = process.env.ADMIN_SESSION_SECRET ?? "";
+  const clientKey = ip && isIP(ip) ? ip : "shared";
+  const key = createHash("sha256").update(JSON.stringify([secret, action, clientKey])).digest("hex");
+  const [row] = await client!<{ attempts: number }[]>`
+    INSERT INTO request_limits (key, attempts, expires_at)
+    VALUES (${key}, 1, now() + ${seconds} * interval '1 second')
+    ON CONFLICT (key) DO UPDATE SET
+      attempts = CASE WHEN request_limits.expires_at <= now() THEN 1
+                      ELSE LEAST(request_limits.attempts + 1, ${limit + 1}) END,
+      expires_at = CASE WHEN request_limits.expires_at <= now() THEN EXCLUDED.expires_at
+                        ELSE request_limits.expires_at END
+    RETURNING attempts`;
+  return !!row && row.attempts <= limit;
 }

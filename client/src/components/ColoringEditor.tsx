@@ -2,7 +2,7 @@
 // the shared color map, plus a freehand brush layer clipped to the
 // artwork, undo/redo, zoom & pan, and the personalized name plaque.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { clampArtPan, clampArtZoom, pointToArt, scribbleGoal, zoomArtAt } from "../lib/editor-touch";
 import {
 INK,
@@ -25,8 +25,9 @@ export interface Stroke {
 
 export function fitFontSize(text: string, w: number, h: number): number {
   if (!text) return h * 0.55;
-  const byWidth = (w / Math.max(1, text.length)) * 1.55;
-  return Math.max(9, Math.min(h * 0.56, byWidth));
+  const widthUnits = [...text.toUpperCase()].reduce((width, glyph) =>
+    width + (/\s/u.test(glyph) ? 0.4 : /[I1]/u.test(glyph) ? 0.55 : 1), 0);
+  return Math.min(h * 0.56, Math.max(1, w - 16) / Math.max(1, widthUnits));
 }
 
 export function ArtworkSvg({
@@ -54,10 +55,11 @@ export function ArtworkSvg({
   onRegionTap?: (regionId: string) => void;
   children?: React.ReactNode;
 }) {
+  const clipId = useId();
   const [vw, vh] = template.viewBox;
   const font = NAME_FONTS.find((f) => f.id === nameFont) ?? NAME_FONTS[0]!;
   const displayName = name.trim();
-  const nameSize = fitFontSize(displayName || "★", template.label.w, template.label.h);
+  const nameSize = fitFontSize(displayName, template.label.w, template.label.h);
   const nameX =
     nameAlign === "left"
       ? template.label.x + 8
@@ -75,7 +77,7 @@ export function ArtworkSvg({
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <clipPath id={`clip-${template.id}`}>
+        <clipPath id={clipId}>
           {template.regions.map((r) =>
             r.els.map((el, i) => <path key={`${r.id}-${i}`} d={elToPath(el)} />),
           )}
@@ -119,7 +121,7 @@ export function ArtworkSvg({
         </g>
       ))}
       {/* Freehand layer, clipped so crayons stay inside the lines */}
-      <g clipPath={`url(#clip-${template.id})`}>
+      <g clipPath={`url(#${clipId})`}>
         {strokes.map((s, i) => (
           <path
             key={i}
@@ -179,7 +181,7 @@ export function ArtworkSvg({
           textAnchor={nameAnchor}
           fontFamily="'Nunito', sans-serif"
           fontWeight={700}
-          fontSize={Math.max(9, template.label.h * 0.26)}
+          fontSize={Math.min(template.label.h * 0.26, fitFontSize(message.trim(), template.label.w, template.label.h))}
           fill="#6F6157"
           pointerEvents="none"
         >
@@ -205,12 +207,10 @@ interface Snapshot {
 // three groups map onto the catalog's age bands: Little Explorer covers
 // 9–24 months, Curious Creator 2–3 years, Young Artist 4–5 years.
 export function scribbleParams(ageBand: string): { threshold: number; radius: number; group: string } {
-  if (ageBand === "9-18bln" || ageBand === "1-2th") {
-    return { threshold: 0.18, radius: 30, group: "Little Explorer" };
-  }
-  if (ageBand === "2-3th") {
-    return { threshold: 0.28, radius: 22, group: "Curious Creator" };
-  }
+  if (ageBand === "9-18bln") return { threshold: 0.16, radius: 32, group: "Little Explorer" };
+  if (ageBand === "1-2th") return { threshold: 0.21, radius: 28, group: "Little Explorer" };
+  if (ageBand === "2-3th") return { threshold: 0.27, radius: 24, group: "Curious Creator" };
+  if (ageBand === "3-4th") return { threshold: 0.33, radius: 20, group: "Curious Creator" };
   return { threshold: 0.4, radius: 17, group: "Young Artist" };
 }
 
@@ -479,7 +479,7 @@ export function ColoringEditor({
 
   /* ------------------------- Scribble-to-Fill ------------------------- */
 
-  const hitRegion = (x: number, y: number): string | null => {
+  const hitRegion = (x: number, y: number, touch = false): string | null => {
     if (!geom.ctx) return null;
     // SVG regions are painted in this order: later ones are visually on top.
     // Hit-test in reverse so small details don't select the body behind them.
@@ -487,8 +487,8 @@ export function ColoringEditor({
     const exact = frontToBack.find((r) =>
       geom.map.get(r.id)?.paths.some((path) => geom.ctx!.isPointInPath(path, x, y)));
     const rect = wrapRef.current?.getBoundingClientRect();
-    if (!rect) return exact?.id ?? null;
-    const tolerance = Math.min(34, 16 * (template.viewBox[0] / Math.max(1, rect.width)) / viewRef.current.zoom);
+    if (!rect || !touch) return exact?.id ?? null;
+    const tolerance = Math.min(34, (params.radius * 0.5 + 4) * (template.viewBox[0] / Math.max(1, rect.width)) / viewRef.current.zoom);
     let nearest: { id: string; distance: number } | null = null;
     // A finger covers more than a mouse pointer. Nearby tiny parts get a
     // forgiving touch target without painting other large regions at random.
@@ -508,9 +508,9 @@ export function ColoringEditor({
     return nearest && nearest.distance <= tolerance * 0.58 ? nearest.id : exact.id;
   };
 
-  const startScribble = (clientX: number, clientY: number) => {
+  const startScribble = (clientX: number, clientY: number, touch: boolean) => {
     const [x, y] = toSvgCoords(clientX, clientY);
-    const regionId = hitRegion(x, y);
+    const regionId = hitRegion(x, y, touch);
     if (!regionId) return;
     const g = geom.map.get(regionId);
     const goal = scribbleGoal(params.threshold, g?.coarseCount ?? 0);
@@ -544,7 +544,8 @@ export function ColoringEditor({
     s.lastX = clientX;
     s.lastY = clientY;
     s.length += d;
-    s.points = [...s.points, [x, y]];
+    // Bound the transient SVG path on long scribbles. Coverage is retained.
+    s.points = [...s.points.slice(-179), [x, y]];
     const g = geom.map.get(s.regionId);
     if (g) {
       for (let i = 0; i < g.samples.length; i++) {
@@ -613,7 +614,7 @@ export function ColoringEditor({
       return;
     }
     if (tool === "scribble") {
-      startScribble(e.clientX, e.clientY);
+      startScribble(e.clientX, e.clientY, e.pointerType === "touch");
     } else if (tool === "brush") {
       const s: Stroke = { color, size: brushSize, points: [toSvgCoords(e.clientX, e.clientY)] };
       drawingRef.current = s;
@@ -636,7 +637,7 @@ export function ColoringEditor({
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const had = pointersRef.current.get(e.pointerId);
+    if (!pointersRef.current.has(e.pointerId)) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointersRef.current.size === 2 && pinchRef.current) {
       const [p1, p2] = [...pointersRef.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
@@ -660,7 +661,6 @@ export function ColoringEditor({
       }
       return;
     }
-    if (!had) return;
     if (panningRef.current) {
       const el = wrapRef.current;
       if (!el) return;
@@ -683,7 +683,7 @@ export function ColoringEditor({
     if (drawingRef.current) {
       const p = toSvgCoords(e.clientX, e.clientY);
       const lastPt = drawingRef.current.points[drawingRef.current.points.length - 1]!;
-      if (Math.hypot(p[0] - lastPt[0], p[1] - lastPt[1]) > 2) {
+      if (drawingRef.current.points.length < 4000 && Math.hypot(p[0] - lastPt[0], p[1] - lastPt[1]) > 2) {
         drawingRef.current = {
           ...drawingRef.current,
           points: [...drawingRef.current.points, p],
@@ -697,11 +697,12 @@ export function ColoringEditor({
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
     const wasPinching = pinchRef.current !== null;
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size < 2) pinchRef.current = null;
     panningRef.current = null;
-    if (wasPinching || e.type === "pointercancel") {
+    if (wasPinching || (e.type === "pointercancel" || e.type === "lostpointercapture")) {
       scribbleRef.current = null;
       setLiveScribble(null);
       drawingRef.current = null;
@@ -732,6 +733,8 @@ export function ColoringEditor({
     return () => clearTimeout(t);
   }, [scribbleHint]);
 
+  useEffect(() => () => crayonNoise.stop(), []);
+
   const paletteColors = palette === "vibrant" ? VIBRANT : PASTEL;
   const toolBtn = (t: Tool, label: string, icon: React.ReactNode) => (
     <button
@@ -759,6 +762,7 @@ export function ColoringEditor({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onLostPointerCapture={onPointerUp}
       >
         <div
           className="absolute inset-0 h-full w-full will-change-transform"
@@ -814,11 +818,9 @@ export function ColoringEditor({
         )}
       </div>
 
-      {scribbleHint && (
-        <p className="mt-2 text-center font-display text-sm font-bold text-tang-deep" role="status">
-          {scribbleHint}
-        </p>
-      )}
+      <p className="mt-2 min-h-10 text-center font-display text-sm font-bold text-olive-deep sm:min-h-5" role="status">
+        {scribbleHint}
+      </p>
       <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">
         Zoom hanya pada gambar: cubit dua jari atau gunakan +/−, lalu pilih Geser untuk memindahkan gambar.
         Detail kecil cukup digosok pendek sampai terisi.
@@ -928,7 +930,7 @@ export function ColoringEditor({
             role="tab"
             aria-selected={palette === "vibrant"}
             onClick={() => setPalette("vibrant")}
-            className={`rounded-full px-4 py-1.5 font-display text-sm font-bold ${palette === "vibrant" ? "bg-tang-deep text-white" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
+            className={`rounded-full px-4 py-1.5 font-display text-sm font-bold ${palette === "vibrant" ? "bg-tang-deep text-ink" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
           >
             Krayon cerah
           </button>
@@ -937,7 +939,7 @@ export function ColoringEditor({
             role="tab"
             aria-selected={palette === "pastel"}
             onClick={() => setPalette("pastel")}
-            className={`rounded-full px-4 py-1.5 font-display text-sm font-bold ${palette === "pastel" ? "bg-tang-deep text-white" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
+            className={`rounded-full px-4 py-1.5 font-display text-sm font-bold ${palette === "pastel" ? "bg-tang-deep text-ink" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
           >
             Pastel lembut
           </button>

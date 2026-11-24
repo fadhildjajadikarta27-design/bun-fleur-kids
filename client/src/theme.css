@@ -35,16 +35,17 @@
   --color-ink: #3b2a22;
   --color-ink-soft: #716257;
   --color-sky: #77bceb;
-  --color-sky-deep: #2f7fb8;
+  --color-sky-deep: #25638f;
   --color-sky-band: #0f4c75;
   --color-sky-soft: #e7f3fb;
   --color-butter: #ffc93c;
   --color-butter-soft: #ffedb0;
   --color-tang: #f68b3c;
   --color-tang-deep: #d97e14;
+  --color-tang-ink: #9a4309;
   --color-sage: #8fce62;
   --color-sage-soft: #edf2e6;
-  --color-olive: #667c3e;
+  --color-olive: #536832;
   --color-olive-deep: #4e612e;
   --color-berry: #c23b22;
 }
@@ -61,7 +62,7 @@
   --card-foreground: #3b2a22;
   --popover: #ffffff;
   --popover-foreground: #3b2a22;
-  --primary: #667c3e;
+  --primary: #536832;
   --primary-foreground: #ffffff;
   --secondary: #e7f3fb;
   --secondary-foreground: #3b2a22;
@@ -70,7 +71,7 @@
   --muted: #f1ebdd;
   --muted-foreground: #716257;
   --input: #ffffff;
-  --ring: #667c3e;
+  --ring: #536832;
 
   --bg: #f8f4ec;
   --surface: #ffffff;
@@ -125,10 +126,10 @@
 
 /* Aksen kata berwarna logo untuk judul seksi — dipakai hemat, satu kata
    per judul. */
-.hero-word-olive { color: #667c3e; }
-.hero-word-tang { color: #d97e14; }
-.hero-word-sky { color: #2f7fb8; }
-.hero-word-butter { color: #b97e06; }
+.hero-word-olive { color: #536832; }
+.hero-word-tang { color: #a34d0d; }
+.hero-word-sky { color: #25638f; }
+.hero-word-butter { color: #845900; }
 
 /* Panel seksi mengikuti tabel warna brief secara persis: basis krem
    #F8F4EC, putih #FFFFFF, krem pekat #F1EBDD, sage pucat #EDF2E6, biru
@@ -136,10 +137,23 @@
    olive (.band-olive). Cokelat #3B2A22 hanya untuk teks, tidak pernah
    menjadi latar. --band-dim / --band-accent memberi warna sekunder dan
    aksen yang tetap kontras di tiap panel. */
-.band-olive { background: #667c3e; color: #ffffff; --band-dim: #e6efdb; --band-accent: #ffc93c; }
+.band-olive { background: #536832; color: #ffffff; --band-dim: #e6efdb; --band-accent: #ffc93c; }
 .band-sage { background: #edf2e6; color: #3b2a22; --band-dim: #5f6b52; --band-accent: #4e612e; }
 .band-sky { background: #e7f3fb; color: #3b2a22; --band-dim: #33566b; --band-accent: #0f4c75; }
 .band-butter { background: #fdf3d7; color: #3b2a22; --band-dim: #66520f; --band-accent: #4e612e; }
-.band-tang { background: #fdebdc; color: #3b2a22; --band-dim: #7a4a21; --band-accent: #b45a12; }
+.band-tang { background: #fdebdc; color: #3b2a22; --band-dim: #7a4a21; --band-accent: #9a4309; }
 .band-dim { color: var(--band-dim, #716257); }
-.band-accent { color: var(--band-accent, #667c3e); }
+.band-accent { color: var(--band-accent, #536832); }
+
+
+:focus-visible {
+  outline: 3px solid var(--color-sky-band);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -6,13 +6,14 @@ describe("3D Papercraft product pricing", () => {
   test("shop catalog includes fixed Rp49.000 papercraft", async () => {
     // Call the pure catalog handler directly: the generic dispatch bootstraps
     // DB, which is intentionally unavailable in unit tests.
-    const res = await Actions.getShopConfig.handler({} as never, {});
+    const db = () => ({ select: () => ({ from: async () => [] }) });
+    const res = await Actions.getShopConfig.handler({ db } as never, {});
     const products = res.products;
     expect(products.find((p) => p.id === "papercraft")).toEqual({
       id: "papercraft", basePrice: 49000, priceLabel: "fixed",
     });
     expect(products.filter((p) => p.id === "papercraft")).toHaveLength(1);
-    expect(products).toHaveLength(6);
+    expect(products).toHaveLength(8);
     expect(products.find((p) => p.id === "celengan")).toEqual({
       id: "celengan", basePrice: 29000, priceLabel: "fixed",
     });
@@ -57,7 +58,7 @@ describe("Affiliate input validation", () => {
       couponCode: "CONTOH123",
       discountPct: 10,
       commissionPct: 30,
-    });
+    }, "", true);
     expect(result.status).toBe(400);
     expect(JSON.stringify(result.body)).toContain("WhatsApp");
   });
@@ -68,7 +69,7 @@ describe("Affiliate input validation", () => {
       email: "invalid",
       whatsapp: "abcdefghij",
       couponCode: "A",
-    });
+    }, "", true);
     expect(result.status).toBe(400);
   });
 

@@ -6,11 +6,14 @@
 // 3D preview, and the PDF export on the client.
 
 import { defineAction, z, type ActionsModule, type Ctx } from "./sdk.js";
-import { and, count, desc, eq, inArray, or } from "drizzle-orm";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import * as schema from "./schema.js";
+import { isPaymentProof } from "./payment-proof.js";
 
+const paint = z.string().regex(/^#[a-f0-9]{6}$/i, "Warna karya tidak valid.");
 const strokeSchema = z.object({
-  color: z.string().min(1).max(32),
+  color: paint,
   size: z.number().min(1).max(60),
   points: z.array(z.tuple([z.number(), z.number()])).max(4000),
 });
@@ -20,9 +23,9 @@ const projectFields = {
   childName: z.string().max(24),
   message: z.string().max(100),
   nameFont: z.string().min(1).max(32),
-  nameColor: z.string().min(1).max(32),
+  nameColor: paint,
   nameAlign: z.enum(["left", "center", "right"]),
-  colors: z.record(z.string().max(64), z.string().max(32)),
+  colors: z.record(z.string().max(64), paint).refine((colors) => Object.keys(colors).length <= 250),
   strokes: z.array(strokeSchema).max(600),
   // JSON part combination for custom-built characters (templateId "custom").
   customDef: z.string().max(4000),
@@ -83,17 +86,22 @@ function toOut(row: ProjectRow): z.infer<typeof projectOut> {
 // Centralized pricing (brief §5): the ONLY place product prices live on
 // the server. Orders always recompute from these constants — a price
 // sent by the client is never trusted.
-const POSTER_BASE_PRICE = 49000;
-const PAPERCRAFT_BASE_PRICE = 49000;
-const CELENGAN_BASE_PRICE = 29000;
-const ACCESSORY_59_BASE_PRICE = 59000;
-const FIGURINE_BASE_PRICE = 120000;
-const TSHIRT_BASE_PRICE = 79000;
+const PRODUCT_IDS = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat"] as const;
+type ProductId = typeof PRODUCT_IDS[number];
+const DEFAULT_PRICES: Record<ProductId, number> = {
+  poster: 49000, papercraft: 49000, figurine: 120000, tshirt: 79000,
+  celengan: 29000, accessory59: 59000, puzzle: 59000, placemat: 69000,
+};
 // Fabric colors fixed by the brand (brief §2C) and the configured kids
 // t-shirt sizes; all sizes are priced at the base price (no invented
 // surcharges).
 const TSHIRT_COLORS = ["Cream", "Mustard", "Terracotta", "Sage Green", "Brown"] as const;
 const TSHIRT_SIZES = ["2–3 tahun", "4–5 tahun", "6–7 tahun", "8–9 tahun", "10–12 tahun"] as const;
+
+async function catalogPrices(db: Database): Promise<Record<ProductId, number>> {
+  const overrides = await db.select().from(schema.productPrices);
+  return { ...DEFAULT_PRICES, ...Object.fromEntries(overrides.map(({ productId, price }) => [productId, price])) };
+}
 
 const orderOut = z.object({
   id: z.number(),
@@ -108,9 +116,10 @@ const orderOut = z.object({
   nameAlign: z.enum(["left", "center", "right"]),
   colors: z.record(z.string(), z.string()),
   strokes: z.array(strokeSchema),
-  productType: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59"]),
+  productType: z.enum(PRODUCT_IDS),
   variant: z.string(),
   productPrice: z.number(),
+  quantity: z.number(),
   couponCode: z.string(),
   affiliateId: z.number().nullable(),
   discountAmount: z.number(),
@@ -175,6 +184,7 @@ function orderToOut(row: OrderRow): z.infer<typeof orderOut> {
     productType: row.productType,
     variant: row.variant,
     productPrice: row.productPrice,
+    quantity: row.quantity,
     couponCode: row.couponCode,
     affiliateId: row.affiliateId,
     discountAmount: row.discountAmount,
@@ -198,12 +208,7 @@ function orderToOut(row: OrderRow): z.infer<typeof orderOut> {
 }
 
 function makeOrderCode(): string {
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let suffix = "";
-  for (let i = 0; i < 6; i++) {
-    suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return `BFK-${suffix}`;
+  return "BFK-" + randomBytes(8).toString("hex").toUpperCase();
 }
 
 // Compare WhatsApp numbers tolerantly: digits only, with the Indonesian
@@ -282,11 +287,18 @@ function schemaDb(ctx: Ctx) {
 }
 type Db = ReturnType<typeof schemaDb>;
 
-async function audit(db: Db, affiliateId: number | null, action: string, detail: string): Promise<void> {
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type Database = Db | Tx;
+
+async function lockCheckout(db: Tx) {
+  await db.execute(sql`SELECT pg_advisory_xact_lock(82134791)`);
+}
+
+async function audit(db: Database, affiliateId: number | null, action: string, detail: string): Promise<void> {
   await db.insert(schema.affiliateAudit).values({ affiliateId, action, detail, createdAt: new Date() });
 }
 
-async function affiliateConfig(db: Db): Promise<{ minWithdrawal: number; inviteExpiryHours: number }> {
+async function affiliateConfig(db: Database): Promise<{ minWithdrawal: number; inviteExpiryHours: number }> {
   const rows = await db.select().from(schema.settings).where(eq(schema.settings.id, 1)).limit(1);
   return {
     minWithdrawal: rows[0]?.minWithdrawal ?? 50000,
@@ -294,22 +306,51 @@ async function affiliateConfig(db: Db): Promise<{ minWithdrawal: number; inviteE
   };
 }
 
-async function createAffiliateSession(db: Db, affiliateId: number): Promise<string> {
+async function createAffiliateSession(db: Database, affiliateId: number): Promise<string> {
   const token = randomToken(32);
   const expires = new Date(Date.now() + 30 * 24 * 3600 * 1000);
-  await db.insert(schema.affiliateSessions).values({ affiliateId, token, expiresAt: expires, createdAt: new Date() });
+  await db.insert(schema.affiliateSessions).values({ affiliateId, token: tokenDigest(token), expiresAt: expires, createdAt: new Date() });
   return token;
+}
+
+function tokenDigest(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function tokenEncryptionKey(): Buffer {
+  const secret = process.env.ADMIN_SESSION_SECRET;
+  if (!secret || secret.length < 32) throw new Error("Konfigurasi keamanan server belum tersedia.");
+  return createHash("sha256").update("bfk:affiliate-token-storage:" + secret).digest();
+}
+
+function encryptShareableToken(token: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", tokenEncryptionKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString("base64url");
+}
+
+function decryptShareableToken(encrypted: string): string {
+  if (!encrypted) return "";
+  try {
+    const data = Buffer.from(encrypted, "base64url");
+    const decipher = createDecipheriv("aes-256-gcm", tokenEncryptionKey(), data.subarray(0, 12));
+    decipher.setAuthTag(data.subarray(12, 28));
+    return Buffer.concat([decipher.update(data.subarray(28)), decipher.final()]).toString("utf8");
+  } catch {
+    return "";
+  }
 }
 
 type AffiliateRow = typeof schema.affiliates.$inferSelect;
 
 // Resolves a session token to its affiliate, or throws a readable error.
 // Suspended affiliates lose dashboard access immediately.
-async function requireAffiliateSession(db: Db, token: string): Promise<AffiliateRow> {
+async function requireAffiliateSession(db: Database, token: string): Promise<AffiliateRow> {
   const sessions = await db
     .select()
     .from(schema.affiliateSessions)
-    .where(eq(schema.affiliateSessions.token, token))
+    .where(eq(schema.affiliateSessions.token, tokenDigest(token)))
     .limit(1);
   const session = sessions[0];
   if (!session || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
@@ -327,11 +368,12 @@ async function requireAffiliateSession(db: Db, token: string): Promise<Affiliate
 // Keeps the single commission row for an order in step with the order's
 // payment/fulfilment state. Idempotent: safe to call on every transition.
 async function syncCommission(
-  db: Db,
+  db: Database,
   order: OrderRow,
   event: "created" | "verified" | "completed" | "reversed",
 ): Promise<void> {
   if (!order.affiliateId) return;
+  await db.select({ id: schema.affiliates.id }).from(schema.affiliates).where(eq(schema.affiliates.id, order.affiliateId)).for("update");
   const rows = await db.select().from(schema.commissions).where(eq(schema.commissions.orderId, order.id)).limit(1);
   const existing = rows[0];
   const now = new Date();
@@ -359,7 +401,7 @@ async function syncCommission(
   }
   if (existing.status === "paid") return;
   let next = existing.status;
-  if (event === "verified" && existing.status === "pending") next = "confirmed";
+  if (event === "verified" && (existing.status === "pending" || existing.status === "reversed")) next = "confirmed";
   if (event === "completed" && (existing.status === "pending" || existing.status === "confirmed")) next = "payable";
   if (event === "reversed") next = "reversed";
   if (next !== existing.status) {
@@ -406,7 +448,7 @@ export const Actions = {
       const rows = await db
         .select()
         .from(schema.projects)
-        .where(ctx.isAdmin ? undefined : eq(schema.projects.ownerId, ctx.visitorId))
+        .where(eq(schema.projects.ownerId, ctx.visitorId))
         .orderBy(desc(schema.projects.updatedAt))
         .limit(args.limit);
       return { projects: rows.map(toOut) };
@@ -467,12 +509,10 @@ export const Actions = {
           status: args.status,
           updatedAt: new Date(),
         })
-        .where(ctx.isAdmin
-          ? eq(schema.projects.id, args.id)
-          : and(eq(schema.projects.id, args.id), eq(schema.projects.ownerId, ctx.visitorId)))
+        .where(and(eq(schema.projects.id, args.id), eq(schema.projects.ownerId, ctx.visitorId)))
         .returning();
       const row = result[0];
-      if (!row) throw new Error("That project no longer exists.");
+      if (!row) throw new Error("Karya tidak ditemukan.");
       ctx.invalidateQueries();
       return { project: toOut(row) };
     },
@@ -486,9 +526,7 @@ export const Actions = {
       const db = ctx.db<typeof schema>();
       await db
         .delete(schema.projects)
-        .where(ctx.isAdmin
-          ? eq(schema.projects.id, args.id)
-          : and(eq(schema.projects.id, args.id), eq(schema.projects.ownerId, ctx.visitorId)));
+        .where(and(eq(schema.projects.id, args.id), eq(schema.projects.ownerId, ctx.visitorId)));
       ctx.invalidateQueries();
       return { ok: true };
     },
@@ -562,7 +600,7 @@ export const Actions = {
   getSettings: defineAction({
     description: "Returns the configurable brand name for the app.",
     request: z.object({}),
-    response: z.object({ brandName: z.string() }),
+    response: z.object({ brandName: z.string(), catalogPrices: z.record(z.enum(PRODUCT_IDS), z.number()) }),
     async handler(ctx) {
       const db = ctx.db<typeof schema>();
       const rows = await db
@@ -570,7 +608,7 @@ export const Actions = {
         .from(schema.settings)
         .where(eq(schema.settings.id, 1))
         .limit(1);
-      return { brandName: rows[0]?.brandName ?? "Bun & Fleur Kids" };
+      return { brandName: rows[0]?.brandName ?? "Bun & Fleur Kids", catalogPrices: await catalogPrices(db) };
     },
   }),
 
@@ -711,7 +749,7 @@ export const Actions = {
     response: z.object({
       products: z.array(
         z.object({
-          id: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59"]),
+          id: z.enum(PRODUCT_IDS),
           basePrice: z.number(),
           priceLabel: z.enum(["fixed", "from"]),
         }),
@@ -720,21 +758,14 @@ export const Actions = {
       tshirtSizes: z.array(z.string()),
       paymentGatewayConnected: z.boolean(),
     }),
-    async handler(): Promise<{
-      products: { id: "poster" | "papercraft" | "figurine" | "tshirt" | "celengan" | "accessory59"; basePrice: number; priceLabel: "fixed" | "from" }[];
-      tshirtColors: string[];
-      tshirtSizes: string[];
-      paymentGatewayConnected: boolean;
-    }> {
+    async handler(ctx) {
+      const prices = await catalogPrices(schemaDb(ctx));
       return {
-        products: [
-          { id: "poster", basePrice: POSTER_BASE_PRICE, priceLabel: "fixed" },
-          { id: "papercraft", basePrice: PAPERCRAFT_BASE_PRICE, priceLabel: "fixed" },
-          { id: "celengan", basePrice: CELENGAN_BASE_PRICE, priceLabel: "fixed" },
-          { id: "accessory59", basePrice: ACCESSORY_59_BASE_PRICE, priceLabel: "fixed" },
-          { id: "figurine", basePrice: FIGURINE_BASE_PRICE, priceLabel: "from" },
-          { id: "tshirt", basePrice: TSHIRT_BASE_PRICE, priceLabel: "from" },
-        ],
+        products: PRODUCT_IDS.map((id) => ({
+          id,
+          basePrice: prices[id],
+          priceLabel: id === "figurine" || id === "tshirt" ? "from" as const : "fixed" as const,
+        })),
         tshirtColors: [...TSHIRT_COLORS],
         tshirtSizes: [...TSHIRT_SIZES],
         // No Midtrans/Xendit (or other gateway) credentials exist in this
@@ -750,10 +781,13 @@ export const Actions = {
       "Creates a physical-product order from a saved coloring project. The price is computed on the server from the centralized product configuration (client-sent prices are never trusted), the artwork is snapshotted from the project row, and the order starts as Pending Payment.",
     request: z.object({
       projectId: z.number().int().positive(),
-      productType: z.enum(["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59"]),
+      checkoutId: z.uuid().optional(),
+      quantity: z.number().int().min(1).max(20).default(1),
+      expectedUnitPrice: z.number().int().positive().optional(),
+      productType: z.enum(PRODUCT_IDS),
       tshirtColor: z.string().max(40).default(""),
       tshirtSize: z.string().max(40).default(""),
-      childName: z.string().trim().max(24).default(""),
+      childName: z.string().trim().max(24).optional(),
       couponCode: z.string().trim().max(24).default(""),
       customerName: z.string().trim().min(2, "Nama pemesan wajib diisi.").max(80),
       whatsapp: z.string().trim().min(9, "Nomor WhatsApp wajib diisi.").max(20),
@@ -767,177 +801,205 @@ export const Actions = {
       if (digits.length < 9 || digits.length > 15) {
         throw new Error("Nomor WhatsApp harus 9–15 digit angka.");
       }
-      const db = ctx.db<typeof schema>();
-      const rows = await db
-        .select()
-        .from(schema.projects)
-        .where(ctx.isAdmin
-          ? eq(schema.projects.id, args.projectId)
-          : and(eq(schema.projects.id, args.projectId), eq(schema.projects.ownerId, ctx.visitorId)))
-        .limit(1);
-      const project = rows[0];
-      if (!project) {
-        throw new Error("Karya untuk pesanan ini tidak ditemukan. Kembali ke Studio Mewarnai dan simpan dulu karyamu.");
-      }
-      let colors: Record<string, string> = {};
-      try {
-        const parsed = JSON.parse(project.colors) as Record<string, string>;
-        if (parsed && typeof parsed === "object") colors = parsed;
-      } catch {
-        colors = {};
-      }
-      if (Object.keys(colors).length === 0) {
-        throw new Error("Karya ini belum diwarnai — warnai dulu minimal satu bagian sebelum memesan.");
-      }
-
-      let variant = "";
-      let price = 0;
-      if (args.productType === "poster") {
-        price = POSTER_BASE_PRICE;
-        variant = "Poster berbingkai";
-      } else if (args.productType === "papercraft") {
-        price = PAPERCRAFT_BASE_PRICE;
-        variant = "Kit Papercraft 3D custom — pola gunting, lipat & lem dari karya anak";
-      } else if (args.productType === "celengan") {
-        price = CELENGAN_BASE_PRICE;
-        variant = "Aksesori celengan tabung custom — gambar, warna dan nama dari karya anak";
-      } else if (args.productType === "accessory59") {
-        price = ACCESSORY_59_BASE_PRICE;
-        variant = "Aksesori custom kedua — gambar, warna, dan nama dari karya anak";
-      } else if (args.productType === "figurine") {
-        price = FIGURINE_BASE_PRICE;
-        variant = "Figurine custom — melewati Design Review";
-      } else {
-        price = TSHIRT_BASE_PRICE;
-        if (!(TSHIRT_COLORS as readonly string[]).includes(args.tshirtColor)) {
-          throw new Error("Pilih warna kaos yang tersedia: Cream, Mustard, Terracotta, Sage Green, atau Brown.");
+      return ctx.db<typeof schema>().transaction(async (db) => {
+        await lockCheckout(db);
+        const checkoutKey = args.checkoutId ? createHash("sha256")
+          .update(JSON.stringify([ctx.visitorId, args.checkoutId])).digest("hex") : null;
+        if (checkoutKey) {
+          const [previous] = await db.select().from(schema.orders).where(eq(schema.orders.checkoutKey, checkoutKey)).limit(1);
+          if (previous) return { order: orderToOut(previous) };
         }
-        if (!(TSHIRT_SIZES as readonly string[]).includes(args.tshirtSize)) {
-          throw new Error("Pilih ukuran kaos yang tersedia.");
-        }
-        variant = `Kaos ${args.tshirtColor} · ukuran ${args.tshirtSize}`;
-      }
-
-      // Affiliate coupon (brief Part 3.7): validated on the server —
-      // the code must belong to an active affiliate. The discount comes
-      // from the affiliate's configured rate, never from the client.
-      let affiliate: AffiliateRow | null = null;
-      let discountAmount = 0;
-      const couponInput = args.couponCode.trim().toUpperCase();
-      if (couponInput) {
         const rows = await db
           .select()
-          .from(schema.affiliates)
-          .where(eq(schema.affiliates.couponCode, couponInput))
+          .from(schema.projects)
+          .where(and(eq(schema.projects.id, args.projectId), eq(schema.projects.ownerId, ctx.visitorId)))
           .limit(1);
-        const found = rows[0];
-        if (!found || found.status !== "active") {
-          throw new Error("Kode kupon tidak ditemukan atau sudah tidak aktif. Periksa lagi kode-nya, atau lanjutkan tanpa kupon.");
+        const project = rows[0];
+        if (!project) {
+          throw new Error("Karya untuk pesanan ini tidak ditemukan. Kembali ke Studio Mewarnai dan simpan dulu karyamu.");
         }
-        affiliate = found;
-        discountAmount = Math.floor((price * found.discountPct) / 100);
-      }
-      const netSubtotal = price - discountAmount;
+        let colors: Record<string, string> = {};
+        try {
+          const parsed = JSON.parse(project.colors) as Record<string, string>;
+          if (parsed && typeof parsed === "object") colors = parsed;
+        } catch {
+          colors = {};
+        }
+        if (!Object.values(colors).some((color) => !["#ffffff", "#fff"].includes(String(color).toLowerCase())) &&
+            toOut(project).strokes.length === 0) {
+          throw new Error("Karya ini belum diwarnai — warnai dulu minimal satu bagian sebelum memesan.");
+        }
 
-      // Unique QRIS payment identifier (brief Part 4.2): Rp1–999 chosen
-      // so the exact payable total (net + code, shipping still 0 at this
-      // point) does not collide with any other order still waiting to be
-      // matched to a real transfer. Stored on the order and never
-      // regenerated, so a page refresh keeps the same amount.
-      const activeOrders = await db
-        .select({ total: schema.orders.total, uniqueCode: schema.orders.uniqueCode })
-        .from(schema.orders)
-        .where(inArray(schema.orders.payState, ["awaiting", "waiting_verification"]));
-      const takenTotals = new Set(activeOrders.map((o) => o.total + o.uniqueCode));
-      let uniqueCode = 0;
-      for (let attempt = 0; attempt < 300 && uniqueCode === 0; attempt++) {
-        const candidate = 1 + Math.floor(Math.random() * 999);
-        if (!takenTotals.has(netSubtotal + candidate)) uniqueCode = candidate;
-      }
-      if (uniqueCode === 0) {
-        for (let candidate = 1; candidate <= 999; candidate++) {
-          if (!takenTotals.has(netSubtotal + candidate)) {
-            uniqueCode = candidate;
-            break;
+        let variant = "";
+        const [override] = await db.select().from(schema.productPrices)
+          .where(eq(schema.productPrices.productId, args.productType)).limit(1);
+        const unitPrice = override?.price ?? DEFAULT_PRICES[args.productType];
+        if (args.expectedUnitPrice !== undefined && args.expectedUnitPrice !== unitPrice) {
+          throw new Error("Harga produk baru saja berubah. Periksa ringkasan harga dan coba lagi.");
+        }
+        if (args.productType === "poster") {
+          variant = "Poster berbingkai";
+        } else if (args.productType === "papercraft") {
+          variant = "Kit Papercraft 3D custom — pola gunting, lipat & lem dari karya anak";
+        } else if (args.productType === "celengan") {
+          variant = "Aksesori celengan tabung custom — gambar, warna dan nama dari karya anak";
+        } else if (args.productType === "accessory59") {
+          variant = "Aksesori custom kedua — gambar, warna, dan nama dari karya anak";
+        } else if (args.productType === "puzzle") {
+          variant = "Puzzle personalisasi";
+        } else if (args.productType === "placemat") {
+          variant = "Alas makan personalisasi";
+        } else if (args.productType === "figurine") {
+          variant = "Figurine custom — melewati Design Review";
+        } else {
+          if (!(TSHIRT_COLORS as readonly string[]).includes(args.tshirtColor)) {
+            throw new Error("Pilih warna kaos yang tersedia: Cream, Mustard, Terracotta, Sage Green, atau Brown.");
+          }
+          if (!(TSHIRT_SIZES as readonly string[]).includes(args.tshirtSize)) {
+            throw new Error("Pilih ukuran kaos yang tersedia.");
+          }
+          variant = `Kaos ${args.tshirtColor} · ukuran ${args.tshirtSize}`;
+        }
+
+        const price = unitPrice * args.quantity;
+
+        // Affiliate coupon (brief Part 3.7): validated on the server —
+        // the code must belong to an active affiliate. The discount comes
+        // from the affiliate's configured rate, never from the client.
+        let affiliate: AffiliateRow | null = null;
+        let discountAmount = 0;
+        const couponInput = args.couponCode.trim().toUpperCase();
+        if (couponInput) {
+          const rows = await db
+            .select()
+            .from(schema.affiliates)
+            .where(eq(schema.affiliates.couponCode, couponInput))
+            .limit(1);
+          const found = rows[0];
+          if (!found || found.status !== "active") {
+            throw new Error("Kode kupon tidak ditemukan atau sudah tidak aktif. Periksa lagi kode-nya, atau lanjutkan tanpa kupon.");
+          }
+          affiliate = found;
+          discountAmount = Math.floor((price * found.discountPct) / 100);
+        }
+        const netSubtotal = price - discountAmount;
+
+        // Unique QRIS payment identifier (brief Part 4.2): Rp1–999 chosen
+        // so the exact payable total (net + code, shipping still 0 at this
+        // point) does not collide with any other order still waiting to be
+        // matched to a real transfer. Stored on the order and never
+        // regenerated, so a page refresh keeps the same amount.
+        const activeOrders = await db
+          .select({ total: schema.orders.total, uniqueCode: schema.orders.uniqueCode })
+          .from(schema.orders)
+          .where(and(inArray(schema.orders.payState, ["awaiting", "waiting_verification", "unmatched"]),
+            sql`${schema.orders.uniqueCode} > 0 AND ${schema.orders.total} + ${schema.orders.uniqueCode} BETWEEN ${netSubtotal + 1} AND ${netSubtotal + 999}`));
+        const takenTotals = new Set(activeOrders.map((o) => o.total + o.uniqueCode));
+        let uniqueCode = 0;
+        for (let attempt = 0; attempt < 300 && uniqueCode === 0; attempt++) {
+          const candidate = 1 + Math.floor(Math.random() * 999);
+          if (!takenTotals.has(netSubtotal + candidate)) uniqueCode = candidate;
+        }
+        if (uniqueCode === 0) {
+          for (let candidate = 1; candidate <= 999; candidate++) {
+            if (!takenTotals.has(netSubtotal + candidate)) {
+              uniqueCode = candidate;
+              break;
+            }
           }
         }
-      }
-      if (uniqueCode === 0) throw new Error("Kode pembayaran unik sedang penuh — coba lagi sebentar.");
+        if (uniqueCode === 0) throw new Error("Kode pembayaran unik sedang penuh — coba lagi sebentar.");
 
-      const now = new Date();
-      let code = "";
-      for (let attempt = 0; attempt < 5 && !code; attempt++) {
-        const candidate = makeOrderCode();
-        const clash = await db
-          .select({ id: schema.orders.id })
-          .from(schema.orders)
-          .where(eq(schema.orders.code, candidate))
-          .limit(1);
-        if (clash.length === 0) code = candidate;
-      }
-      if (!code) throw new Error("Kode pesanan tidak bisa dibuat — coba lagi sebentar.");
+        const now = new Date();
+        const result = await db
+          .insert(schema.orders)
+          .values({
+            code: makeOrderCode(),
+            checkoutKey,
+            quantity: args.quantity,
+            projectId: project.id,
+            templateId: project.templateId,
+            customDef: project.customDef,
+            childName: args.childName ?? project.childName,
+            message: project.message,
+            nameFont: project.nameFont,
+            nameColor: project.nameColor,
+            nameAlign: project.nameAlign,
+            colors: project.colors,
+            strokes: project.strokes,
+            productType: args.productType,
+            variant,
+            productPrice: price,
+            couponCode: affiliate ? affiliate.couponCode : "",
+            affiliateId: affiliate ? affiliate.id : null,
+            discountAmount,
+            uniqueCode,
+            payState: "awaiting",
+            paymentConfirmedAt: null,
+            shippingCost: null,
+            total: netSubtotal,
+            customerName: args.customerName,
+            whatsapp: digits,
+            email: args.email,
+            address: args.address,
+            notes: args.notes,
+            paymentStatus: "pending",
+            orderStatus: "pending_payment",
+            trackingNumber: "",
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+        const row = result[0];
+        if (!row) throw new Error("Pesanan tidak bisa disimpan — coba lagi sebentar.");
+        // Attribution is recorded once, at order creation (the unique
+        // order_id on the commission row makes duplicates impossible).
+        await syncCommission(db, row, "created");
+        ctx.invalidateQueries();
+        return { order: orderToOut(row) };
+      });
+    },
+  }),
 
-      const result = await db
-        .insert(schema.orders)
-        .values({
-          code,
-          projectId: project.id,
-          templateId: project.templateId,
-          customDef: project.customDef,
-          childName: args.childName || project.childName,
-          message: project.message,
-          nameFont: project.nameFont,
-          nameColor: project.nameColor,
-          nameAlign: project.nameAlign,
-          colors: project.colors,
-          strokes: project.strokes,
-          productType: args.productType,
-          variant,
-          productPrice: price,
-          couponCode: affiliate ? affiliate.couponCode : "",
-          affiliateId: affiliate ? affiliate.id : null,
-          discountAmount,
-          uniqueCode,
-          payState: "awaiting",
-          paymentConfirmedAt: null,
-          shippingCost: null,
-          total: netSubtotal,
-          customerName: args.customerName,
-          whatsapp: digits,
-          email: args.email,
-          address: args.address,
-          notes: args.notes,
-          paymentStatus: "pending",
-          orderStatus: "pending_payment",
-          trackingNumber: "",
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
-      const row = result[0];
-      if (!row) throw new Error("Pesanan tidak bisa disimpan — coba lagi sebentar.");
-      // Attribution is recorded once, at order creation (the unique
-      // order_id on the commission row makes duplicates impossible).
-      await syncCommission(db, row, "created");
-      ctx.invalidateQueries();
-      return { order: orderToOut(row) };
+  adminSetProductPrice: defineAction({
+    description: "Changes the catalog price for future orders.",
+    request: z.object({ productId: z.enum(PRODUCT_IDS), price: z.number().int().min(1000).max(10000000) }),
+    response: z.object({ ok: z.literal(true) }),
+    async handler(ctx, args): Promise<{ ok: true }> {
+      return schemaDb(ctx).transaction(async (db) => {
+        await db.insert(schema.productPrices).values(args).onConflictDoUpdate({
+          target: schema.productPrices.productId, set: { price: args.price },
+        });
+        await audit(db, null, "catalog.price_changed", `${args.productId}: Rp${args.price}`);
+        return { ok: true };
+      });
     },
   }),
 
   listOrders: defineAction({
     description: "Lists all physical-product orders for the admin dashboard, newest first.",
     request: z.object({
-      limit: z.number().int().positive().max(100).default(50),
+      limit: z.number().int().positive().max(100).default(20),
+      offset: z.number().int().min(0).max(100000).default(0),
     }),
-    response: z.object({ orders: z.array(orderOut) }),
+    response: z.object({
+      orders: z.array(orderOut), orderCount: z.number(), paidCount: z.number(),
+      paymentReviewCount: z.number(), netProductRevenue: z.number(),
+    }),
     async handler(ctx, args) {
       const db = ctx.db<typeof schema>();
       const rows = await db
         .select()
         .from(schema.orders)
         .orderBy(desc(schema.orders.createdAt))
-        .limit(args.limit);
-      return { orders: rows.map(orderToOut) };
+        .limit(args.limit).offset(args.offset);
+      const [summary] = await db.select({
+        orderCount: count(),
+        paidCount: sql<number>`count(*) FILTER (WHERE payment_status = 'paid')`.mapWith(Number),
+        paymentReviewCount: sql<number>`count(*) FILTER (WHERE pay_state = 'waiting_verification')`.mapWith(Number),
+        netProductRevenue: sql<number>`COALESCE(sum(product_price - discount_amount) FILTER (WHERE payment_status = 'paid'), 0)`.mapWith(Number),
+      }).from(schema.orders);
+      return { orders: rows.map(orderToOut), ...summary! };
     },
   }),
 
@@ -967,58 +1029,63 @@ export const Actions = {
     }),
     response: z.object({ order: orderOut }),
     async handler(ctx, args) {
-      const db = ctx.db<typeof schema>();
-      const rows = await db
-        .select()
-        .from(schema.orders)
-        .where(eq(schema.orders.id, args.id))
-        .limit(1);
-      const row = rows[0];
-      if (!row) throw new Error("Pesanan tidak ditemukan.");
+      return ctx.db<typeof schema>().transaction(async (db) => {
+        await lockCheckout(db);
+        const rows = await db
+          .select()
+          .from(schema.orders)
+          .where(eq(schema.orders.id, args.id))
+          .limit(1);
+        const row = rows[0];
+        if (!row) throw new Error("Pesanan tidak ditemukan.");
 
-      let paymentStatus = args.paymentStatus ?? row.paymentStatus;
-      let orderStatus = args.orderStatus ?? row.orderStatus;
-      // Marking payment as verified-paid advances a still-pending order.
-      if (args.paymentStatus === "paid" && orderStatus === "pending_payment") {
-        orderStatus = "paid";
-      }
-      const advanced = ["confirmed", "design_review", "production", "ready_to_ship", "shipped", "completed"];
-      if (advanced.includes(orderStatus) && paymentStatus !== "paid") {
-        throw new Error("Tahap produksi hanya bisa dimulai setelah pembayaran terverifikasi (status pembayaran = Lunas).");
-      }
-      const trackingNumber = args.trackingNumber ?? row.trackingNumber;
-      if (orderStatus === "shipped" && !trackingNumber) {
-        throw new Error("Nomor resi wajib diisi sebelum status diubah ke Dikirim.");
-      }
-      const shippingCost = args.shippingCost !== undefined ? args.shippingCost : row.shippingCost;
-      const total = row.productPrice - row.discountAmount + (shippingCost ?? 0);
+        const paymentStatus = args.paymentStatus ?? row.paymentStatus;
+        let orderStatus = args.orderStatus ?? row.orderStatus;
+        if (paymentStatus !== row.paymentStatus) {
+          throw new Error("Gunakan verifikasi QRIS untuk mengubah status pembayaran.");
+        }
+        if (orderStatus === "paid" && paymentStatus !== "paid") {
+          throw new Error("Pembayaran belum terverifikasi.");
+        }
+        const advanced = ["confirmed", "design_review", "production", "ready_to_ship", "shipped", "completed"];
+        if (advanced.includes(orderStatus) && paymentStatus !== "paid") {
+          throw new Error("Tahap produksi hanya bisa dimulai setelah pembayaran terverifikasi (status pembayaran = Lunas).");
+        }
+        const trackingNumber = args.trackingNumber ?? row.trackingNumber;
+        if (orderStatus === "shipped" && !trackingNumber) {
+          throw new Error("Nomor resi wajib diisi sebelum status diubah ke Dikirim.");
+        }
+        const shippingCost = args.shippingCost !== undefined ? args.shippingCost : row.shippingCost;
+        const total = row.productPrice - row.discountAmount + (shippingCost ?? 0);
+        if (total !== row.total) {
+          if (row.payState !== "awaiting") throw new Error("Nominal tidak bisa diubah setelah transfer dilaporkan.");
+          const [conflict] = await db.select({ id: schema.orders.id }).from(schema.orders).where(and(
+            ne(schema.orders.id, row.id),
+            inArray(schema.orders.payState, ["awaiting", "waiting_verification", "unmatched"]),
+            sql`${schema.orders.uniqueCode} > 0 AND ${schema.orders.total} + ${schema.orders.uniqueCode} = ${total + row.uniqueCode}`,
+          )).limit(1);
+          if (conflict) throw new Error("Nominal QRIS ini sudah dialokasikan ke pesanan lain.");
+        }
 
-      // Keep the QRIS pay-state and the commission ledger in step when
-      // the admin drives the order from this general editor too.
-      let payState = row.payState;
-      if (paymentStatus === "paid" && payState !== "verified") payState = "verified";
-      if (paymentStatus === "refunded") payState = "refunded";
-
-      const result = await db
-        .update(schema.orders)
-        .set({
-          paymentStatus,
-          orderStatus,
-          trackingNumber,
-          shippingCost,
-          total,
-          payState,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.orders.id, args.id))
-        .returning();
-      const updated = result[0];
-      if (!updated) throw new Error("Pesanan tidak ditemukan.");
-      if (paymentStatus === "paid" && row.paymentStatus !== "paid") await syncCommission(db, updated, "verified");
-      if (orderStatus === "completed" && row.orderStatus !== "completed") await syncCommission(db, updated, "completed");
-      if (paymentStatus === "refunded" && row.paymentStatus !== "refunded") await syncCommission(db, updated, "reversed");
-      ctx.invalidateQueries();
-      return { order: orderToOut(updated) };
+        const result = await db
+          .update(schema.orders)
+          .set({
+            paymentStatus,
+            orderStatus,
+            trackingNumber,
+            shippingCost,
+            total,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.orders.id, args.id))
+          .returning();
+        const updated = result[0];
+        if (!updated) throw new Error("Pesanan tidak ditemukan.");
+        if (orderStatus === "completed" && row.orderStatus !== "completed") await syncCommission(db, updated, "completed");
+        if (orderStatus === "cancelled" && row.orderStatus !== "cancelled" && paymentStatus !== "paid") await syncCommission(db, updated, "reversed");
+        ctx.invalidateQueries();
+        return { order: orderToOut(updated) };
+      });
     },
   }),
 
@@ -1040,7 +1107,7 @@ export const Actions = {
       const row = rows[0];
       if (!row) return { order: null };
       if (normalizeWa(row.whatsapp) !== normalizeWa(args.whatsapp)) return { order: null };
-      return { order: orderToOut(row) };
+      return { order: orderToOut({ ...row, customerName: "", email: "", address: "", notes: "", affiliateId: null }) };
     },
   }),
 
@@ -1086,37 +1153,65 @@ export const Actions = {
     request: z.object({
       code: z.string().trim().min(4).max(24),
       whatsapp: z.string().trim().min(9).max(20),
+      proof: z.object({
+        mime: z.enum(["image/jpeg", "image/png"]),
+        data: z.base64().min(32).max(1000000),
+      }).optional(),
     }),
     response: z.object({
       ok: z.boolean(),
       payState: z.enum(["awaiting", "waiting_verification", "verified", "rejected", "unmatched", "refunded", "not_found"]),
     }),
     async handler(ctx, args) {
+      return ctx.db<typeof schema>().transaction(async (db) => {
+        await lockCheckout(db);
+        const rows = await db
+          .select()
+          .from(schema.orders)
+          .where(eq(schema.orders.code, args.code.trim().toUpperCase()))
+          .limit(1);
+        const row = rows[0];
+        if (!row) return { ok: false, payState: "not_found" as const };
+        if (normalizeWa(row.whatsapp) !== normalizeWa(args.whatsapp)) return { ok: false, payState: "not_found" as const };
+        if (row.payState === "verified") return { ok: true, payState: "verified" as const };
+        if (row.orderStatus === "cancelled" || row.payState === "rejected" || row.payState === "refunded") return { ok: false, payState: row.payState };
+        if (row.checkoutKey && row.shippingCost === null) throw new Error("Tunggu ongkir dikonfirmasi sebelum melakukan pembayaran.");
+        if (args.proof) {
+          const { mime, data } = args.proof;
+          if (!isPaymentProof(mime, data)) {
+            throw new Error("Gunakan gambar PNG atau JPG yang valid, maksimal 4096 piksel per sisi dan 12 megapiksel.");
+          }
+          await db.insert(schema.paymentProofs).values({
+            orderId: row.id, mime, data, updatedAt: new Date(),
+          }).onConflictDoUpdate({ target: schema.paymentProofs.orderId, set: { mime, data, updatedAt: new Date() } });
+        }
+        if (row.payState === "waiting_verification") return { ok: true, payState: "waiting_verification" as const };
+        const now = new Date();
+        await db
+          .update(schema.orders)
+          .set({
+            payState: "waiting_verification",
+            paymentStatus: "waiting_verification",
+            paymentConfirmedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(schema.orders.id, row.id));
+        await audit(db, row.affiliateId, "payment.customer_confirmed", `Pesanan ${row.code} — pelanggan menekan "Saya Sudah Transfer".`);
+        ctx.invalidateQueries();
+        return { ok: true, payState: "waiting_verification" as const };
+      });
+    },
+  }),
+
+  adminGetPaymentProof: defineAction({
+    description: "Reads a private QRIS payment proof for an admin verifying an order.",
+    request: z.object({ id: z.number().int().positive() }),
+    response: z.object({ proof: z.object({ mime: z.enum(["image/jpeg", "image/png"]), data: z.string() }).nullable() }),
+    async handler(ctx, args) {
       const db = ctx.db<typeof schema>();
-      const rows = await db
-        .select()
-        .from(schema.orders)
-        .where(eq(schema.orders.code, args.code.trim().toUpperCase()))
-        .limit(1);
-      const row = rows[0];
-      if (!row) return { ok: false, payState: "not_found" as const };
-      if (normalizeWa(row.whatsapp) !== normalizeWa(args.whatsapp)) return { ok: false, payState: "not_found" as const };
-      if (row.payState === "verified") return { ok: true, payState: "verified" as const };
-      if (row.payState === "waiting_verification") return { ok: true, payState: "waiting_verification" as const };
-      if (row.payState === "rejected" || row.payState === "refunded") return { ok: false, payState: row.payState };
-      const now = new Date();
-      await db
-        .update(schema.orders)
-        .set({
-          payState: "waiting_verification",
-          paymentStatus: "waiting_verification",
-          paymentConfirmedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(schema.orders.id, row.id));
-      await audit(db, row.affiliateId, "payment.customer_confirmed", `Pesanan ${row.code} — pelanggan menekan "Saya Sudah Transfer".`);
-      ctx.invalidateQueries();
-      return { ok: true, payState: "waiting_verification" as const };
+      const [proof] = await db.select({ mime: schema.paymentProofs.mime, data: schema.paymentProofs.data })
+        .from(schema.paymentProofs).where(eq(schema.paymentProofs.orderId, args.id)).limit(1);
+      return { proof: proof ?? null };
     },
   }),
 
@@ -1126,63 +1221,78 @@ export const Actions = {
     request: z.object({
       id: z.number().int().positive(),
       decision: z.enum(["verify", "reject", "unmatched", "refund"]),
+      paymentReference: z.string().trim().max(80).default(""),
     }),
     response: z.object({ order: orderOut }),
     async handler(ctx, args) {
-      const db = ctx.db<typeof schema>();
-      const rows = await db.select().from(schema.orders).where(eq(schema.orders.id, args.id)).limit(1);
-      const row = rows[0];
-      if (!row) throw new Error("Pesanan tidak ditemukan.");
-      const now = new Date();
-      let updated: OrderRow | undefined;
-      if (args.decision === "verify") {
-        if (row.payState === "verified") return { order: orderToOut(row) };
-        if (row.payState === "refunded" || row.payState === "rejected") {
-          throw new Error("Pesanan ini sudah ditolak/direfund — tidak bisa diverifikasi lagi.");
+      return ctx.db<typeof schema>().transaction(async (db) => {
+        await lockCheckout(db);
+        const rows = await db.select().from(schema.orders).where(eq(schema.orders.id, args.id)).limit(1);
+        const row = rows[0];
+        if (!row) throw new Error("Pesanan tidak ditemukan.");
+        const now = new Date();
+        let updated: OrderRow | undefined;
+        if (args.decision === "verify") {
+          if (row.payState === "verified") return { order: orderToOut(row) };
+          if (row.payState === "refunded" || row.orderStatus === "cancelled") {
+            throw new Error("Pesanan ini sudah dibatalkan atau direfund.");
+          }
+          const reference = args.paymentReference.toUpperCase();
+          if (!/^[A-Z0-9-]{4,80}$/.test(reference)) throw new Error("Masukkan nomor referensi dari mutasi QRIS.");
+          const [used] = await db.select({ id: schema.orders.id }).from(schema.orders)
+            .where(eq(schema.orders.paymentReference, reference)).limit(1);
+          if (used) throw new Error("Nomor referensi QRIS sudah dipakai untuk pesanan lain.");
+          const result = await db
+            .update(schema.orders)
+            .set({
+              payState: "verified",
+              paymentReference: reference,
+              paymentStatus: "paid",
+              orderStatus: row.orderStatus === "pending_payment" ? "paid" : row.orderStatus,
+              updatedAt: now,
+            })
+            .where(eq(schema.orders.id, row.id))
+            .returning();
+          updated = result[0];
+          if (updated) await syncCommission(db, updated, "verified");
+          await audit(db, row.affiliateId, "payment.verified", `Pesanan ${row.code} diverifikasi lunas oleh admin (total bayar ${row.total + row.uniqueCode}).`);
+        } else if (args.decision === "reject") {
+          if (row.payState === "rejected") return { order: orderToOut(row) };
+          if (["verified", "refunded"].includes(row.payState)) throw new Error("Keputusan ini hanya untuk pembayaran yang belum diverifikasi.");
+          const result = await db
+            .update(schema.orders)
+            .set({ payState: "rejected", paymentStatus: "rejected", updatedAt: now })
+            .where(eq(schema.orders.id, row.id))
+            .returning();
+          updated = result[0];
+          if (updated) await syncCommission(db, updated, "reversed");
+          await audit(db, row.affiliateId, "payment.rejected", `Pesanan ${row.code} — pembayaran ditolak admin.`);
+        } else if (args.decision === "unmatched") {
+          if (row.payState === "unmatched") return { order: orderToOut(row) };
+          if (!["awaiting", "waiting_verification"].includes(row.payState)) throw new Error("Keputusan ini hanya untuk pembayaran yang belum diperiksa.");
+          const result = await db
+            .update(schema.orders)
+            .set({ payState: "unmatched", updatedAt: now })
+            .where(eq(schema.orders.id, row.id))
+            .returning();
+          updated = result[0];
+          await audit(db, row.affiliateId, "payment.unmatched", `Pesanan ${row.code} ditandai belum cocok (unmatched).`);
+        } else {
+          if (row.payState === "refunded") return { order: orderToOut(row) };
+          if (row.payState !== "verified") throw new Error("Hanya pembayaran terverifikasi yang bisa direfund.");
+          const result = await db
+            .update(schema.orders)
+            .set({ payState: "refunded", paymentStatus: "refunded", orderStatus: "cancelled", updatedAt: now })
+            .where(eq(schema.orders.id, row.id))
+            .returning();
+          updated = result[0];
+          if (updated) await syncCommission(db, updated, "reversed");
+          await audit(db, row.affiliateId, "payment.refunded", `Pesanan ${row.code} direfund; komisi terkait dibalikkan.`);
         }
-        const result = await db
-          .update(schema.orders)
-          .set({
-            payState: "verified",
-            paymentStatus: "paid",
-            orderStatus: row.orderStatus === "pending_payment" ? "paid" : row.orderStatus,
-            updatedAt: now,
-          })
-          .where(eq(schema.orders.id, row.id))
-          .returning();
-        updated = result[0];
-        if (updated) await syncCommission(db, updated, "verified");
-        await audit(db, row.affiliateId, "payment.verified", `Pesanan ${row.code} diverifikasi lunas oleh admin (total bayar ${row.total + row.uniqueCode}).`);
-      } else if (args.decision === "reject") {
-        const result = await db
-          .update(schema.orders)
-          .set({ payState: "rejected", paymentStatus: "rejected", updatedAt: now })
-          .where(eq(schema.orders.id, row.id))
-          .returning();
-        updated = result[0];
-        if (updated) await syncCommission(db, updated, "reversed");
-        await audit(db, row.affiliateId, "payment.rejected", `Pesanan ${row.code} — pembayaran ditolak admin.`);
-      } else if (args.decision === "unmatched") {
-        const result = await db
-          .update(schema.orders)
-          .set({ payState: "unmatched", updatedAt: now })
-          .where(eq(schema.orders.id, row.id))
-          .returning();
-        updated = result[0];
-        await audit(db, row.affiliateId, "payment.unmatched", `Pesanan ${row.code} ditandai belum cocok (unmatched).`);
-      } else {
-        const result = await db
-          .update(schema.orders)
-          .set({ payState: "refunded", paymentStatus: "refunded", updatedAt: now })
-          .where(eq(schema.orders.id, row.id))
-          .returning();
-        updated = result[0];
-        if (updated) await syncCommission(db, updated, "reversed");
-        await audit(db, row.affiliateId, "payment.refunded", `Pesanan ${row.code} direfund; komisi terkait dibalikkan.`);
-      }
-      if (!updated) throw new Error("Pesanan tidak ditemukan.");
-      ctx.invalidateQueries();
-      return { order: orderToOut(updated) };
+        if (!updated) throw new Error("Pesanan tidak ditemukan.");
+        ctx.invalidateQueries();
+        return { order: orderToOut(updated) };
+      });
     },
   }),
 
@@ -1330,7 +1440,8 @@ export const Actions = {
       const expires = new Date(now.getTime() + cfg.inviteExpiryHours * 3600 * 1000);
       await db.insert(schema.affiliateInvitations).values({
         affiliateId: affiliate.id,
-        token,
+        token: tokenDigest(token),
+        encryptedToken: encryptShareableToken(token),
         expiresAt: expires,
         createdAt: now,
       });
@@ -1405,7 +1516,7 @@ export const Actions = {
           instagram: a.instagram,
           tiktok: a.tiktok,
           inviteState,
-          inviteToken: inviteState === "pending" && invite ? invite.token : "",
+          inviteToken: inviteState === "pending" && invite ? decryptShareableToken(invite.encryptedToken) : "",
           inviteExpiresAt: invite ? invite.expiresAt.toISOString() : null,
           pinResetRequested: a.pinResetRequestedAt != null,
           hasPin: a.pinHash !== "",
@@ -1521,7 +1632,8 @@ export const Actions = {
       const expires = new Date(now.getTime() + cfg.inviteExpiryHours * 3600 * 1000);
       await db.insert(schema.affiliateInvitations).values({
         affiliateId: args.affiliateId,
-        token,
+        token: tokenDigest(token),
+        encryptedToken: encryptShareableToken(token),
         expiresAt: expires,
         createdAt: now,
       });
@@ -1573,7 +1685,7 @@ export const Actions = {
       const valid = a.resetToken !== "" && a.resetExpiresAt != null && a.resetExpiresAt.getTime() > Date.now();
       return {
         requested: a.pinResetRequestedAt != null,
-        resetToken: valid ? a.resetToken : "",
+        resetToken: valid ? decryptShareableToken(a.resetTokenEncrypted) : "",
         resetExpiresAt: a.resetExpiresAt ? a.resetExpiresAt.toISOString() : null,
       };
     },
@@ -1670,48 +1782,58 @@ export const Actions = {
     }),
     response: z.object({ ok: z.literal(true) }),
     async handler(ctx, args): Promise<{ ok: true }> {
-      const db = ctx.db<typeof schema>();
-      const rows = await db.select().from(schema.payouts).where(eq(schema.payouts.id, args.id)).limit(1);
-      const payout = rows[0];
-      if (!payout) throw new Error("Permintaan penarikan tidak ditemukan.");
-      const now = new Date();
-      if (args.decision === "approve") {
-        if (payout.status !== "requested") throw new Error("Hanya permintaan berstatus Diminta yang bisa disetujui.");
-        await db.update(schema.payouts).set({ status: "approved", note: args.note || payout.note, updatedAt: now }).where(eq(schema.payouts.id, args.id));
-        await audit(db, payout.affiliateId, "payout.approved", `Penarikan Rp${payout.amount} disetujui.`);
-      } else if (args.decision === "reject") {
-        if (payout.status === "paid") throw new Error("Penarikan yang sudah dibayar tidak bisa ditolak.");
-        await db.update(schema.payouts).set({ status: "rejected", note: args.note || payout.note, updatedAt: now }).where(eq(schema.payouts.id, args.id));
-        await audit(db, payout.affiliateId, "payout.rejected", `Penarikan Rp${payout.amount} ditolak. ${args.note}`.trim());
-      } else {
-        if (payout.status !== "approved" && payout.status !== "requested") {
-          throw new Error("Penarikan ini tidak bisa ditandai dibayar dari statusnya sekarang.");
-        }
-        await db
-          .update(schema.payouts)
-          .set({ status: "paid", paidAt: now, note: args.note || payout.note, updatedAt: now })
-          .where(eq(schema.payouts.id, args.id));
-        // Settle payable commissions oldest-first up to the paid amount.
-        let remaining = payout.amount;
-        const payable = await db
-          .select()
-          .from(schema.commissions)
-          .where(and(eq(schema.commissions.affiliateId, payout.affiliateId), eq(schema.commissions.status, "payable")))
-          .orderBy(schema.commissions.createdAt);
-        for (const c of payable) {
-          if (remaining <= 0) break;
-          if (c.amount <= remaining) {
-            await db
-              .update(schema.commissions)
-              .set({ status: "paid", payoutId: payout.id, updatedAt: now })
-              .where(eq(schema.commissions.id, c.id));
-            remaining -= c.amount;
+      return ctx.db<typeof schema>().transaction(async (db) => {
+        const rows = await db.select().from(schema.payouts).where(eq(schema.payouts.id, args.id)).limit(1);
+        const payoutOwner = rows[0];
+        if (!payoutOwner) throw new Error("Permintaan penarikan tidak ditemukan.");
+        await db.select({ id: schema.affiliates.id }).from(schema.affiliates)
+          .where(eq(schema.affiliates.id, payoutOwner.affiliateId)).for("update");
+        const [payout] = await db.select().from(schema.payouts).where(eq(schema.payouts.id, args.id)).limit(1);
+        if (!payout) throw new Error("Permintaan penarikan tidak ditemukan.");
+        const now = new Date();
+        if (args.decision === "approve") {
+          if (payout.status !== "requested") throw new Error("Hanya permintaan berstatus Diminta yang bisa disetujui.");
+          await db.update(schema.payouts).set({ status: "approved", note: args.note || payout.note, updatedAt: now }).where(eq(schema.payouts.id, args.id));
+          await audit(db, payout.affiliateId, "payout.approved", `Penarikan Rp${payout.amount} disetujui.`);
+        } else if (args.decision === "reject") {
+          if (payout.status === "paid") throw new Error("Penarikan yang sudah dibayar tidak bisa ditolak.");
+          await db.update(schema.payouts).set({ status: "rejected", note: args.note || payout.note, updatedAt: now }).where(eq(schema.payouts.id, args.id));
+          await audit(db, payout.affiliateId, "payout.rejected", `Penarikan Rp${payout.amount} ditolak. ${args.note}`.trim());
+        } else {
+          if (payout.status === "paid") return { ok: true };
+          if (payout.status !== "approved") {
+            throw new Error("Penarikan ini tidak bisa ditandai dibayar dari statusnya sekarang.");
           }
+          await db
+            .update(schema.payouts)
+            .set({ status: "paid", paidAt: now, note: args.note || payout.note, updatedAt: now })
+            .where(eq(schema.payouts.id, args.id));
+          // Settle payable commissions oldest-first up to the paid amount.
+          let remaining = payout.amount;
+          const payable = await db
+            .select()
+            .from(schema.commissions)
+            .where(and(eq(schema.commissions.affiliateId, payout.affiliateId), eq(schema.commissions.status, "payable")))
+            .orderBy(schema.commissions.createdAt);
+          for (const c of payable) {
+            if (remaining <= 0) break;
+            const settled = Math.min(c.amount - c.paidAmount, remaining);
+            if (settled <= 0) continue;
+            const paidAmount = c.paidAmount + settled;
+            await db.update(schema.commissions).set({
+              paidAmount,
+              status: paidAmount === c.amount ? "paid" : "payable",
+              payoutId: payout.id,
+              updatedAt: now,
+            }).where(eq(schema.commissions.id, c.id));
+            remaining -= settled;
+          }
+          if (remaining !== 0) throw new Error("Saldo komisi berubah. Periksa ulang penarikan ini sebelum mencatat pembayaran.");
+          await audit(db, payout.affiliateId, "payout.paid", `Penarikan Rp${payout.amount} ditandai sudah ditransfer.`);
         }
-        await audit(db, payout.affiliateId, "payout.paid", `Penarikan Rp${payout.amount} ditandai sudah ditransfer.`);
-      }
-      ctx.invalidateQueries();
-      return { ok: true };
+        ctx.invalidateQueries();
+        return { ok: true };
+      });
     },
   }),
 
@@ -1755,7 +1877,7 @@ export const Actions = {
       const rows = await db
         .select()
         .from(schema.affiliateInvitations)
-        .where(eq(schema.affiliateInvitations.token, args.token.trim()))
+        .where(eq(schema.affiliateInvitations.token, tokenDigest(args.token)))
         .limit(1);
       const invite = rows[0];
       if (!invite) return { valid: false, reason: "not_found" as const, affiliateName: "", expiresAt: null };
@@ -1784,48 +1906,49 @@ export const Actions = {
     }),
     response: z.object({ sessionToken: z.string(), affiliate: affiliatePublicOut }),
     async handler(ctx, args) {
-      const db = ctx.db<typeof schema>();
-      if (isTrivialPin(args.pin)) {
-        throw new Error("PIN itu terlalu mudah ditebak (contoh: 0000, 1111, 1234). Pilih kombinasi lain ya.");
-      }
-      const invites = await db
-        .select()
-        .from(schema.affiliateInvitations)
-        .where(eq(schema.affiliateInvitations.token, args.token.trim()))
-        .limit(1);
-      const invite = invites[0];
-      if (!invite || invite.usedAt || invite.revokedAt) {
-        throw new Error("Tautan undangan ini sudah tidak berlaku. Minta tautan baru ke tim Bun & Fleur Kids.");
-      }
-      if (invite.expiresAt.getTime() < Date.now()) {
-        throw new Error("Tautan undangan sudah kedaluwarsa. Minta tautan baru ke tim Bun & Fleur Kids.");
-      }
-      const affRows = await db.select().from(schema.affiliates).where(eq(schema.affiliates.id, invite.affiliateId)).limit(1);
-      const affiliate = affRows[0];
-      if (!affiliate) throw new Error("Akun afiliasi untuk undangan ini tidak ditemukan.");
-      if (affiliate.status === "suspended") throw new Error("Akun afiliasi ini sedang ditangguhkan.");
-      if (affiliate.pinHash) throw new Error("Akun ini sudah aktif. Gunakan login nomor HP atau minta reset PIN.");
-      // Identity confirmation: the email or WhatsApp the admin registered.
-      const identity = args.identity.trim();
-      const emailMatch = identity.includes("@") && identity.toLowerCase() === affiliate.email;
-      const waMatch = !identity.includes("@") && affiliate.whatsapp !== "" && normalizeWa(identity) === normalizeWa(affiliate.whatsapp);
-      if (!emailMatch && !waMatch) {
-        throw new Error("Email / nomor WhatsApp tidak cocok dengan yang terdaftar. Periksa lagi, atau hubungi tim kami.");
-      }
-      const now = new Date();
-      const pinHash = await hashPin(args.pin);
-      await db
-        .update(schema.affiliates)
-        .set({ pinHash, status: "active", failedAttempts: 0, lockedUntil: null, updatedAt: now })
-        .where(eq(schema.affiliates.id, affiliate.id));
-      await db
-        .update(schema.affiliateInvitations)
-        .set({ usedAt: now })
-        .where(eq(schema.affiliateInvitations.id, invite.id));
-      const sessionToken = await createAffiliateSession(db, affiliate.id);
-      await audit(db, affiliate.id, "affiliate.activated", "Akun diaktifkan lewat tautan undangan; PIN dibuat.");
-      ctx.invalidateQueries();
-      return { sessionToken, affiliate: toAffiliatePublic({ ...affiliate, status: "active" }) };
+      return ctx.db<typeof schema>().transaction(async (db) => {
+        if (isTrivialPin(args.pin)) {
+          throw new Error("PIN itu terlalu mudah ditebak (contoh: 0000, 1111, 1234). Pilih kombinasi lain ya.");
+        }
+        const invites = await db
+          .select()
+          .from(schema.affiliateInvitations)
+          .where(eq(schema.affiliateInvitations.token, tokenDigest(args.token)))
+          .limit(1).for("update");
+        const invite = invites[0];
+        if (!invite || invite.usedAt || invite.revokedAt) {
+          throw new Error("Tautan undangan ini sudah tidak berlaku. Minta tautan baru ke tim Bun & Fleur Kids.");
+        }
+        if (invite.expiresAt.getTime() < Date.now()) {
+          throw new Error("Tautan undangan sudah kedaluwarsa. Minta tautan baru ke tim Bun & Fleur Kids.");
+        }
+        const affRows = await db.select().from(schema.affiliates).where(eq(schema.affiliates.id, invite.affiliateId)).limit(1).for("update");
+        const affiliate = affRows[0];
+        if (!affiliate) throw new Error("Akun afiliasi untuk undangan ini tidak ditemukan.");
+        if (affiliate.status === "suspended") throw new Error("Akun afiliasi ini sedang ditangguhkan.");
+        if (affiliate.pinHash) throw new Error("Akun ini sudah aktif. Gunakan login nomor HP atau minta reset PIN.");
+        // Identity confirmation: the email or WhatsApp the admin registered.
+        const identity = args.identity.trim();
+        const emailMatch = identity.includes("@") && identity.toLowerCase() === affiliate.email;
+        const waMatch = !identity.includes("@") && affiliate.whatsapp !== "" && normalizeWa(identity) === normalizeWa(affiliate.whatsapp);
+        if (!emailMatch && !waMatch) {
+          throw new Error("Email / nomor WhatsApp tidak cocok dengan yang terdaftar. Periksa lagi, atau hubungi tim kami.");
+        }
+        const now = new Date();
+        const pinHash = await hashPin(args.pin);
+        await db
+          .update(schema.affiliates)
+          .set({ pinHash, status: "active", failedAttempts: 0, lockedUntil: null, updatedAt: now })
+          .where(eq(schema.affiliates.id, affiliate.id));
+        await db
+          .update(schema.affiliateInvitations)
+          .set({ usedAt: now, encryptedToken: "" })
+          .where(eq(schema.affiliateInvitations.id, invite.id));
+        const sessionToken = await createAffiliateSession(db, affiliate.id);
+        await audit(db, affiliate.id, "affiliate.activated", "Akun diaktifkan lewat tautan undangan; PIN dibuat.");
+        ctx.invalidateQueries();
+        return { sessionToken, affiliate: toAffiliatePublic({ ...affiliate, status: "active" }) };
+      });
     },
   }),
 
@@ -1842,43 +1965,46 @@ export const Actions = {
     }),
     response: z.object({ sessionToken: z.string(), affiliate: affiliatePublicOut }),
     async handler(ctx, args) {
-      const db = ctx.db<typeof schema>();
-      const phone = normalizeWa(args.identifier);
-      const intlPhone = phone.startsWith("0") ? `62${phone.slice(1)}` : phone;
-      const matches = await db.select().from(schema.affiliates)
-        .where(or(eq(schema.affiliates.whatsapp, phone), eq(schema.affiliates.whatsapp, intlPhone)))
-        .limit(1);
-      const affiliate = matches[0];
-      const genericError = "Nomor HP atau PIN salah. Periksa lagi.";
-      if (!affiliate || affiliate.pinHash === "") throw new Error(genericError);
-      if (affiliate.status === "suspended") {
-        throw new Error("Akun afiliasi ini sedang ditangguhkan. Hubungi tim Bun & Fleur Kids untuk bantuan.");
-      }
-      const now = new Date();
-      if (affiliate.lockedUntil && affiliate.lockedUntil.getTime() > now.getTime()) {
-        const minutes = Math.max(1, Math.ceil((affiliate.lockedUntil.getTime() - now.getTime()) / 60000));
-        throw new Error(`Terlalu banyak percobaan PIN salah. Akun terkunci sementara — coba lagi dalam ${minutes} menit.`);
-      }
-      const ok = await verifyPin(args.pin, affiliate.pinHash);
-      if (!ok) {
-        const attempts = affiliate.failedAttempts + 1;
-        const lock = attempts >= 5 ? new Date(now.getTime() + 15 * 60 * 1000) : null;
+      const result = await ctx.db<typeof schema>().transaction(async (db) => {
+        const phone = normalizeWa(args.identifier);
+        const intlPhone = phone.startsWith("0") ? `62${phone.slice(1)}` : phone;
+        const matches = await db.select().from(schema.affiliates)
+          .where(or(eq(schema.affiliates.whatsapp, phone), eq(schema.affiliates.whatsapp, intlPhone)))
+          .limit(1).for("update");
+        const affiliate = matches[0];
+        const genericError = "Nomor HP atau PIN salah. Periksa lagi.";
+        if (!affiliate || affiliate.pinHash === "") throw new Error(genericError);
+        if (affiliate.status === "suspended") {
+          throw new Error("Akun afiliasi ini sedang ditangguhkan. Hubungi tim Bun & Fleur Kids untuk bantuan.");
+        }
+        const now = new Date();
+        if (affiliate.lockedUntil && affiliate.lockedUntil.getTime() > now.getTime()) {
+          const minutes = Math.max(1, Math.ceil((affiliate.lockedUntil.getTime() - now.getTime()) / 60000));
+          throw new Error(`Terlalu banyak percobaan PIN salah. Akun terkunci sementara — coba lagi dalam ${minutes} menit.`);
+        }
+        const ok = await verifyPin(args.pin, affiliate.pinHash);
+        if (!ok) {
+          const attempts = affiliate.failedAttempts + 1;
+          const lock = attempts >= 5 ? new Date(now.getTime() + 15 * 60 * 1000) : null;
+          await db
+            .update(schema.affiliates)
+            .set({ failedAttempts: lock ? 0 : attempts, lockedUntil: lock, updatedAt: now })
+            .where(eq(schema.affiliates.id, affiliate.id));
+          if (lock) {
+            await audit(db, affiliate.id, "affiliate.locked", "Akun terkunci 15 menit setelah 5 PIN salah berturut-turut.");
+            return { error: "PIN salah 5 kali — akun terkunci sementara selama 15 menit demi keamanan." };
+          }
+          return { error: genericError };
+        }
         await db
           .update(schema.affiliates)
-          .set({ failedAttempts: lock ? 0 : attempts, lockedUntil: lock, updatedAt: now })
+          .set({ failedAttempts: 0, lockedUntil: null, updatedAt: now })
           .where(eq(schema.affiliates.id, affiliate.id));
-        if (lock) {
-          await audit(db, affiliate.id, "affiliate.locked", "Akun terkunci 15 menit setelah 5 PIN salah berturut-turut.");
-          throw new Error("PIN salah 5 kali — akun terkunci sementara selama 15 menit demi keamanan.");
-        }
-        throw new Error(genericError);
-      }
-      await db
-        .update(schema.affiliates)
-        .set({ failedAttempts: 0, lockedUntil: null, updatedAt: now })
-        .where(eq(schema.affiliates.id, affiliate.id));
-      const sessionToken = await createAffiliateSession(db, affiliate.id);
-      return { sessionToken, affiliate: toAffiliatePublic(affiliate) };
+        const sessionToken = await createAffiliateSession(db, affiliate.id);
+        return { sessionToken, affiliate: toAffiliatePublic(affiliate) };
+      });
+      if ("error" in result) throw new Error(result.error);
+      return result;
     },
   }),
 
@@ -1897,11 +2023,13 @@ export const Actions = {
       const affiliate = matches[0];
       if (affiliate && affiliate.pinHash !== "") {
         const now = new Date();
+        const token = randomToken(24);
         await db
           .update(schema.affiliates)
           .set({
             pinResetRequestedAt: now,
-            resetToken: randomToken(24),
+            resetToken: tokenDigest(token),
+            resetTokenEncrypted: encryptShareableToken(token),
             resetExpiresAt: new Date(now.getTime() + 3600 * 1000),
             updatedAt: now,
           })
@@ -1921,38 +2049,40 @@ export const Actions = {
     }),
     response: z.object({ sessionToken: z.string(), affiliate: affiliatePublicOut }),
     async handler(ctx, args) {
-      const db = ctx.db<typeof schema>();
-      if (isTrivialPin(args.pin)) {
-        throw new Error("PIN itu terlalu mudah ditebak (contoh: 0000, 1111, 1234). Pilih kombinasi lain ya.");
-      }
-      const all = await db.select().from(schema.affiliates);
-      const affiliate = all.find((a) => a.resetToken !== "" && a.resetToken === args.token.trim());
-      if (!affiliate || !affiliate.resetExpiresAt || affiliate.resetExpiresAt.getTime() < Date.now()) {
-        throw new Error("Tautan reset PIN tidak berlaku atau sudah kedaluwarsa. Minta tautan baru lewat admin.");
-      }
-      const now = new Date();
-      const pinHash = await hashPin(args.pin);
-      await db
-        .update(schema.affiliates)
-        .set({
-          pinHash,
-          status: affiliate.status === "pending" ? "active" : affiliate.status,
-          failedAttempts: 0,
-          lockedUntil: null,
-          pinResetRequestedAt: null,
-          resetToken: "",
-          resetExpiresAt: null,
-          updatedAt: now,
-        })
-        .where(eq(schema.affiliates.id, affiliate.id));
-      await db
-        .update(schema.affiliateSessions)
-        .set({ revokedAt: now })
-        .where(eq(schema.affiliateSessions.affiliateId, affiliate.id));
-      const sessionToken = await createAffiliateSession(db, affiliate.id);
-      await audit(db, affiliate.id, "pin.reset_completed", "PIN berhasil diatur ulang lewat tautan reset; semua sesi lama dicabut.");
-      ctx.invalidateQueries();
-      return { sessionToken, affiliate: toAffiliatePublic(affiliate) };
+      return ctx.db<typeof schema>().transaction(async (db) => {
+        if (isTrivialPin(args.pin)) {
+          throw new Error("PIN itu terlalu mudah ditebak (contoh: 0000, 1111, 1234). Pilih kombinasi lain ya.");
+        }
+        const [affiliate] = await db.select().from(schema.affiliates)
+          .where(eq(schema.affiliates.resetToken, tokenDigest(args.token))).limit(1).for("update");
+        if (!affiliate || !affiliate.resetExpiresAt || affiliate.resetExpiresAt.getTime() < Date.now()) {
+          throw new Error("Tautan reset PIN tidak berlaku atau sudah kedaluwarsa. Minta tautan baru lewat admin.");
+        }
+        const now = new Date();
+        const pinHash = await hashPin(args.pin);
+        await db
+          .update(schema.affiliates)
+          .set({
+            pinHash,
+            status: affiliate.status === "pending" ? "active" : affiliate.status,
+            failedAttempts: 0,
+            lockedUntil: null,
+            pinResetRequestedAt: null,
+            resetToken: "",
+            resetTokenEncrypted: "",
+            resetExpiresAt: null,
+            updatedAt: now,
+          })
+          .where(eq(schema.affiliates.id, affiliate.id));
+        await db
+          .update(schema.affiliateSessions)
+          .set({ revokedAt: now })
+          .where(eq(schema.affiliateSessions.affiliateId, affiliate.id));
+        const sessionToken = await createAffiliateSession(db, affiliate.id);
+        await audit(db, affiliate.id, "pin.reset_completed", "PIN berhasil diatur ulang lewat tautan reset; semua sesi lama dicabut.");
+        ctx.invalidateQueries();
+        return { sessionToken, affiliate: toAffiliatePublic(affiliate) };
+      });
     },
   }),
 
@@ -1965,7 +2095,7 @@ export const Actions = {
       await db
         .update(schema.affiliateSessions)
         .set({ revokedAt: new Date() })
-        .where(eq(schema.affiliateSessions.token, args.sessionToken));
+        .where(eq(schema.affiliateSessions.token, tokenDigest(args.sessionToken)));
       return { ok: true };
     },
   }),
@@ -2058,19 +2188,19 @@ export const Actions = {
         .from(schema.commissions)
         .where(eq(schema.commissions.affiliateId, affiliate.id))
         .orderBy(desc(schema.commissions.createdAt));
-      const orderRows = await db
-        .select()
-        .from(schema.orders)
-        .where(eq(schema.orders.affiliateId, affiliate.id))
-        .orderBy(desc(schema.orders.createdAt));
+      const recentOrderIds = comms.slice(0, 50).map(({ orderId }) => orderId);
+      const orderRows = recentOrderIds.length
+        ? await db.select({ id: schema.orders.id, code: schema.orders.code, productType: schema.orders.productType })
+          .from(schema.orders).where(inArray(schema.orders.id, recentOrderIds))
+        : [];
       const orderById = new Map(orderRows.map((o) => [o.id, o]));
       const counted = comms.filter((c) => c.status === "confirmed" || c.status === "payable" || c.status === "paid");
       const sum = (list: typeof comms, key: "amount" | "netSubtotal") => list.reduce((s, c) => s + c[key], 0);
       const wallet = {
         pending: sum(comms.filter((c) => c.status === "pending"), "amount"),
         confirmed: sum(comms.filter((c) => c.status === "confirmed"), "amount"),
-        payable: sum(comms.filter((c) => c.status === "payable"), "amount"),
-        paid: sum(comms.filter((c) => c.status === "paid"), "amount"),
+        payable: comms.filter((c) => c.status === "payable").reduce((total, c) => total + c.amount - c.paidAmount, 0),
+        paid: comms.reduce((total, c) => total + c.paidAmount, 0),
       };
       // Daily series over the requested range (default: last 30 days).
       const today = new Date();
@@ -2096,7 +2226,7 @@ export const Actions = {
         if (series.length > 366) break;
       }
       const productLabel = (t: string) =>
-        t === "poster" ? "Printed Poster" : t === "papercraft" ? "3D Papercraft Kit" : t === "celengan" ? "Celengan Custom" : t === "accessory59" ? "Aksesori Custom 59K" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
+        t === "poster" ? "Printed Poster" : t === "papercraft" ? "3D Papercraft Kit" : t === "celengan" ? "Celengan Custom" : t === "accessory59" ? "Aksesori Custom 59K" : t === "puzzle" ? "Puzzle" : t === "placemat" ? "Personalized Placemat" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
       const orders = comms.slice(0, 50).map((c) => {
         const o = orderById.get(c.orderId);
         return {
@@ -2116,13 +2246,16 @@ export const Actions = {
         .where(eq(schema.payouts.affiliateId, affiliate.id))
         .orderBy(desc(schema.payouts.createdAt))
         .limit(20);
+      const [reserved] = await db.select({ amount: sql<number>`COALESCE(SUM(${schema.payouts.amount}), 0)`.mapWith(Number) })
+        .from(schema.payouts).where(and(eq(schema.payouts.affiliateId, affiliate.id),
+          inArray(schema.payouts.status, ["requested", "approved"])));
       return {
         affiliate: toAffiliatePublic(affiliate),
         minWithdrawal: cfg.minWithdrawal,
         totalSales: counted.length,
         totalRevenue: sum(counted, "netSubtotal"),
         totalCommission: sum(counted, "amount"),
-        availablePayout: wallet.payable,
+        availablePayout: Math.max(0, wallet.payable - (reserved?.amount ?? 0)),
         wallet,
         series,
         orders,
@@ -2156,44 +2289,48 @@ export const Actions = {
     }),
     response: z.object({ ok: z.literal(true), payoutId: z.number() }),
     async handler(ctx, args): Promise<{ ok: true; payoutId: number }> {
-      const db = ctx.db<typeof schema>();
-      const affiliate = await requireAffiliateSession(db, args.sessionToken);
-      const cfg = await affiliateConfig(db);
-      if (args.amount < cfg.minWithdrawal) {
-        throw new Error(`Minimum penarikan saat ini ${cfg.minWithdrawal.toLocaleString("id-ID")} rupiah.`);
-      }
-      const comms = await db
-        .select()
-        .from(schema.commissions)
-        .where(and(eq(schema.commissions.affiliateId, affiliate.id), eq(schema.commissions.status, "payable")));
-      const payableTotal = comms.reduce((s, c) => s + c.amount, 0);
-      const open = await db
-        .select()
-        .from(schema.payouts)
-        .where(and(eq(schema.payouts.affiliateId, affiliate.id), inArray(schema.payouts.status, ["requested", "approved"])));
-      const openTotal = open.reduce((s, p) => s + p.amount, 0);
-      if (args.amount > payableTotal - openTotal) {
-        throw new Error("Jumlah melebihi komisi yang siap dicairkan saat ini.");
-      }
-      const now = new Date();
-      const inserted = await db
-        .insert(schema.payouts)
-        .values({
-          affiliateId: affiliate.id,
-          amount: args.amount,
-          bankName: args.bankName.trim(),
-          accountName: args.accountName.trim(),
-          accountNumber: args.accountNumber.trim(),
-          status: "requested",
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
-      const payout = inserted[0];
-      if (!payout) throw new Error("Permintaan penarikan tidak bisa disimpan — coba lagi.");
-      await audit(db, affiliate.id, "payout.requested", `Permintaan penarikan Rp${args.amount} ke ${args.bankName.trim()}.`);
-      ctx.invalidateQueries();
-      return { ok: true, payoutId: payout.id };
+      return ctx.db<typeof schema>().transaction(async (db) => {
+        const affiliate = await requireAffiliateSession(db, args.sessionToken);
+        const [locked] = await db.select({ status: schema.affiliates.status }).from(schema.affiliates)
+          .where(eq(schema.affiliates.id, affiliate.id)).for("update");
+        if (locked?.status !== "active") throw new Error("Akun afiliasi belum aktif.");
+        const cfg = await affiliateConfig(db);
+        if (args.amount < cfg.minWithdrawal) {
+          throw new Error(`Minimum penarikan saat ini ${cfg.minWithdrawal.toLocaleString("id-ID")} rupiah.`);
+        }
+        const comms = await db
+          .select()
+          .from(schema.commissions)
+          .where(and(eq(schema.commissions.affiliateId, affiliate.id), eq(schema.commissions.status, "payable")));
+        const payableTotal = comms.reduce((s, c) => s + c.amount - c.paidAmount, 0);
+        const open = await db
+          .select()
+          .from(schema.payouts)
+          .where(and(eq(schema.payouts.affiliateId, affiliate.id), inArray(schema.payouts.status, ["requested", "approved"])));
+        const openTotal = open.reduce((s, p) => s + p.amount, 0);
+        if (args.amount > payableTotal - openTotal) {
+          throw new Error("Jumlah melebihi komisi yang siap dicairkan saat ini.");
+        }
+        const now = new Date();
+        const inserted = await db
+          .insert(schema.payouts)
+          .values({
+            affiliateId: affiliate.id,
+            amount: args.amount,
+            bankName: args.bankName.trim(),
+            accountName: args.accountName.trim(),
+            accountNumber: args.accountNumber.trim(),
+            status: "requested",
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+        const payout = inserted[0];
+        if (!payout) throw new Error("Permintaan penarikan tidak bisa disimpan — coba lagi.");
+        await audit(db, affiliate.id, "payout.requested", `Permintaan penarikan Rp${args.amount} ke ${args.bankName.trim()}.`);
+        ctx.invalidateQueries();
+        return { ok: true, payoutId: payout.id };
+      });
     },
   }),
 

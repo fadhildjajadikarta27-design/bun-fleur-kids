@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaTopScrim } from "./components/SafeAreaTopScrim";
 import { AdminGate } from "./components/AdminGate";
@@ -24,33 +24,47 @@ import { ArtworkSvg, ColoringEditor, type Stroke } from "./components/ColoringEd
 import { ModelViewer } from "./components/ModelViewer";
 import { PillowViewer } from "./components/PillowViewer";
 import { NetPreview, PillowPreview, StandeePreview } from "./components/PrintPreview";
-import {
-  AdminOrders,
-  Checkout,
-  Customize,
-  Masterpiece,
-  OrderConfirmation,
-  OrderTracking,
-  PosterPreview,
-  PapercraftPreview,
-  CelenganPreview,
-  PRODUCT_META,
-  TshirtPreview,
-  formatIDR,
-  type OrderOut,
-  type ProductId,
-  type ShopSelection,
-} from "./components/Shop";
-import {
-  AffiliateAdmin,
-  AffiliateDashboard,
-  AffiliateInvitePage,
-  AffiliateLoginPage,
-  AffiliateResetPage,
-} from "./components/Affiliate";
-import { AffiliateRegistrationPage } from "./components/AffiliateRegistration";
-import { buildPillowPdf, buildStandeePdf, buildToyPdf, downloadBlob } from "./lib/pdf";
+import type { OrderOut, ShopSelection } from "./components/Shop";
+import { formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
 import { logoUrl } from "./assets-inline";
+
+const AdminProductPrices = lazy(() => import("./components/Shop").then((m) => ({ default: m.AdminProductPrices })));
+const AdminOrders = lazy(() => import("./components/Shop").then((m) => ({ default: m.AdminOrders })));
+const Checkout = lazy(() => import("./components/Shop").then((m) => ({ default: m.Checkout })));
+const Customize = lazy(() => import("./components/Shop").then((m) => ({ default: m.Customize })));
+const Masterpiece = lazy(() => import("./components/Shop").then((m) => ({ default: m.Masterpiece })));
+const OrderConfirmation = lazy(() => import("./components/Shop").then((m) => ({ default: m.OrderConfirmation })));
+const OrderTracking = lazy(() => import("./components/Shop").then((m) => ({ default: m.OrderTracking })));
+const PosterPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.PosterPreview })));
+const PapercraftPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.PapercraftPreview })));
+const CelenganPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.CelenganPreview })));
+const TshirtPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.TshirtPreview })));
+const AffiliateAdmin = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateAdmin })));
+const AffiliateDashboard = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateDashboard })));
+const AffiliateInvitePage = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateInvitePage })));
+const AffiliateLoginPage = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateLoginPage })));
+const AffiliateResetPage = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateResetPage })));
+const AffiliateRegistrationPage = lazy(() => import("./components/AffiliateRegistration").then((m) => ({ default: m.AffiliateRegistrationPage })));
+
+function DeferredPreview({ children }: { children: ReactNode }) {
+  const marker = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!marker.current) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      setVisible(true);
+      observer.disconnect();
+    }, { rootMargin: "240px" });
+    observer.observe(marker.current);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={marker}>
+      {visible ? <Suspense fallback={<div className="aspect-square" />}>{children}</Suspense> : <div className="aspect-square" />}
+    </div>
+  );
+}
 
 type ServerProject = ApiResponse<typeof api, "listProjects">["projects"][number];
 
@@ -103,7 +117,10 @@ function parseHashRoute(): Route | null {
   // Rute khusus admin untuk Manajemen Afiliasi: SENGAJA tidak ditautkan
   // dari menu, header, footer, Dasbor Orang Tua, atau halaman publik mana
   // pun — admin membukanya langsung lewat potongan alamat ini.
-  if (h.startsWith("#/admin/affiliate") || h.startsWith("#/kelola-afiliasi-4821")) return { view: "aff-admin" };
+  if (h === "#/admin/affiliate" || h === "#/kelola-afiliasi-4821") return { view: "aff-admin" };
+  if (h === "#/admin/orders" || h === "#/orang-tua") return { view: "parents" };
+  if (h === "#/koleksi") return { view: "explore" };
+  if (h === "#/kreasiku") return { view: "creations" };
   return null;
 }
 
@@ -175,8 +192,7 @@ function templateForProject(p: { templateId: string; customDef?: string }): Temp
 /**
  * Proyek yatim: proyek tersimpan yang karakter dasarnya sudah tidak ada
  * di katalog saat ini (mis. template lama yang dihapus). Proyek seperti
- * ini dibersihkan dari daftar dan dihapus dari penyimpanan, bukan
- * ditampilkan sebagai entri rusak.
+ * ini disaring dari daftar sampai templatnya tersedia lagi.
  */
 function isOrphanProject(p: { templateId: string }): boolean {
   return p.templateId !== "custom" && !TEMPLATES.some((t) => t.id === p.templateId);
@@ -194,15 +210,16 @@ function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) { URL.revokeObjectURL(url); return; }
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, W, H);
     ctx.drawImage(img, 0, 0, W, H);
     URL.revokeObjectURL(url);
     canvas.toBlob((b) => {
-      if (b) downloadBlob(b, filename);
+      if (b) void import("./lib/pdf").then(({ downloadBlob }) => downloadBlob(b, filename));
     }, "image/png");
   };
+  img.onerror = () => URL.revokeObjectURL(url);
   img.src = url;
 }
 
@@ -332,7 +349,7 @@ function Header({
         <button
           type="button"
           onClick={() => go({ view: "explore" })}
-          className="ml-auto shrink-0 rounded-full bg-tang px-4 py-2 font-display text-sm font-semibold text-white shadow-sm transition hover:bg-tang-deep sm:ml-1"
+          className="ml-auto shrink-0 rounded-full bg-tang px-4 py-2 font-display text-sm font-semibold text-ink shadow-sm transition hover:bg-tang-deep sm:ml-1"
         >
           Mulai Berkreasi
         </button>
@@ -400,12 +417,14 @@ function MobileTabBar({
 
 function Home({
   brandName,
+  catalogPrices,
   startTemplate,
   go,
   onAge,
   onCustom,
 }: {
   brandName: string;
+  catalogPrices: Partial<Record<ProductId, number>>;
   startTemplate: (id: string) => void;
   go: (r: Route) => void;
   onAge: (bandId: string) => void;
@@ -450,24 +469,24 @@ function Home({
       {/* HERO — dua kolom: naskah di kiri, etalase produk di kanan */}
       <section className="grid items-center gap-10 pt-8 sm:pt-12 lg:grid-cols-2">
         <div>
-          <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-tang-deep">
+          <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-tang-ink">
             Creative Play, Made Personal
           </p>
           <h1 className="mt-3 font-display text-[clamp(2.5rem,6vw,4.25rem)] font-semibold leading-[1.04] text-[var(--text)]">
             <span className="text-olive">Warnai Sendiri.</span>
             <br />
-            Kami <span className="text-tang-deep">Wujudkan.</span>
+            Kami <span className="text-tang-ink">Wujudkan.</span>
           </h1>
           <p className="mt-4 max-w-md text-lg leading-relaxed text-[var(--dim)]">
             Si kecil bebas memilih karakter, mewarnai, dan menambahkan namanya — selalu
             gratis. Setelah selesai, wujudkan kreasinya menjadi papercraft 3D, poster, figurine 3D,
-            kaos custom, atau aksesori celengan personal yang dikirim langsung ke rumah.
+            kaos custom, puzzle, alas makan atau aksesori personal yang dikirim langsung ke rumah.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => startTemplate("pb-dino")}
-              className="rounded-full bg-tang px-7 py-3 font-display text-base font-semibold text-white shadow-sm transition hover:bg-tang-deep"
+              className="rounded-full bg-tang px-7 py-3 font-display text-base font-semibold text-ink shadow-sm transition hover:bg-tang-deep"
             >
               Mulai Mewarnai
             </button>
@@ -558,13 +577,13 @@ function Home({
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <article className="overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">
             <div className="bg-sky-soft p-5">
-              <PosterPreview project={demoProject} name="Adam" />
+              <DeferredPreview><PosterPreview project={demoProject} name="Adam" /></DeferredPreview>
               <p className="pt-2 text-center text-xs font-semibold text-[var(--dim)]">Mockup poster dari karya contoh berlabel</p>
             </div>
             <div className="p-6">
               <h3 className="font-display text-2xl font-semibold">{PRODUCT_META.poster.title}</h3>
               <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META.poster.description}</p>
-              <p className="mt-3 font-display text-xl font-semibold text-olive-deep">{formatIDR(49000)}</p>
+              <p className="mt-3 font-display text-xl font-semibold text-olive-deep">{formatIDR(catalogPrices.poster ?? 49000)}</p>
               <ul className="mt-2 space-y-1.5 font-semibold text-[var(--dim)]">
                 <li>· Karya anak persis, lengkap dengan namanya</li>
                 <li>· Diproduksi &amp; dikirim oleh tim kami</li>
@@ -579,14 +598,14 @@ function Home({
             </div>
           </article>
           <article className="relative overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-2 ring-olive">
-            <span className="absolute right-4 top-4 z-10 rounded-full bg-tang px-3 py-1 font-display text-xs font-extrabold text-white">Baru · Rp49.000</span>
+            <span className="absolute right-4 top-4 z-10 rounded-full bg-tang px-3 py-1 font-display text-xs font-extrabold text-ink">{formatIDR(catalogPrices.papercraft ?? 49000)}</span>
             <div className="bg-[#EEF4E4] p-4">
-              <PapercraftPreview project={demoProject} name="Adam" />
+              <DeferredPreview><PapercraftPreview project={demoProject} name="Adam" /></DeferredPreview>
             </div>
             <div className="p-6">
               <h3 className="font-display text-2xl font-extrabold">{PRODUCT_META.papercraft.title}</h3>
               <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META.papercraft.description}</p>
-              <p className="mt-3 font-display text-xl font-extrabold text-olive-deep">{formatIDR(49000)}</p>
+              <p className="mt-3 font-display text-xl font-extrabold text-olive-deep">{formatIDR(catalogPrices.papercraft ?? 49000)}</p>
               <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Belum termasuk ongkos kirim</p>
               <ul className="mt-3 space-y-1.5 text-sm font-semibold text-[var(--dim)]">
                 <li>· Warna dan nama sesuai karya anak</li>
@@ -597,14 +616,14 @@ function Home({
               <button
                 type="button"
                 onClick={() => startTemplate("pb-dino")}
-                className="mt-5 w-full rounded-full bg-tang px-5 py-2.5 font-display text-base font-bold text-white transition hover:brightness-95"
+                className="mt-5 w-full rounded-full bg-tang px-5 py-2.5 font-display text-base font-bold text-ink transition hover:brightness-95"
               >
                 Mulai Mewarnai untuk Papercraft
               </button>
             </div>
           </article>
           <article className="relative overflow-hidden rounded-[2rem] bg-olive text-white">
-            <span className="absolute right-5 top-5 z-10 rounded-full bg-tang px-3 py-1 font-display text-xs font-semibold text-white">Premium</span>
+            <span className="absolute right-5 top-5 z-10 rounded-full bg-tang px-3 py-1 font-display text-xs font-semibold text-ink">Premium</span>
             <div className="bg-white/10 p-5">
               <div className="mx-auto max-w-xs">
                 <ModelViewer
@@ -619,12 +638,12 @@ function Home({
                   restYaw={Math.PI + 0.6}
                 />
               </div>
-              <p className="pt-1 text-center text-xs font-semibold text-[#E6EFDB]">Model 3D digital dari karya contoh — geometri yang sama dengan pratinjau di Studio Kreasi 3D</p>
+              <p className="pt-1 text-center text-xs font-semibold text-white">Model 3D digital dari karya contoh — geometri yang sama dengan pratinjau di Studio Kreasi 3D</p>
             </div>
             <div className="p-6">
               <h3 className="font-display text-2xl font-semibold">{PRODUCT_META.figurine.title}</h3>
               <p className="mt-2 leading-relaxed text-[#EDF3E2]">{PRODUCT_META.figurine.description}</p>
-              <p className="mt-3 font-display text-xl font-semibold">Mulai {formatIDR(120000)}</p>
+              <p className="mt-3 font-display text-xl font-semibold">Mulai {formatIDR(catalogPrices.figurine ?? 120000)}</p>
               <ul className="mt-2 space-y-1.5 font-semibold text-[#EDF3E2]">
                 <li>· Warna &amp; nama persis dari karya anak</li>
                 <li>· Melewati Design Review tim kami sebelum produksi</li>
@@ -641,13 +660,13 @@ function Home({
           </article>
           <article className="overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">
             <div className="bg-butter-soft p-5">
-              <TshirtPreview project={demoProject} name="Adam" fabric="Sage Green" />
+              <DeferredPreview><TshirtPreview project={demoProject} name="Adam" fabric="Sage Green" /></DeferredPreview>
               <p className="pt-2 text-center text-xs font-semibold text-[var(--dim)]">Mockup kaos dari karya contoh berlabel</p>
             </div>
             <div className="p-6">
               <h3 className="font-display text-2xl font-semibold">{PRODUCT_META.tshirt.title}</h3>
               <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META.tshirt.description}</p>
-              <p className="mt-3 font-display text-xl font-semibold text-olive-deep">Mulai {formatIDR(79000)}</p>
+              <p className="mt-3 font-display text-xl font-semibold text-olive-deep">Mulai {formatIDR(catalogPrices.tshirt ?? 79000)}</p>
               <ul className="mt-2 space-y-1.5 font-semibold text-[var(--dim)]">
                 <li>· Lima warna kain: Cream, Mustard, Terracotta, Sage Green, Brown</li>
                 <li>· Ukuran anak 2–12 tahun, semua harga sama</li>
@@ -665,7 +684,7 @@ function Home({
         <section className="mt-7 grid items-center gap-6 rounded-[2.25rem] bg-[#EDF2E6] p-5 ring-1 ring-olive/20 sm:p-8 lg:grid-cols-2"
           aria-label="Accessories Celengan Bun & Fleur Kids">
           <div className="rounded-[1.5rem] bg-white p-3 shadow-sm ring-1 ring-[var(--border)]">
-            <CelenganPreview project={demoProject} name="Adam" large />
+            <DeferredPreview><CelenganPreview project={demoProject} name="Adam" large /></DeferredPreview>
           </div>
           <div>
             <span className="inline-block rounded-full bg-olive px-4 py-1.5 font-display text-xs font-bold text-white">
@@ -677,10 +696,10 @@ function Home({
               warna, dan nama anak dicetak di bagian depan tabung, dengan identitas Bun & Fleur Kids
               di bagian belakang. Contoh foto menampilkan karakter dinosaurus.
             </p>
-            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(29000)}</p>
+            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(catalogPrices.celengan ?? 29000)}</p>
             <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Harga tetap per celengan · ongkir dihitung terpisah</p>
             <button type="button" onClick={() => startTemplate("pb-dino")}
-              className="mt-5 w-full rounded-full bg-tang px-6 py-3 font-display text-base font-bold text-white transition hover:brightness-95 sm:w-auto">
+              className="mt-5 w-full rounded-full bg-tang px-6 py-3 font-display text-base font-bold text-ink transition hover:brightness-95 sm:w-auto">
               Warnai &amp; Buat Celengan
             </button>
           </div>
@@ -693,7 +712,7 @@ function Home({
                 nameColor="#E4572E" nameAlign="center" />
             </div>
             <p className="mt-3 text-center font-display text-xs font-bold text-sky-deep">
-              Ilustrasi karya yang dipersonalisasi · foto produk menunggu integrasi
+              Contoh karya yang dipersonalisasi
             </p>
           </div>
           <div>
@@ -705,7 +724,7 @@ function Home({
               Desain aksesori lain dari gambar yang sudah diwarnai. Warna, karakter, dan nama anak
               disesuaikan dari karya pribadi, seperti pada produk custom lainnya.
             </p>
-            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(59000)}</p>
+            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(catalogPrices.accessory59 ?? 59000)}</p>
             <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Harga per produk · ongkir terpisah</p>
             <button type="button" onClick={() => startTemplate("pb-dino")}
               className="mt-5 w-full rounded-full bg-olive px-6 py-3 font-display text-base font-bold text-white transition hover:brightness-95 sm:w-auto">
@@ -713,8 +732,19 @@ function Home({
             </button>
           </div>
         </section>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          {(["puzzle", "placemat"] as const).map((id) => (
+            <article key={id} className="rounded-3xl bg-white p-5 ring-1 ring-[var(--border)]">
+              <h3 className="font-display text-xl font-bold">{PRODUCT_META[id].title}</h3>
+              <p className="mt-1 text-sm text-[var(--dim)]">{PRODUCT_META[id].description}</p>
+              <p className="mt-3 font-display text-xl font-bold text-olive-deep">{formatIDR(catalogPrices[id] ?? (id === "puzzle" ? 59000 : 69000))}</p>
+              <button type="button" onClick={() => startTemplate("pb-dino")}
+                className="mt-3 rounded-full bg-sky-soft px-4 py-2 text-sm font-bold text-sky-band">{PRODUCT_META[id].cta}</button>
+            </article>
+          ))}
+        </div>
         <p className="mt-4 text-sm font-semibold text-[var(--dim)]">
-          Pola DIY gratis tetap tersedia di Studio Cetak. Harga Rp49.000 khusus kit papercraft fisik yang dicetak sesuai karya anak dan dikirim oleh tim kami.
+          Pola DIY gratis tetap tersedia di Studio Cetak. Harga {formatIDR(catalogPrices.papercraft ?? 49000)} khusus kit papercraft fisik yang dicetak sesuai karya anak dan dikirim oleh tim kami.
         </p>
       </section>
 
@@ -747,7 +777,7 @@ function Home({
                 </div>
                 <p className="mt-3 font-display text-lg font-semibold leading-tight text-ink">{c.name}</p>
                 <p className="text-sm font-semibold text-ink-soft">{c.tagline}</p>
-                <p className="mt-1.5 font-display text-sm font-semibold" style={{ color: c.color }}>{count} karakter →</p>
+                <p className="mt-1.5 font-display text-sm font-semibold text-olive-deep">{count} karakter →</p>
               </button>
             );
           })}
@@ -764,7 +794,7 @@ function Home({
                 className="rounded-full px-4 py-2 font-display text-sm font-semibold text-ink ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:shadow-sm"
                 style={{ background: b.soft }}
               >
-                {b.label} <span className="font-body font-bold" style={{ color: b.color }}>· {count}</span>
+                {b.label} <span className="font-body font-bold text-ink">· {count}</span>
               </button>
             );
           })}
@@ -791,8 +821,8 @@ function Home({
                 <h3 className="mt-2 font-display text-base font-semibold leading-tight">{t.name}</h3>
                 <p className="text-sm font-semibold text-[var(--dim)]">{t.blurb}</p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] font-bold">
-                  <span className="rounded-full px-2 py-0.5 text-white" style={{ background: ageBandOf(t.ageBand).color }}>Usia {t.age}</span>
-                  <span className="rounded-full px-2 py-0.5 text-white" style={{ background: tier.color }}>{tier.label}</span>
+                  <span className="rounded-full px-2 py-0.5 text-ink" style={{ background: ageBandOf(t.ageBand).soft }}>Usia {t.age}</span>
+                  <span className="rounded-full px-2 py-0.5 text-ink" style={{ background: tier.soft }}>{tier.label}</span>
                 </div>
                 <button
                   type="button"
@@ -878,7 +908,7 @@ function Home({
             <button
               type="button"
               onClick={() => go({ view: "explore" })}
-              className="mt-4 rounded-full bg-tang px-6 py-2.5 font-display text-base font-semibold text-white transition hover:bg-tang-deep"
+              className="mt-4 rounded-full bg-tang px-6 py-2.5 font-display text-base font-semibold text-ink transition hover:bg-tang-deep"
             >
               Buat Kreasi Pertama
             </button>
@@ -975,7 +1005,7 @@ function Home({
         <button
           type="button"
           onClick={() => go({ view: "explore" })}
-          className="mt-6 rounded-full bg-tang px-8 py-3 font-display text-lg font-semibold text-white shadow-sm transition hover:bg-tang-deep"
+          className="mt-6 rounded-full bg-tang px-8 py-3 font-display text-lg font-semibold text-ink shadow-sm transition hover:bg-tang-deep"
         >
           Mulai Berkreasi
         </button>
@@ -1043,7 +1073,7 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
             aria-pressed={filter === c.id}
             onClick={() => setFilter(c.id)}
             className={`rounded-full px-4 py-2 font-display text-sm font-bold ${filter === c.id ? "bg-ink text-white" : "ring-1 ring-black/5"}`}
-            style={filter === c.id ? undefined : { background: c.soft, color: c.color }}
+            style={filter === c.id ? undefined : { background: c.soft, color: "var(--text)" }}
           >
             {c.name}
           </button>
@@ -1128,18 +1158,18 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
                 <span className="rounded-full bg-ink px-2.5 py-1 text-white">
                   Hitam Putih
                 </span>
-                <span className="rounded-full px-2.5 py-1" style={{ background: c.soft, color: c.color }}>
+                <span className="rounded-full px-2.5 py-1" style={{ background: c.soft, color: "var(--text)" }}>
                   {c.name}
                 </span>
                 <span
-                  className="rounded-full px-2.5 py-1 text-white"
-                  style={{ background: ageBandOf(t.ageBand).color }}
+                  className="rounded-full px-2.5 py-1 text-ink"
+                  style={{ background: ageBandOf(t.ageBand).soft }}
                 >
                   Umur {t.age}
                 </span>
                 <span
-                  className="rounded-full px-2.5 py-1 text-white"
-                  style={{ background: difficultyTierOf(t).color }}
+                  className="rounded-full px-2.5 py-1 text-ink"
+                  style={{ background: difficultyTierOf(t).soft }}
                   title={difficultyTierOf(t).hint}
                 >
                   {difficultyTierOf(t).label}
@@ -1278,7 +1308,7 @@ function CustomBuilder({
           type="button"
           aria-pressed={mode === "ai"}
           onClick={() => setMode("ai")}
-          className={`rounded-full px-5 py-2.5 font-display text-base font-extrabold transition ${mode === "ai" ? "bg-tang text-white shadow" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
+          className={`rounded-full px-5 py-2.5 font-display text-base font-extrabold transition ${mode === "ai" ? "bg-tang text-ink shadow" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
         >
           Buat dengan AI
         </button>
@@ -1326,7 +1356,7 @@ function CustomBuilder({
             type="button"
             disabled={generateMut.isPending || prompt.trim().length < 3}
             onClick={() => generateMut.mutate(prompt.trim())}
-            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-extrabold text-white shadow-lg transition hover:bg-tang-deep disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-extrabold text-ink shadow-lg transition hover:bg-tang-deep disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             {generateMut.isPending ? "AI sedang merakit karaktermu…" : "Buat Karakter dengan AI"}
           </button>
@@ -1379,7 +1409,7 @@ function CustomBuilder({
               }
               onDone(def);
             }}
-            className="mt-3 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-extrabold text-white shadow-lg transition hover:bg-tang-deep"
+            className="mt-3 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-extrabold text-ink shadow-lg transition hover:bg-tang-deep"
           >
             {editing ? "Simpan & Lanjut Mewarnai" : "Mulai Mewarnai Karakter Ini"}
           </button>
@@ -1432,7 +1462,7 @@ function Studio({
           ← Semua buku
         </button>
         <h1 className="font-display text-3xl font-semibold">Studio Mewarnai · {template.name}</h1>
-        <span className="rounded-full bg-ink px-3 py-1.5 font-display text-xs font-extrabold text-white">Halaman hitam putih — ketuk untuk memberi warna</span>
+        <span className="rounded-full bg-ink px-3 py-1.5 font-display text-xs font-extrabold text-white">Gosok bidang untuk mengisinya</span>
         {template.custom && (
           <button
             type="button"
@@ -1643,7 +1673,7 @@ function Studio({
             }
             onDone();
           }}
-          className="rounded-full bg-tang px-9 py-4 font-display text-xl font-extrabold text-white shadow-lg transition hover:scale-[1.03] hover:bg-tang-deep"
+          className="rounded-full bg-tang px-9 py-4 font-display text-xl font-extrabold text-ink shadow-lg transition hover:scale-[1.03] hover:bg-tang-deep"
         >
           Lihat Hasilnya
         </button>
@@ -1839,7 +1869,7 @@ function Magic({
               onClick={() => setProduct("figure")}
               className={`relative rounded-[1.75rem] p-5 text-left ring-1 transition ${product === "figure" ? "bg-olive text-white shadow-md ring-2 ring-olive-deep" : "bg-[var(--surface)] ring-[var(--border)] hover:shadow"}`}
             >
-              <span className="absolute right-4 top-4 rounded-full bg-tang px-2.5 py-0.5 font-display text-xs font-semibold text-white">Premium</span>
+              <span className="absolute right-4 top-4 rounded-full bg-tang px-2.5 py-0.5 font-display text-xs font-semibold text-ink">Premium</span>
               <span className="font-display text-lg font-semibold">Figurine 3D Printed</span>
               <span className={`mt-1 block leading-relaxed ${product === "figure" ? "text-[#EDF3E2]" : "text-[var(--dim)]"}`}>
                 Figurine padat made-to-order dari geometri terverifikasi yang sama — bukan sulap
@@ -1882,7 +1912,7 @@ function Magic({
         <button
           type="button"
           onClick={() => go({ view: "print" })}
-          className="rounded-full bg-tang px-8 py-3.5 font-display text-lg font-extrabold text-white shadow-lg transition hover:bg-tang-deep"
+          className="rounded-full bg-tang px-8 py-3.5 font-display text-lg font-extrabold text-ink shadow-lg transition hover:bg-tang-deep"
         >
           Lihat Wujud Kertasnya
         </button>
@@ -2076,11 +2106,12 @@ function PrintStudio({
       <div className="mt-5 text-center">
         <button
           type="button"
-          onClick={() => {
+          onClick={async () => {
+            const { buildPillowPdf, buildStandeePdf, buildToyPdf, downloadBlob } = await import("./lib/pdf");
             const blob = format === "pillow" ? buildPillowPdf(data) : format === "toy" ? buildToyPdf(data) : buildStandeePdf(data);
             downloadBlob(blob, `${template.id}-${format === "pillow" ? "paper-pillow" : format === "toy" ? "paper-toy" : "standee"}.pdf`);
           }}
-          className="rounded-full bg-tang px-10 py-4 font-display text-xl font-extrabold text-white shadow-lg transition hover:bg-tang-deep"
+          className="rounded-full bg-tang px-10 py-4 font-display text-xl font-extrabold text-ink shadow-lg transition hover:bg-tang-deep"
         >
           Unduh PDF A4
         </button>
@@ -2153,7 +2184,7 @@ function Creations({
           <p className="font-display text-xl font-extrabold">Belum ada kreasi</p>
           <p className="mt-1 font-semibold text-[var(--dim)]">Warnai karakter pertamamu dan ia akan tersimpan di sini.</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <button type="button" onClick={() => startTemplate("pb-dino")} className="rounded-full bg-tang px-6 py-3 font-display font-extrabold text-white shadow">
+            <button type="button" onClick={() => startTemplate("pb-dino")} className="rounded-full bg-tang px-6 py-3 font-display font-extrabold text-ink shadow">
               Warnai Dino
             </button>
             <button type="button" onClick={onCustomNew} className="rounded-full bg-[var(--surface)] px-6 py-3 font-display font-extrabold shadow ring-1 ring-[var(--border)]">
@@ -2185,7 +2216,7 @@ function Creations({
                 <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
                   <button type="button" onClick={() => openProject(p, "studio")} className="rounded-full bg-sky-deep px-2 py-2 font-display text-xs font-extrabold text-white">Warnai</button>
                   <button type="button" onClick={() => openProject(p, "magic")} className="rounded-full bg-sage px-2 py-2 font-display text-xs font-extrabold text-white">{t.custom ? "Lihat" : "3D"}</button>
-                  <button type="button" onClick={() => openProject(p, "print")} className="rounded-full bg-tang px-2 py-2 font-display text-xs font-extrabold text-white">Cetak</button>
+                  <button type="button" onClick={() => openProject(p, "print")} className="rounded-full bg-tang px-2 py-2 font-display text-xs font-extrabold text-ink">Cetak</button>
                 </div>
                 {Object.keys(p.colors).length > 0 && (
                   <button
@@ -2358,7 +2389,7 @@ function Parents({ brandName }: { brandName: string }) {
       <section className="mt-5 rounded-3xl bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pesanan masuk">
         <h2 className="font-display text-lg font-extrabold">Pesanan masuk (Admin)</h2>
         <p className="text-sm font-semibold text-[var(--dim)]">
-          Semua pesanan Poster, Figurine, dan Kaos dari tombol “Jadikan Nyata”. Tandai pembayaran
+          Semua pesanan produk dari “Jadikan Nyata”. Tandai pembayaran
           sebagai Lunas hanya setelah pembayaran benar-benar diterima &amp; terverifikasi — tahap
           Design Review, Produksi, dan seterusnya terkunci sampai pembayaran lunas, dan status
           Dikirim mensyaratkan nomor resi. Ongkir yang sudah dikonfirmasi ke pelanggan bisa
@@ -2368,6 +2399,7 @@ function Parents({ brandName }: { brandName: string }) {
           <AdminOrders />
         </div>
       </section>
+      <AdminProductPrices />
 
       </AdminGate>
 
@@ -2462,39 +2494,16 @@ export function App() {
   const settings = useQuery({
     queryKey: ["settings"],
     queryFn: () => api.getSettings({}),
+    staleTime: 60000,
   });
   const brandName = settings.data?.brandName ?? "Bun & Fleur Kids";
-  // Pembersihan sekali per sesi: proyek yatim (karakter dasarnya sudah
-  // tidak ada di katalog) dihapus dari penyimpanan supaya tidak kembali
-  // tampil sebagai entri rusak di Kreasiku.
-  const allProjects = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => api.listProjects({ limit: 50 }),
-  });
-  const orphanCleanupDone = useRef(false);
-  useEffect(() => {
-    if (orphanCleanupDone.current || !allProjects.data) return;
-    orphanCleanupDone.current = true;
-    const orphans = allProjects.data.projects.filter(isOrphanProject);
-    if (orphans.length === 0) return;
-    void (async () => {
-      for (const p of orphans) {
-        try {
-          await api.deleteProject({ id: p.id });
-        } catch {
-          // Abaikan kegagalan satu proyek; daftar tetap menyaringnya.
-        }
-      }
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-    })();
-  }, [allProjects.data, queryClient]);
   const [route, setRoute] = useState<Route>(() => parseHashRoute() ?? { view: "home" });
   // Referral attribution + affiliate deep links arriving via the hash.
   useEffect(() => {
     captureReferral();
     const onHash = () => {
       captureReferral();
-      const r = parseHashRoute();
+      const r = parseHashRoute() ?? (window.location.hash === "" ? { view: "home" } as const : null);
       if (r) {
         setRoute(r);
         window.scrollTo({ top: 0 });
@@ -2519,7 +2528,25 @@ export function App() {
   const [celebrating, setCelebrating] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const projectRef = useRef(project);
-  projectRef.current = project;
+  const activeDraft = useRef<{ id: number | null; tail: Promise<unknown> }>({ id: project.id, tail: Promise.resolve() });
+
+  const updateWorkingCopy = (next: WorkProject) => {
+    projectRef.current = next;
+    setProjectState(next);
+  };
+  const switchDraft = (next: WorkProject) => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      void persist(projectRef.current).catch(() => undefined);
+    }
+    activeDraft.current = { id: next.id, tail: Promise.resolve() };
+    updateWorkingCopy(next);
+    setSaveState("");
+  };
+  useEffect(() => () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+  }, []);
 
   const createMut = useMutation({
     mutationFn: async (p: WorkProject) =>
@@ -2553,47 +2580,56 @@ export function App() {
       }),
   });
 
-  const persist = async (p: WorkProject): Promise<WorkProject> => {
-    if (p.id == null) {
-      const res = await createMut.mutateAsync(p);
+  const persist = (p: WorkProject): Promise<WorkProject> => {
+    const draft = activeDraft.current;
+    const task = draft.tail.catch(() => undefined).then(async () => {
+      const isNew = draft.id === null;
+      const res = draft.id === null
+        ? await createMut.mutateAsync(p)
+        : await updateMut.mutateAsync({ ...p, id: draft.id });
       const saved = toWork(res.project);
-      setProjectState(saved);
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      draft.id = saved.id;
+      if (activeDraft.current === draft) {
+        const current = projectRef.current;
+        updateWorkingCopy(current === p ? saved : { ...current, id: saved.id });
+      }
+      if (isNew || p.status === "done") void queryClient.invalidateQueries({ queryKey: ["projects"] });
       return saved;
-    }
-    const res = await updateMut.mutateAsync({ ...p, id: p.id });
-    const saved = toWork(res.project);
-    setProjectState(saved);
-    return saved;
+    });
+    draft.tail = task;
+    return task;
   };
 
-  // Autosave (debounced) while in the studio.
+  // Autosave the edits against their original draft, including when changing artwork.
   const setProject = (p: WorkProject) => {
-    setProjectState(p);
+    updateWorkingCopy(p);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaveState("Menyimpan…");
+    const draft = activeDraft.current;
     saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
       void persist(projectRef.current)
-        .then(() => setSaveState("Tersimpan ✓"))
-        .catch(() => setSaveState("Tidak bisa menyimpan — lanjut mewarnai saja, kami coba lagi"));
+        .then(() => { if (activeDraft.current === draft && !saveTimer.current) setSaveState("Tersimpan ✓"); })
+        .catch(() => { if (activeDraft.current === draft) setSaveState("Tidak bisa menyimpan. Coba simpan lagi."); });
     }, 900);
   };
 
   const go = (r: Route) => {
+    const hash = r.view === "explore" ? "#/koleksi" : r.view === "parents" ? "#/orang-tua" : r.view === "creations" ? "#/kreasiku" : "";
+    const path = window.location.pathname + window.location.search + hash;
+    if (window.location.hash !== hash) window.history.replaceState(window.history.state, "", path);
     setRoute(r);
     window.scrollTo({ top: 0 });
   };
 
   const startTemplate = (id: string) => {
-    setProjectState(newWork(id));
-    setSaveState("");
+    switchDraft(newWork(id));
     go({ view: "studio" });
   };
 
   const openProject = (p: ServerProject, view: "studio" | "magic" | "print" | "finish") => {
     const w = toWork(p);
-    setProjectState(w);
-    setSaveState("");
+    switchDraft(w);
     if (view === "finish") {
       setShopSel({
         product: "poster",
@@ -2639,14 +2675,14 @@ export function App() {
     } else {
       const w = newWork("custom", json);
       if (colors) w.colors = colors;
-      setProjectState(w);
-      setSaveState("");
+      switchDraft(w);
     }
     go({ view: "studio" });
   };
 
   const persistNow = async () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
     setSaveState("Menyimpan…");
     try {
       await persist(projectRef.current);
@@ -2670,12 +2706,15 @@ export function App() {
   // lalu buka halaman masterpiece dengan empat pilihan produk.
   const handleFinish = async () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
     const p = { ...projectRef.current, status: "done" as const };
-    let saved: WorkProject = p;
+    updateWorkingCopy(p);
+    let saved: WorkProject;
     try {
       saved = await persist(p);
     } catch {
-      setProjectState(p);
+      setSaveState("Karya belum tersimpan. Coba simpan lagi sebelum memesan.");
+      return;
     }
     setShopSel({
       product: "poster",
@@ -2694,13 +2733,15 @@ export function App() {
 
   const handleDone = async () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
     const p = { ...projectRef.current, status: "done" as const };
+    updateWorkingCopy(p);
     try {
       await persist(p);
     } catch {
       // Even if the save hiccups, the child still gets their 3D moment;
       // the local copy carries the exact colors.
-      setProjectState(p);
+      updateWorkingCopy(p);
     }
     setCelebrating(true);
     setTimeout(() => {
@@ -2711,12 +2752,15 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] font-body text-[var(--text)]">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:z-50 focus:rounded-xl focus:bg-white focus:p-3">Lewati ke konten utama</a>
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <Header brandName={brandName} route={route} go={go} onCustom={startCustomNew} />
-      <main>
+      <main id="main-content" style={route.view === "studio" ? { overflowAnchor: "none" } : undefined}>
+        <Suspense fallback={<p role="status" className="p-6 text-center">Memuat halaman…</p>}>
         {route.view === "home" && (
           <Home
             brandName={brandName}
+            catalogPrices={settings.data?.catalogPrices ?? {}}
             startTemplate={startTemplate}
             go={go}
             onCustom={startCustomNew}
@@ -2832,6 +2876,7 @@ export function App() {
           <AffiliateResetPage token={route.token} goDashboard={() => goAffiliate({ view: "aff-dashboard" })} />
         )}
         {route.view === "aff-admin" && <AdminGate><AffiliateAdminPage /></AdminGate>}
+        </Suspense>
       </main>
       <footer className="bg-[#F1EBDD] px-4 pb-24 pt-10 text-center text-sm font-semibold sm:pb-10">
         <img src={logoUrl} alt="" className="mx-auto h-12 w-12 rounded-2xl object-cover ring-1 ring-black/10" />

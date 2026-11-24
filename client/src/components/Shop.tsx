@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ApiResponse } from "../api";
+import { formatIDR, PRODUCT_META, type ProductId } from "../lib/shop";
 import { FIELDS } from "../fields";
 import { NAME_FONTS, type TemplateDef } from "../lib/model";
 import { getTemplate } from "../lib/registry";
@@ -26,7 +27,6 @@ import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 
-export type ProductId = "poster" | "papercraft" | "figurine" | "tshirt" | "celengan" | "accessory59";
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 
 export interface ShopProject {
@@ -50,10 +50,6 @@ export interface ShopSelection {
   childName: string;
 }
 
-export function formatIDR(n: number): string {
-  return `Rp${n.toLocaleString("id-ID")}`;
-}
-
 function fontFamilyOf(id: string): string {
   return (NAME_FONTS.find((f) => f.id === id) ?? NAME_FONTS[0]!).family;
 }
@@ -68,53 +64,7 @@ export function templateForSnapshot(snap: { templateId: string; customDef?: stri
 
 /* ------------------------- Product definitions ------------------------- */
 
-export const PRODUCT_META: Record<
-  ProductId,
-  { title: string; tagline: string; description: string; cta: string; see: string }
-> = {
-  poster: {
-    title: "Printed Poster",
-    tagline: "Poster Berbingkai",
-    description: "Turn their artwork into a beautiful keepsake for their room.",
-    cta: "Create My Poster",
-    see: "See My Poster",
-  },
-  accessory59: {
-    title: "Aksesori Custom Premium",
-    tagline: "Accessories",
-    description: "Aksesori personal dari hasil mewarnai si kecil — karakter, pilihan warna, serta namanya menjadi desain produk miliknya sendiri.",
-    cta: "Buat Aksesori-ku",
-    see: "Lihat Desain-ku",
-  },
-  celengan: {
-    title: "Celengan Custom",
-    tagline: "Aksesori Celengan",
-    description: "Celengan tabung bergambar karya si kecil, lengkap dengan warna dan namanya. Souvenir personal yang bisa digunakan sehari-hari.",
-    cta: "Buat Celengan-ku",
-    see: "Lihat Celengan-ku",
-  },
-  papercraft: {
-    title: "3D Papercraft Custom",
-    tagline: "Papercraft 3D",
-    description: "Karya si kecil berubah jadi kit kertas 3D siap gunting, lipat, dan lem — warnanya persis, namanya juga!",
-    cta: "Buat Papercraft-ku",
-    see: "Lihat Papercraft-ku",
-  },
-  figurine: {
-    title: "Custom 3D Figurine",
-    tagline: "Figurine 3D Custom",
-    description: "Watch their imagination come to life in 3D.",
-    cta: "Create My Figurine",
-    see: "See My 3D Figurine",
-  },
-  tshirt: {
-    title: "Custom Printed T-Shirt",
-    tagline: "Kaos Custom",
-    description: "Wear your imagination, made just for you.",
-    cta: "Create My T-Shirt",
-    see: "See My T-Shirt",
-  },
-};
+
 
 const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
   products: [
@@ -122,6 +72,8 @@ const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
     { id: "papercraft", basePrice: 49000, priceLabel: "fixed" },
     { id: "celengan", basePrice: 29000, priceLabel: "fixed" },
     { id: "accessory59", basePrice: 59000, priceLabel: "fixed" },
+    { id: "puzzle", basePrice: 59000, priceLabel: "fixed" },
+    { id: "placemat", basePrice: 69000, priceLabel: "fixed" },
     { id: "figurine", basePrice: 120000, priceLabel: "from" },
     { id: "tshirt", basePrice: 79000, priceLabel: "from" },
   ],
@@ -140,8 +92,8 @@ export const TSHIRT_FABRIC_HEX: Record<string, string> = {
   Brown: "#7A4E2D",
 };
 
-function useShopConfig() {
-  const q = useQuery({ queryKey: ["shopConfig"], queryFn: () => api.getShopConfig({}) });
+export function useShopConfig() {
+  const q = useQuery({ queryKey: ["shopConfig"], queryFn: () => api.getShopConfig({}), staleTime: 60000 });
   return q.data ?? FALLBACK_CONFIG;
 }
 
@@ -381,7 +333,7 @@ function ProductPreview({
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
   if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
   if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
-  if (product === "accessory59") {
+  if (product === "accessory59" || product === "puzzle" || product === "placemat") {
     return (
       <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
         <div className="rounded-3xl bg-[#EEF4E4] p-5 ring-1 ring-[var(--border)]">
@@ -392,11 +344,11 @@ function ProductPreview({
               nameAlign={project.nameAlign} />
           </div>
           <p className="mt-3 text-center font-display text-sm font-bold text-olive-deep">
-            Aksesori custom dari karya yang kamu warnai
+            {PRODUCT_META[product].title}
           </p>
         </div>
         <p className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">
-          Pratinjau karya dan warna pesanan. Contoh foto produk belum tersedia pada katalog.
+          Pratinjau gambar, warna, dan nama yang akan dicetak.
         </p>
       </div>
     );
@@ -524,7 +476,7 @@ export function Masterpiece({
               <p className="mt-2 font-display text-lg font-semibold text-olive-deep">{priceLine(cfg, id)}</p>
               {id === "accessory59" && (
                 <p className="mt-1 text-xs font-bold text-olive-deep">
-                  Accessories · Rp59.000 · personalisasi gambar dan nama · ongkir terpisah.
+                  Aksesori dengan gambar dan nama pilihanmu.
                 </p>
               )}
               {id === "celengan" && (
@@ -557,7 +509,7 @@ export function Masterpiece({
                 <button
                   type="button"
                   onClick={() => onCustomize(id)}
-                  className="rounded-full bg-tang px-5 py-3 font-display text-base font-semibold text-white shadow-sm transition hover:bg-tang-deep"
+                  className="rounded-full bg-tang px-5 py-3 font-display text-base font-semibold text-ink shadow-sm transition hover:bg-tang-deep"
                 >
                   {meta.cta}
                 </button>
@@ -750,7 +702,7 @@ export function Customize({
           <dl className="mt-5 space-y-1.5 border-t-2 border-dashed border-[var(--border)] pt-4 text-sm font-semibold">
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Harga produk</dt>
-              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft" || selection.product === "celengan" || selection.product === "accessory59") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
+              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft" || selection.product === "celengan" || selection.product === "accessory59" || selection.product === "puzzle" || selection.product === "placemat") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Ongkos kirim</dt>
@@ -767,7 +719,7 @@ export function Customize({
               }
               onCheckout();
             }}
-            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-white shadow transition hover:bg-tang-deep"
+            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink shadow transition hover:bg-tang-deep"
           >
             Lanjut ke Checkout
           </button>
@@ -791,8 +743,11 @@ export function Checkout({
   onPlaced: (o: OrderOut) => void;
 }) {
   const cfg = useShopConfig();
+  const queryClient = useQueryClient();
   const meta = PRODUCT_META[selection.product];
-  const price = basePrice(cfg, selection.product);
+  const [quantity, setQuantity] = useState(1);
+  const checkoutId = useRef<string | null>(null);
+  const price = basePrice(cfg, selection.product) * quantity;
   const [customerName, setCustomerName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
@@ -838,6 +793,9 @@ export function Checkout({
     mutationFn: async () =>
       await api.createOrder({
         projectId: project.id ?? 0,
+        checkoutId: checkoutId.current ??= crypto.randomUUID(),
+        quantity,
+        expectedUnitPrice: basePrice(cfg, selection.product),
         productType: selection.product,
         tshirtColor: selection.product === "tshirt" ? selection.tshirtColor : "",
         tshirtSize: selection.product === "tshirt" ? selection.tshirtSize : "",
@@ -849,7 +807,10 @@ export function Checkout({
         address: address.trim(),
         notes: notes.trim(),
       }),
-    onError: (e) => setError(e.message),
+    onError: (e) => {
+      setError(e.message);
+      void queryClient.invalidateQueries({ queryKey: ["shopConfig"] });
+    },
     onSuccess: (res) => onPlaced(res.order),
   });
   const submit = () => {
@@ -872,6 +833,14 @@ export function Checkout({
         </button>
         <h1 className="font-display text-2xl font-semibold">Checkout</h1>
       </div>
+      <div className="mt-4 flex items-center gap-3 px-2">
+        <label htmlFor="checkout-quantity" className="font-display text-sm font-bold">Jumlah</label>
+        <input id="checkout-quantity" type="number" inputMode="numeric" min={1} max={20}
+          value={quantity} disabled={create.isPending}
+          onChange={(event) => setQuantity(Math.min(20, Math.max(1, Math.trunc(Number(event.target.value)) || 1)))}
+          className="w-24 rounded-2xl bg-white px-4 py-2 text-ink ring-1 ring-[var(--border)]" />
+      </div>
+
 
       <div className="mt-4 grid items-start gap-4 md:grid-cols-[1fr_360px]">
         <form
@@ -981,7 +950,7 @@ export function Checkout({
           <button
             type="submit"
             disabled={create.isPending}
-            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-white shadow transition hover:bg-tang-deep disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink shadow transition hover:bg-tang-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
             {create.isPending ? "Membuat pesanan…" : "Buat Pesanan"}
           </button>
@@ -1104,16 +1073,39 @@ export const QRIS_NMID = "ID1026626210169";
 // Transfer" only records the customer's confirmation — the order moves
 // to Waiting for Verification and stays unpaid until an admin verifies
 // the real incoming transfer.
+function encodeBase64(bytes: Uint8Array): string {
+  let raw = "";
+  for (let offset = 0; offset < bytes.length; offset += 8192) {
+    raw += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+  }
+  return btoa(raw);
+}
+
 export function PaymentPanel({ order }: { order: OrderOut }) {
   const [payState, setPayState] = useState<OrderOut["payState"]>(order.payState);
   const [copied, setCopied] = useState(false);
+  const [proofFile, setProofFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   useEffect(() => setPayState(order.payState), [order.payState]);
   const confirm = useMutation({
-    mutationFn: async () => await api.confirmTransfer({ code: order.code, whatsapp: order.whatsapp }),
+    mutationFn: async () => {
+      let proof;
+      if (proofFile) {
+        if (proofFile.size > 750000 || (proofFile.type !== "image/jpeg" && proofFile.type !== "image/png")) {
+          throw new Error("Pilih gambar JPG atau PNG dengan ukuran maksimal 750 KB.");
+        }
+        const data = encodeBase64(new Uint8Array(await proofFile.arrayBuffer()));
+        proof = { mime: proofFile.type, data } as const;
+      }
+      return api.confirmTransfer({ code: order.code, whatsapp: order.whatsapp, proof });
+    },
     onError: (e) => setError(e.message),
     onSuccess: (res) => {
-      if (res.ok) setPayState(res.payState === "not_found" ? payState : res.payState);
+      if (res.ok) {
+        setError("");
+        setProofFile(null);
+        setPayState(res.payState === "not_found" ? payState : res.payState);
+      }
       else setError("Konfirmasi tidak bisa dicatat. Periksa lagi sebentar, atau hubungi tim kami via WhatsApp.");
     },
   });
@@ -1187,7 +1179,7 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
           </div>
 
           <dl className="mt-4 space-y-2 px-1 text-sm font-semibold">
-            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Produk</dt><dd className="text-right font-display">{PRODUCT_META[order.productType].title}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Produk</dt><dd className="text-right font-display">{order.quantity} × {PRODUCT_META[order.productType].title}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Subtotal Produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
             {order.discountAmount > 0 && (
               <div className="flex justify-between gap-3">
@@ -1223,6 +1215,19 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
             hanya mencatat laporan pembayaran; tim tetap memeriksa mutasi QRIS sebelum pesanan dinyatakan lunas.
           </p>
 
+          {["awaiting", "waiting_verification", "unmatched"].includes(payState) && (
+            <div className="mt-4">
+              <label htmlFor={`proof-${order.id}`} className="block text-sm font-bold">Bukti pembayaran (opsional)</label>
+              <input key={payState} id={`proof-${order.id}`} type="file" accept="image/jpeg,image/png"
+                onChange={(event) => setProofFile(event.target.files?.[0] ?? null)} disabled={confirm.isPending}
+                className="mt-2 block w-full text-sm" aria-describedby={`proof-help-${order.id}`} />
+              <p id={`proof-help-${order.id}`} className="mt-1 text-xs text-[var(--dim)]">JPG atau PNG, maksimal 750 KB.</p>
+              {payState === "waiting_verification" && proofFile && (
+                <button type="button" disabled={confirm.isPending} onClick={() => confirm.mutate()}
+                  className="mt-2 rounded-full bg-olive px-4 py-2 text-sm font-bold text-white">Kirim bukti</button>
+              )}
+            </div>
+          )}
           {payState === "verified" ? (
             <p className="mt-4 rounded-2xl bg-sage-soft px-4 py-3 font-display text-sm font-bold text-olive-deep ring-1 ring-[var(--border)]">
               Pembayaran sudah terverifikasi. Pesanan akan dilanjutkan ke tahap berikutnya.
@@ -1236,9 +1241,9 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
           ) : (
             <>
               <button type="button"
-                disabled={confirm.isPending || payState === "waiting_verification"}
+                disabled={confirm.isPending || payState === "waiting_verification" || order.shippingCost == null}
                 onClick={() => confirm.mutate()}
-                className="mt-4 min-h-12 w-full rounded-full bg-tang px-5 py-3 font-display text-base font-extrabold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50">
+                className="mt-4 min-h-12 w-full rounded-full bg-tang px-5 py-3 font-display text-base font-extrabold text-ink shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50">
                 {payState === "waiting_verification"
                   ? "Menunggu Verifikasi Tim"
                   : confirm.isPending ? "Mencatat Pembayaran…" : "Saya Sudah Transfer"}
@@ -1495,7 +1500,7 @@ export function OrderTracking() {
                         i < stepIndex
                           ? "bg-olive text-white"
                           : i === stepIndex
-                            ? "bg-tang text-white"
+                            ? "bg-tang text-ink"
                             : "bg-[var(--surface)] text-[var(--dim)] ring-1 ring-[var(--border)]"
                       }`}
                     >
@@ -1583,7 +1588,8 @@ function downloadPapercraftKit(order: OrderOut) {
 
 function AdminOrderCard({ order }: { order: OrderOut }) {
   const queryClient = useQueryClient();
-  const [paymentStatus, setPaymentStatus] = useState<OrderOut["paymentStatus"]>(order.paymentStatus);
+  const [paymentReference, setPaymentReference] = useState("");
+  const proof = useMutation({ mutationFn: () => api.adminGetPaymentProof({ id: order.id }) });
   const [orderStatus, setOrderStatus] = useState<OrderOut["orderStatus"]>(order.orderStatus);
   const [resi, setResi] = useState(order.trackingNumber);
   const [ongkir, setOngkir] = useState(order.shippingCost == null ? "" : String(order.shippingCost));
@@ -1593,7 +1599,6 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
     mutationFn: async () =>
       await api.updateOrder({
         id: order.id,
-        paymentStatus,
         orderStatus,
         trackingNumber: resi.trim(),
         ...(ongkir.trim() === "" ? {} : { shippingCost: Number(ongkir) }),
@@ -1610,11 +1615,11 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
   });
   const verify = useMutation({
     mutationFn: async (decision: "verify" | "reject" | "unmatched" | "refund") =>
-      await api.verifyOrderPayment({ id: order.id, decision }),
+      await api.verifyOrderPayment({ id: order.id, decision, paymentReference }),
     onError: (e) => setError(e.message),
     onSuccess: (res) => {
       setError("");
-      setPaymentStatus(res.order.paymentStatus);
+      setPaymentReference("");
       setOrderStatus(res.order.orderStatus);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
@@ -1693,9 +1698,14 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Verifikasi pembayaran QRIS">
             <span className="font-display text-xs font-bold text-[var(--dim)]">Verifikasi QRIS:</span>
-            {(order.payState === "awaiting" || order.payState === "waiting_verification" || order.payState === "unmatched") && (
+            {["awaiting", "waiting_verification", "unmatched", "rejected"].includes(order.payState) && order.orderStatus !== "cancelled" && (
               <>
-                <button type="button" disabled={verify.isPending} onClick={() => verify.mutate("verify")} className="rounded-full bg-olive px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
+                <label className="text-xs font-semibold">
+                  Referensi mutasi QRIS
+                  <input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)}
+                    maxLength={80} autoComplete="off" className="ml-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2" />
+                </label>
+                <button type="button" disabled={verify.isPending || paymentReference.trim().length < 4} onClick={() => verify.mutate("verify")} className="rounded-full bg-olive px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
                   Verifikasi Pembayaran
                 </button>
                 <button type="button" disabled={verify.isPending} onClick={() => verify.mutate("reject")} className="rounded-full bg-berry px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
@@ -1706,9 +1716,16 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
                 </button>
               </>
             )}
+            <button type="button" disabled={proof.isPending} onClick={() => proof.mutate()}
+              className="rounded-full bg-white px-4 py-2 text-xs font-bold ring-1 ring-[var(--border)]">Lihat bukti pelanggan</button>
+            {proof.isError && <p role="alert" className="text-xs">{proof.error.message}</p>}
+            {proof.isSuccess && (proof.data.proof
+              ? <img className="max-h-80 max-w-full object-contain" alt="Bukti transfer dari pelanggan"
+                  src={`data:${proof.data.proof.mime};base64,${proof.data.proof.data}`} />
+              : <p className="text-xs">Belum ada bukti yang diunggah.</p>)}
             {order.payState === "verified" && (
               <button type="button" disabled={verify.isPending} onClick={() => verify.mutate("refund")} className="rounded-full bg-[var(--surface)] px-4 py-2 font-display text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">
-                Refund Pesanan Ini
+                Catat Refund Terkirim
               </button>
             )}
             <span className="text-xs font-semibold text-[var(--dim)]">
@@ -1718,18 +1735,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-dashed border-[var(--border)] pt-3">
-        <div>
-          <label htmlFor={`pay-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Pembayaran</label>
-          <select id={`pay-${order.id}`} value={paymentStatus} onChange={(e) => { setPaymentStatus(e.target.value as OrderOut["paymentStatus"]); setSaved(false); }} className={selectCls}>
-            <option value="pending">Menunggu Pembayaran</option>
-            <option value="waiting_verification">Menunggu Verifikasi</option>
-            <option value="paid">Lunas (terverifikasi)</option>
-            <option value="rejected">Ditolak</option>
-            <option value="failed">Gagal</option>
-            <option value="cancelled">Dibatalkan</option>
-            <option value="refunded">Direfund</option>
-          </select>
-        </div>
+        <p className="text-sm font-semibold">{PAYMENT_STATUS_LABELS[order.paymentStatus]}</p>
         <div>
           <label htmlFor={`status-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Status pesanan</label>
           <select id={`status-${order.id}`} value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value as OrderOut["orderStatus"]); setSaved(false); }} className={selectCls}>
@@ -1783,25 +1789,84 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
 }
 
 export function AdminOrders() {
+  const [page, setPage] = useState(0);
   const orders = useQuery({
-    queryKey: ["orders"],
-    queryFn: () => api.listOrders({ limit: 50 }),
+    queryKey: ["orders", page],
+    queryFn: () => api.listOrders({ limit: 20, offset: page * 20 }),
   });
   if (orders.isPending) return <p className="font-display font-bold">Memuat pesanan…</p>;
   if (orders.error) return <p className="font-display font-bold">Pesanan tidak bisa dimuat. Coba lagi sebentar.</p>;
-  const list = orders.data.orders;
-  if (list.length === 0) {
-    return (
-      <p className="font-semibold text-[var(--dim)]">
-        Belum ada pesanan masuk. Pesanan dari tombol “Jadikan Nyata” akan tampil di sini lengkap dengan karyanya.
-      </p>
-    );
-  }
+  const { orders: list, orderCount, paidCount, paymentReviewCount, netProductRevenue } = orders.data;
   return (
-    <div className="space-y-3">
-      {list.map((o) => (
-        <AdminOrderCard key={o.id} order={o} />
-      ))}
+    <div className="space-y-4">
+      <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {[
+          ["Total pesanan", orderCount],
+          ["Pesanan lunas", paidCount],
+          ["Menunggu verifikasi", paymentReviewCount],
+          ["Pendapatan produk neto", formatIDR(netProductRevenue)],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-2xl bg-sage-soft p-3">
+            <dt className="text-xs font-bold text-olive-deep">{label}</dt>
+            <dd className="mt-1 break-words font-display text-xl font-semibold">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {list.length === 0 && <p className="text-sm text-[var(--dim)]">Belum ada pesanan pada halaman ini.</p>}
+      {list.map((order) => <AdminOrderCard key={order.id} order={order} />)}
+      {orderCount > 20 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}
+            className="rounded-full border px-4 text-sm font-bold disabled:opacity-40">Sebelumnya</button>
+          <span className="text-sm">Halaman {page + 1}</span>
+          <button type="button" disabled={(page + 1) * 20 >= orderCount} onClick={() => setPage(page + 1)}
+            className="rounded-full border px-4 text-sm font-bold disabled:opacity-40">Berikutnya</button>
+        </div>
+      )}
     </div>
+  );
+}
+
+export function AdminProductPrices() {
+  const queryClient = useQueryClient();
+  const config = useShopConfig();
+  const [productId, setProductId] = useState<ProductId>("poster");
+  const [amount, setAmount] = useState("");
+  const changePrice = useMutation({
+    mutationFn: (price: number) => api.adminSetProductPrice({ productId, price }),
+    onSuccess: () => {
+      setAmount("");
+      void queryClient.invalidateQueries({ queryKey: ["shopConfig"] });
+      void queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+  return (
+    <section className="mt-5 rounded-3xl bg-white p-5 ring-1 ring-[var(--border)]" aria-label="Harga katalog">
+      <h2 className="font-display text-lg font-bold">Harga katalog</h2>
+      <p className="text-sm text-[var(--dim)]">Harga baru berlaku untuk checkout berikutnya.</p>
+      <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={(event) => {
+        event.preventDefault();
+        changePrice.mutate(Number(amount));
+      }}>
+        <label className="grid gap-1 text-sm font-bold">Produk
+          <select value={productId} onChange={(event) => { setProductId(event.target.value as ProductId); setAmount(""); changePrice.reset(); }}
+            className="rounded-xl bg-[var(--bg)] px-3 py-2 ring-1 ring-[var(--border)]">
+            {config.products.map((product) => (
+              <option key={product.id} value={product.id}>{PRODUCT_META[product.id].title} · {formatIDR(product.basePrice)}</option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-bold">Harga baru (Rp)
+          <input type="number" required min={1000} max={10000000} step={1} value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            className="w-40 rounded-xl bg-[var(--bg)] px-3 py-2 ring-1 ring-[var(--border)]" />
+        </label>
+        <button type="submit" disabled={changePrice.isPending} className="rounded-full bg-olive px-4 py-2 text-sm font-bold text-white">
+          Simpan harga
+        </button>
+      </form>
+      {changePrice.isError && <p role="alert" className="mt-2 text-sm text-berry">{changePrice.error.message}</p>}
+      {changePrice.isSuccess && <p role="status" className="mt-2 text-sm text-olive-deep">Harga tersimpan.</p>}
+    </section>
   );
 }

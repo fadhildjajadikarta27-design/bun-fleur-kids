@@ -44,10 +44,7 @@ export const FIELDS: FieldsShape<typeof Actions> = {
       "maxLength": 32,
       "minLength": 1
     },
-    "nameColor": {
-      "maxLength": 32,
-      "minLength": 1
-    },
+    "nameColor": {},
     "nameAlign": {},
     "colors": {},
     "strokes": {},
@@ -72,10 +69,7 @@ export const FIELDS: FieldsShape<typeof Actions> = {
       "maxLength": 32,
       "minLength": 1
     },
-    "nameColor": {
-      "maxLength": 32,
-      "minLength": 1
-    },
+    "nameColor": {},
     "nameAlign": {},
     "colors": {},
     "strokes": {},
@@ -128,6 +122,12 @@ export const FIELDS: FieldsShape<typeof Actions> = {
   "getShopConfig": {},
   "createOrder": {
     "projectId": {},
+    "checkoutId": {},
+    "quantity": {
+      "min": 1,
+      "max": 20
+    },
+    "expectedUnitPrice": {},
     "productType": {},
     "tshirtColor": {
       "maxLength": 40
@@ -161,9 +161,20 @@ export const FIELDS: FieldsShape<typeof Actions> = {
       "maxLength": 300
     }
   },
+  "adminSetProductPrice": {
+    "productId": {},
+    "price": {
+      "min": 1000,
+      "max": 10000000
+    }
+  },
   "listOrders": {
     "limit": {
       "max": 100
+    },
+    "offset": {
+      "min": 0,
+      "max": 100000
     }
   },
   "updateOrder": {
@@ -202,11 +213,18 @@ export const FIELDS: FieldsShape<typeof Actions> = {
     "whatsapp": {
       "maxLength": 20,
       "minLength": 9
-    }
+    },
+    "proof": {}
+  },
+  "adminGetPaymentProof": {
+    "id": {}
   },
   "verifyOrderPayment": {
     "id": {},
-    "decision": {}
+    "decision": {},
+    "paymentReference": {
+      "maxLength": 80
+    }
   },
   "affiliateApply": {
     "fullName": {

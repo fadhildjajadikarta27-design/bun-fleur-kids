@@ -10,7 +10,8 @@
 
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { Actions } from "./actions.js";
-import { ensureMigrations, getDb } from "./db.js";
+import { consumeRateLimit, ensureMigrations, getDb } from "./db.js";
+import { requiresAdmin } from "./admin-auth.js";
 import { z, type ActionDef, type Ctx } from "./sdk.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,7 +60,7 @@ async function inferenceComplete<T extends z.ZodType>(
       signal: controller.signal,
     });
     if (!res.ok) {
-      throw new Error(`OpenAI request failed (${res.status}): ${await res.text()}`);
+      throw new Error("Pembuatan karakter sementara tidak tersedia.");
     }
     const data = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
@@ -92,11 +93,12 @@ export interface DispatchResult {
   body: unknown;
 }
 
-export async function dispatchAction(action: string, args: unknown, visitorId = "local-dev", isAdmin = false): Promise<DispatchResult> {
-  const def = actionsMap[action];
-  if (!def) {
+export async function dispatchAction(action: string, args: unknown, visitorId = "", isAdmin = false, options: { local?: boolean; ip?: string } = {}): Promise<DispatchResult> {
+  if (!Object.hasOwn(actionsMap, action)) {
     return { status: 404, body: { error: `Unknown action: ${action}` } };
   }
+  if (requiresAdmin(action) && !isAdmin) return { status: 401, body: { error: "Masuk sebagai admin terlebih dahulu." } };
+  const def = actionsMap[action]!;
   // Validate input before touching the database, so invalid form data
   // receives an actionable 400 even during a database outage.
   const parsed = def.request.safeParse(args ?? {});
@@ -105,29 +107,27 @@ export async function dispatchAction(action: string, args: unknown, visitorId = 
     return { status: 400, body: { error: issue?.message ?? "Data formulir tidak valid." } };
   }
   try {
-    await ensureMigrations();
+    if (options.local) await ensureMigrations();
+    const limits = { affiliateLogin: 25, affiliateApply: 8, affiliateRequestPinReset: 8,
+      trackOrder: 35, confirmTransfer: 20, createOrder: 20, generateCharacter: 6 };
+    if (Object.hasOwn(limits, action) && !await consumeRateLimit(action, options.ip, limits[action as keyof typeof limits], 900)) {
+      return { status: 429, body: { error: "Terlalu banyak permintaan. Coba lagi dalam 15 menit." } };
+    }
     const result = await def.handler({ ...ctx, visitorId, isAdmin }, parsed.data);
     // Lenient response validation: a mismatch is a server bug worth
     // logging, but the client is better served by the raw value than by
     // turning a cosmetic schema drift into a hard failure.
     const check = def.response.safeParse(result);
     if (!check.success) {
-      console.warn(`[actions] ${action}: response did not match its schema: ${check.error.message}`);
+      console.warn(`[actions] ${action}: response did not match its schema: ${check.error.issues.map((issue: { path: PropertyKey[] }) => issue.path.join(".")).join(", ")}`);
     }
     return { status: 200, body: result };
   } catch (err) {
-    // Do not leak database connection details or raw Postgres errors to browsers.
-    // Keep application validation errors as 400; database outages are 503.
-    const code = err !== null && typeof err === "object" && "code" in err
-      ? String(err.code) : "";
-    if (code === "28P01" || (err instanceof Error && /password authentication failed/i.test(err.message))) {
-      console.error("[actions] Postgres authentication rejected (28P01).");
-      return { status: 503, body: { error: "Database belum terhubung. Periksa DATABASE_URL di Vercel dan deploy ulang." } };
+    if (err instanceof Error && err.constructor === Error && !err.cause &&
+        !/DATABASE_URL is not set|migration|OpenAI returned/i.test(err.message)) {
+      return { status: 400, body: { error: err.message } };
     }
-    if (err instanceof Error && /DATABASE_URL is not set|database connection|Failed to apply migration/i.test(err.message)) {
-      console.error("[actions] Database configuration or migration unavailable:", err.message);
-      return { status: 503, body: { error: "Layanan database sedang bermasalah. Periksa konfigurasi server." } };
-    }
-    return { status: 400, body: { error: err instanceof Error ? err.message : String(err) } };
+    console.error(`[actions] ${action} failed`);
+    return { status: 503, body: { error: "Layanan sementara tidak tersedia. Coba lagi sebentar." } };
   }
 }

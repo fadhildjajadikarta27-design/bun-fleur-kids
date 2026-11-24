@@ -8,21 +8,22 @@
 //   #/affiliate/invite/<token>   #/affiliate/reset/<token>
 //   #/affiliate/login            #/affiliate/dashboard
 //   #/ref/<coupon>               (referral attribution)
-// The session token lives in localStorage; every dashboard read goes
-// through the affiliateMe action, which resolves the affiliate from
-// the server-side session — never from a URL parameter.
+// The browser keeps credentials in an HttpOnly cookie. localStorage stores only a UI hint.
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ApiResponse } from "../api";
 import { FIELDS } from "../fields";
-import { formatIDR } from "./Shop";
+import { formatIDR } from "../lib/shop";
 import { logoUrl } from "../assets-inline";
 const SESSION_KEY = "bfk-aff-session";
 
 export function loadAffiliateSession(): string {
   try {
-    return localStorage.getItem(SESSION_KEY) ?? "";
+    const marker = localStorage.getItem(SESSION_KEY);
+    if (marker === "cookie-session") return marker;
+    if (marker) localStorage.removeItem(SESSION_KEY);
+    return "";
   } catch {
     return "";
   }
@@ -30,7 +31,7 @@ export function loadAffiliateSession(): string {
 
 export function saveAffiliateSession(token: string) {
   try {
-    if (token) localStorage.setItem(SESSION_KEY, token);
+    if (token) localStorage.setItem(SESSION_KEY, "cookie-session");
     else localStorage.removeItem(SESSION_KEY);
   } catch {
     // Session simply won't persist across reloads.
@@ -228,7 +229,7 @@ export function AffiliateInvitePage({
               setError("");
               setStep("pin");
             }}
-            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-white disabled:opacity-50"
+            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink disabled:opacity-50"
           >
             Create Your 4-Digit PIN
           </button>
@@ -257,7 +258,7 @@ export function AffiliateInvitePage({
               setError("");
               accept.mutate();
             }}
-            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-white disabled:opacity-50"
+            className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink disabled:opacity-50"
           >
             {accept.isPending ? "Mengaktifkan…" : "Aktifkan Akun Saya"}
           </button>
@@ -270,7 +271,7 @@ export function AffiliateInvitePage({
         <section className="band-sage mt-5 rounded-3xl px-6 py-8 text-center" aria-label="Aktivasi selesai">
           <h2 className="font-display text-3xl font-semibold">You&rsquo;re All Set!</h2>
           <p className="band-dim mt-1 font-semibold">Your affiliate dashboard is ready.</p>
-          <button type="button" onClick={goDashboard} className="mt-5 rounded-full bg-tang px-7 py-3.5 font-display text-lg font-semibold text-white">
+          <button type="button" onClick={goDashboard} className="mt-5 rounded-full bg-tang px-7 py-3.5 font-display text-lg font-semibold text-ink">
             Go to My Dashboard
           </button>
         </section>
@@ -357,7 +358,7 @@ export function AffiliateLoginPage({
           <button
             type="submit"
             disabled={login.isPending || identifier.trim().replace(/\D/g, "").length < 9}
-            className="w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-white disabled:opacity-50"
+            className="w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink disabled:opacity-50"
           >
             {login.isPending ? "Memeriksa…" : "Masuk"}
           </button>
@@ -439,7 +440,7 @@ export function AffiliateResetPage({
             setError("");
             reset.mutate();
           }}
-          className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-white disabled:opacity-50"
+          className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink disabled:opacity-50"
         >
           {reset.isPending ? "Menyimpan…" : "Simpan PIN Baru & Masuk"}
         </button>
@@ -818,7 +819,7 @@ export function AffiliateDashboard({
                 setPayoutMsg("");
                 requestPayout.mutate();
               }}
-              className="mt-3 rounded-full bg-tang px-6 py-3 font-display text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 rounded-full bg-tang px-6 py-3 font-display text-base font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
             >
               {requestPayout.isPending ? "Mengirim…" : "Request Withdrawal"}
             </button>
@@ -1272,7 +1273,7 @@ export function AffiliateAdmin() {
           </div>
         </div>
         {error && <p className="mt-2 text-sm font-bold text-berry" role="alert">{error}</p>}
-        <button type="submit" disabled={create.isPending} className="mt-3 rounded-full bg-tang px-6 py-3 font-display text-base font-semibold text-white disabled:opacity-50">
+        <button type="submit" disabled={create.isPending} className="mt-3 rounded-full bg-tang px-6 py-3 font-display text-base font-semibold text-ink disabled:opacity-50">
           {create.isPending ? "Membuat…" : "Buat Afiliasi & Tautan Undangan"}
         </button>
         {created && (

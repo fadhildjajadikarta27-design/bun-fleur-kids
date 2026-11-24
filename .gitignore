@@ -11,3 +11,10 @@ dev.db-shm
 dev.db-wal
 audits/
 *.muse-github-snapshot-sync.json
+
+.env
+.env.*
+!.env.example
+
+*.tsbuildinfo
+*.tsbuildinfo.*

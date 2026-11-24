@@ -203,7 +203,7 @@ function rasterize(template: TemplateDef): OutlineData {
   uctx.fillStyle = "#000";
   uctx.scale(1 / cell, 1 / cell);
   const regionCanvas = mk();
-  const rctx = regionCanvas.getContext("2d")!;
+  const rctx = regionCanvas.getContext("2d", { willReadFrequently: true })!;
   let dominant = template.regions[0]?.id ?? "body";
   let dominantCount = -1;
   for (const r of template.regions) {

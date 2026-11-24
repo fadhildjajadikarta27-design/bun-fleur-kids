@@ -1,17 +1,10 @@
-import { describe, expect, test } from "bun:test";
-import { ensureMigrations } from "./db.js";
+import { expect, test } from "bun:test";
+import netlifyHandler from "../../netlify/functions/actions.js";
 
-describe("production schema bootstrap policy", () => {
-  test("does not perform database migrations during production API requests", async () => {
-    const before = process.env.VERCEL_ENV;
-    process.env.VERCEL_ENV = "production";
-    try {
-      // No DATABASE_URL is available in this unit test. Production
-      // dispatch must not query or mutate the schema on cold start.
-      await expect(ensureMigrations()).resolves.toBeUndefined();
-    } finally {
-      if (before === undefined) delete process.env.VERCEL_ENV;
-      else process.env.VERCEL_ENV = before;
-    }
-  });
+test("production transport does not bootstrap the database for authentication status reads", async () => {
+  const response = await netlifyHandler(new Request("https://example.test/api/actions", {
+    method: "POST", headers: { "content-type": "application/json" }, body: '{"action":"adminStatus"}',
+  }));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
 });
