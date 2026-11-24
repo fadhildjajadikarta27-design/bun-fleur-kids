@@ -27,28 +27,39 @@ export type ApiResponse<TClient, K extends keyof TClient> =
   TClient[K] extends (args: never) => Promise<infer R> ? R : never;
 
 async function callAction(action: string, args: unknown): Promise<unknown> {
-  // Prevent the affiliate form from remaining in "Membuat..." indefinitely
-  // if a serverless instance or its database becomes unresponsive.
+  const timeout = action === "adminListAffiliates" ? 15_000
+    : action === "adminCreateAffiliate" || action === "affiliateApply" ? 30_000 : undefined;
   let res: Response;
+  let data: unknown;
   try {
     res = await fetch("/api/actions", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action, args: args ?? {} }),
-      signal: action === "adminCreateAffiliate" || action === "affiliateApply" ? AbortSignal.timeout(30_000) : undefined,
+      signal: timeout === undefined ? undefined : AbortSignal.timeout(timeout),
+    });
+    data = await res.json().catch((err: unknown) => {
+      if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) throw err;
+      return null;
     });
   } catch (err) {
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
-      throw new Error(action === "affiliateApply" ? "Pendaftaran terlalu lama. Jangan mengirim berulang-ulang; hubungi tim Bun & Fleur Kids jika tidak ada kabar lewat WhatsApp." : "Pembuatan afiliasi terlalu lama. Periksa daftar afiliasi sebelum mencoba lagi, agar tidak membuat duplikat.");
+      if (action === "adminListAffiliates") throw new Error("Server terlalu lama memuat daftar afiliasi.");
+      if (action === "affiliateApply") throw new Error("Pendaftaran terlalu lama. Jangan mengirim berulang-ulang; hubungi tim Bun & Fleur Kids jika tidak ada kabar lewat WhatsApp.");
+      if (action === "adminCreateAffiliate") throw new Error("Pembuatan afiliasi terlalu lama. Periksa daftar afiliasi sebelum mencoba lagi, agar tidak membuat duplikat.");
     }
     throw err;
   }
-  const data: unknown = await res.json().catch(() => null);
+  if (res.ok && action === "adminListAffiliates" &&
+      (!data || typeof data !== "object" || !("affiliates" in data) || !Array.isArray(data.affiliates))) {
+    throw new Error("Server mengirim respons daftar afiliasi yang tidak valid.");
+  }
   if (!res.ok) {
     const message =
       data !== null && typeof data === "object" && "error" in data && typeof data.error === "string"
         ? data.error
         : `Action ${action} gagal (${res.status}).`;
+    if (action === "adminListAffiliates" && res.status === 401) throw new Error("Sesi admin berakhir. Masuk kembali.");
     throw new Error(message);
   }
   return data;

@@ -423,7 +423,7 @@ const affiliatePublicOut = z.object({
   createdAt: z.string(),
 });
 
-function toAffiliatePublic(row: AffiliateRow): z.infer<typeof affiliatePublicOut> {
+function toAffiliatePublic(row: Pick<AffiliateRow, "id" | "name" | "email" | "couponCode" | "discountPct" | "commissionPct" | "status" | "createdAt">): z.infer<typeof affiliatePublicOut> {
   return {
     id: row.id,
     name: row.name,
@@ -1477,39 +1477,76 @@ export const Actions = {
     }),
     async handler(ctx) {
       const db = ctx.db<typeof schema>();
-      const [rows, invites, allComms, pendingPayouts] = await Promise.all([
-        db.select().from(schema.affiliates).orderBy(desc(schema.affiliates.createdAt)),
-        db.select().from(schema.affiliateInvitations).orderBy(desc(schema.affiliateInvitations.createdAt)),
-        db.select().from(schema.commissions),
-        db.select().from(schema.payouts).where(inArray(schema.payouts.status, ["requested", "approved"])),
-      ]);
-      // Bulk fetch avoids three additional queries per affiliate when the
-      // program grows to hundreds of members.
-      const latestInvite = new Map<number, typeof schema.affiliateInvitations.$inferSelect>();
-      for (const inv of invites) {
-        if (!latestInvite.has(inv.affiliateId)) latestInvite.set(inv.affiliateId, inv);
-      }
-      const commissionsByAffiliate = new Map<number, typeof allComms>();
-      for (const c of allComms) {
-        const list = commissionsByAffiliate.get(c.affiliateId) ?? [];
-        list.push(c);
-        commissionsByAffiliate.set(c.affiliateId, list);
-      }
-      const payoutByAffiliate = new Map<number, number>();
-      for (const p of pendingPayouts) {
-        payoutByAffiliate.set(p.affiliateId, (payoutByAffiliate.get(p.affiliateId) ?? 0) + p.amount);
-      }
-      const out = rows.map((a) => {
-        const invite = latestInvite.get(a.id);
+      const { affiliates, affiliateInvitations, commissions, payouts } = schema;
+      const latestInvite = db.selectDistinctOn([affiliateInvitations.affiliateId], {
+        affiliateId: affiliateInvitations.affiliateId,
+        encryptedToken: affiliateInvitations.encryptedToken,
+        expiresAt: affiliateInvitations.expiresAt,
+        usedAt: affiliateInvitations.usedAt,
+        revokedAt: affiliateInvitations.revokedAt,
+      }).from(affiliateInvitations)
+        .orderBy(affiliateInvitations.affiliateId, desc(affiliateInvitations.createdAt), desc(affiliateInvitations.id))
+        .as("latest_invite");
+      const commissionTotals = db.select({
+        affiliateId: commissions.affiliateId,
+        totalOrders: count().as("total_orders"),
+        netSales: sql<number>`sum(${commissions.netSubtotal})`.mapWith(Number).as("net_sales"),
+        totalCommission: sql<number>`sum(${commissions.amount})`.mapWith(Number).as("total_commission"),
+      }).from(commissions)
+        .where(inArray(commissions.status, ["confirmed", "payable", "paid"]))
+        .groupBy(commissions.affiliateId)
+        .as("commission_totals");
+      const payoutTotals = db.select({
+        affiliateId: payouts.affiliateId,
+        pendingPayout: sql<number>`sum(${payouts.amount})`.mapWith(Number).as("pending_payout"),
+      }).from(payouts)
+        .where(inArray(payouts.status, ["requested", "approved"]))
+        .groupBy(payouts.affiliateId)
+        .as("payout_totals");
+      const rows = await db.select({
+        account: {
+          id: affiliates.id,
+          name: affiliates.name,
+          email: affiliates.email,
+          couponCode: affiliates.couponCode,
+          discountPct: affiliates.discountPct,
+          commissionPct: affiliates.commissionPct,
+          status: affiliates.status,
+          createdAt: affiliates.createdAt,
+          whatsapp: affiliates.whatsapp,
+          instagram: affiliates.instagram,
+          tiktok: affiliates.tiktok,
+          pinResetRequested: sql<boolean>`${affiliates.pinResetRequestedAt} IS NOT NULL`,
+          hasPin: sql<boolean>`${affiliates.pinHash} <> ''`,
+          kpiTargetOrders: affiliates.kpiTargetOrders,
+          kpiTargetRevenue: affiliates.kpiTargetRevenue,
+        },
+        invite: {
+          affiliateId: latestInvite.affiliateId,
+          encryptedToken: latestInvite.encryptedToken,
+          expiresAt: latestInvite.expiresAt,
+          usedAt: latestInvite.usedAt,
+          revokedAt: latestInvite.revokedAt,
+        },
+        totalOrders: commissionTotals.totalOrders,
+        netSales: commissionTotals.netSales,
+        totalCommission: commissionTotals.totalCommission,
+        pendingPayout: payoutTotals.pendingPayout,
+      }).from(affiliates)
+        .leftJoin(latestInvite, eq(affiliates.id, latestInvite.affiliateId))
+        .leftJoin(commissionTotals, eq(affiliates.id, commissionTotals.affiliateId))
+        .leftJoin(payoutTotals, eq(affiliates.id, payoutTotals.affiliateId))
+        .orderBy(desc(affiliates.createdAt), desc(affiliates.id));
+
+      const now = Date.now();
+      const out = rows.map(({ account: a, invite, totalOrders, netSales, totalCommission, pendingPayout }) => {
         let inviteState: "none" | "pending" | "used" | "expired" | "revoked" = "none";
-        if (invite) {
+        if (invite?.affiliateId != null) {
           if (invite.usedAt) inviteState = "used";
           else if (invite.revokedAt) inviteState = "revoked";
-          else if (invite.expiresAt.getTime() < Date.now()) inviteState = "expired";
+          else if (invite.expiresAt.getTime() <= now) inviteState = "expired";
           else inviteState = "pending";
         }
-        const counted = (commissionsByAffiliate.get(a.id) ?? [])
-          .filter((c) => c.status === "confirmed" || c.status === "payable" || c.status === "paid");
         return {
           ...toAffiliatePublic(a),
           whatsapp: a.whatsapp,
@@ -1517,13 +1554,13 @@ export const Actions = {
           tiktok: a.tiktok,
           inviteState,
           inviteToken: inviteState === "pending" && invite ? decryptShareableToken(invite.encryptedToken) : "",
-          inviteExpiresAt: invite ? invite.expiresAt.toISOString() : null,
-          pinResetRequested: a.pinResetRequestedAt != null,
-          hasPin: a.pinHash !== "",
-          totalOrders: counted.length,
-          netSales: counted.reduce((sum, c) => sum + c.netSubtotal, 0),
-          totalCommission: counted.reduce((sum, c) => sum + c.amount, 0),
-          pendingPayout: payoutByAffiliate.get(a.id) ?? 0,
+          inviteExpiresAt: invite?.expiresAt?.toISOString() ?? null,
+          pinResetRequested: a.pinResetRequested,
+          hasPin: a.hasPin,
+          totalOrders: totalOrders ?? 0,
+          netSales: netSales ?? 0,
+          totalCommission: totalCommission ?? 0,
+          pendingPayout: pendingPayout ?? 0,
           kpiTargetOrders: a.kpiTargetOrders,
           kpiTargetRevenue: a.kpiTargetRevenue,
         };

@@ -60,6 +60,27 @@ try {
   const registered = registration.body;
   const affiliateSession = { cookie: registration.cookie };
   assert.equal(registered.affiliate.commissionPct, 30);
+  await call("adminListAffiliates", {}, { expected: 401 });
+  const newAffiliate = (await call("adminListAffiliates", {}, admin)).body.affiliates[0];
+  assert.equal(newAffiliate.id, registered.affiliate.id);
+  assert.equal(newAffiliate.status, "active");
+  assert.equal(newAffiliate.inviteState, "none");
+  assert.equal(newAffiliate.hasPin, true);
+  assert.equal(newAffiliate.totalOrders, 0);
+  assert.equal(newAffiliate.pendingPayout, 0);
+  assert.equal("pinHash" in newAffiliate, false);
+  const invited = (await call("adminCreateAffiliate", {
+    fullName: "QA Invited Affiliate", email: `invited-${token}@example.test`,
+    whatsapp: phone.slice(0, 2) + (phone[2] === "9" ? "8" : "9") + phone.slice(3), couponCode: "INV" + token,
+  }, admin)).body;
+  const regenerated = (await call("adminRegenerateInvite", { affiliateId: invited.affiliate.id }, admin)).body;
+  const affiliateList = (await call("adminListAffiliates", {}, admin)).body.affiliates;
+  const invitedRow = affiliateList.find(({ id }) => id === invited.affiliate.id);
+  assert.equal(invitedRow.inviteState, "pending");
+  assert.equal(invitedRow.inviteToken, regenerated.inviteToken);
+  assert.equal(invitedRow.hasPin, false);
+  assert.notEqual(invitedRow.inviteToken, invited.inviteToken);
+  console.log("PASS self-registration appears in admin list; latest legacy invite stays visible");
   await call("affiliateApply", { ...affiliateArgs, whatsapp: phone, email: `duplicate-${token}@example.test`, couponCode: "DUP" + token }, { expected: 400 });
   const coupon = (await call("validateCoupon", { code: affiliateArgs.couponCode })).body;
   assert.equal(coupon.discountPct, 10);
@@ -124,6 +145,11 @@ try {
     call("affiliateRequestPayout", requestPayout, affiliateSession),
     call("affiliateRequestPayout", { ...requestPayout, amount: 67000 }, { ...affiliateSession, expected: 400 }),
   ]);
+  const accountSummary = (await call("adminListAffiliates", {}, admin)).body.affiliates.find(({ id }) => id === registered.affiliate.id);
+  assert.equal(accountSummary.totalOrders, 1);
+  assert.equal(accountSummary.netSales, 220500);
+  assert.equal(accountSummary.totalCommission, 66150);
+  assert.equal(accountSummary.pendingPayout, 50000);
   await call("adminUpdatePayout", { id: payout.payoutId, decision: "approve" }, admin);
   await call("adminUpdatePayout", { id: payout.payoutId, decision: "paid" }, admin);
   await call("adminUpdatePayout", { id: payout.payoutId, decision: "paid" }, admin);

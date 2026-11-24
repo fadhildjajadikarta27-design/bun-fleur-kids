@@ -1081,7 +1081,12 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
 
 export function AffiliateAdmin() {
   const queryClient = useQueryClient();
-  const affiliates = useQuery({ queryKey: ["adminAffiliates"], queryFn: () => api.adminListAffiliates({}) });
+  const affiliates = useQuery({
+    queryKey: ["adminAffiliates"],
+    queryFn: () => api.adminListAffiliates({}),
+    retry: false,
+  });
+  const listUnavailable = affiliates.isError || affiliates.isPaused;
   const payouts = useQuery({ queryKey: ["adminPayouts"], queryFn: () => api.adminListPayouts({ limit: 50 }) });
   const config = useQuery({ queryKey: ["affiliateConfig"], queryFn: () => api.getAffiliateConfig({}) });
   const auditLog = useQuery({ queryKey: ["affiliateAudit"], queryFn: () => api.adminListAffiliateAudit({ limit: 20 }) });
@@ -1167,10 +1172,10 @@ export function AffiliateAdmin() {
             Perbarui Data
           </button>
         </div>
-        {affiliates.isPending ? (
+        {affiliates.isPending && !listUnavailable ? (
           <p className="mt-4 text-sm font-semibold text-[var(--dim)]">Memuat ringkasan…</p>
-        ) : affiliates.error ? (
-          <p className="mt-4 text-sm font-semibold text-berry">Ringkasan tidak dapat dimuat. Pastikan sudah login admin.</p>
+        ) : listUnavailable && !affiliates.data ? (
+          <p className="mt-4 text-sm font-semibold text-berry">Ringkasan afiliasi belum tersedia.</p>
         ) : (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {metrics.map((m) => (
@@ -1311,7 +1316,7 @@ export function AffiliateAdmin() {
             <h3 className="font-display text-lg font-extrabold">Kelola Seluruh Affiliate</h3>
             <p className="text-sm font-semibold text-[var(--dim)]">Cari berdasarkan nama, HP, email, Instagram, TikTok, atau kode kupon. Atur status, komisi, diskon, dan KPI di tiap kartu.</p>
           </div>
-          <p className="font-display text-sm font-bold text-olive-deep">{filtered.length} dari {rows.length} akun</p>
+          {affiliates.data && <p className="font-display text-sm font-bold text-olive-deep">{filtered.length} dari {rows.length} akun</p>}
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
@@ -1333,9 +1338,20 @@ export function AffiliateAdmin() {
       </section>
 
       <div className="space-y-3">
-        {affiliates.isPending && <p className="font-display font-bold">Memuat afiliasi…</p>}
-        {affiliates.error && <p className="font-display font-bold text-berry">Daftar afiliasi tidak bisa dimuat.</p>}
-        {affiliates.data?.affiliates.length === 0 && (
+        {affiliates.isPending && !listUnavailable && <p className="font-display font-bold" role="status">Memuat afiliasi…</p>}
+        {listUnavailable && (
+          <div className="rounded-2xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
+            <p className="text-sm font-bold text-berry" role="alert">
+              {affiliates.isPaused ? "Periksa koneksi internet untuk memuat daftar afiliasi." : affiliates.error?.message}
+            </p>
+            {affiliates.data && <p className="text-sm text-[var(--dim)]">Daftar di bawah berasal dari pemuatan terakhir.</p>}
+            <button type="button" disabled={affiliates.isFetching} onClick={() => void affiliates.refetch()}
+              className="mt-2 rounded-full bg-[var(--surface-alt)] px-4 py-2 text-sm font-bold ring-1 ring-[var(--border)]">
+              Muat ulang daftar
+            </button>
+          </div>
+        )}
+        {!listUnavailable && affiliates.data?.affiliates.length === 0 && (
           <p className="font-semibold text-[var(--dim)]">Belum ada affiliate. Bagikan link pendaftaran umum agar mitra bisa mendaftar sendiri.</p>
         )}
         {filtered.length === 0 && rows.length > 0 && !affiliates.isPending && (
