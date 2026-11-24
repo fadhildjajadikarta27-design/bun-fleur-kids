@@ -26,6 +26,7 @@ import { PillowViewer } from "./components/PillowViewer";
 import { NetPreview, PillowPreview, StandeePreview } from "./components/PrintPreview";
 import type { CartLine, OrderOut, ShopSelection } from "./components/Shop";
 import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
+import { isBackgroundId } from "../../server/src/backgrounds";
 import { logoUrl } from "./assets-inline";
 
 const BirthdayPage = lazy(() => import("./components/Birthday").then(m => ({default:m.BirthdayPage})));
@@ -543,7 +544,7 @@ function Home({
         <div className="relative mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div aria-hidden className="absolute left-0 right-0 top-5 hidden border-t-2 border-dashed border-[#3B2A22]/30 lg:block" />
           {[
-            { n: "01", title: "Pilih Karakter", body: "200 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun." },
+            { n: "01", title: "Pilih Karakter", body: "260 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun." },
             { n: "02", title: "Warnai & Custom Nama", body: "Ketuk untuk mengisi warna, gambar bebas dengan kuas, lalu tulis nama dan pesan si kecil dengan gaya huruf favoritnya." },
             { n: "03", title: "Pilih Bentuk Kreasi", body: "Poster, papercraft 3D, alas makan, celengan, puzzle, growth chart, atau kaos — semuanya mengikuti warna karya anakmu." },
             { n: "04", title: "Kami Cetak & Kirim", body: "Pesan dari halaman karya, selesaikan pembayaran lewat konfirmasi tim kami, dan kami produksi lalu kirim langsung ke rumah." },
@@ -860,7 +861,7 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
       <div className="band-sky mt-4 rounded-[2rem] px-6 py-8 sm:px-8">
         <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Buku Mewarnai</p>
         <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">Jelajahi <span className="band-accent">Buku</span></h1>
-        <p className="band-dim mt-2 max-w-2xl leading-relaxed">Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 200 karakter dalam lima kategori umur — 40 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.</p>
+        <p className="band-dim mt-2 max-w-2xl leading-relaxed">Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 260 karakter dalam lima kategori umur — 52 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.</p>
         <div className="mt-4">
           <label htmlFor="explore-search" className="sr-only">Cari karakter berdasarkan nama</label>
           <input
@@ -2199,7 +2200,7 @@ function Celebration({ name }: { name: string }) {
 
 /* ------------------------------ App root ------------------------------ */
 
-type SavedCart={projectId:number;name:string;lines:CartLine[];checkoutId:string;expires:number};
+type SavedCart={projectId:number;name:string;backgroundId?:string;lines:CartLine[];checkoutId:string;expires:number};
 const CART_KEY="bfk-cart-v1", CART_TTL=30*24*60*60*1000;
 function loadCart():SavedCart|null{
  try{
@@ -2422,6 +2423,7 @@ export function App() {
   const [cart, setCart] = useState<CartLine[]>(savedCart?.lines??[]);
   const [cartProject, setCartProject] = useState<number | null>(savedCart?.projectId??null);
   const [cartName, setCartName] = useState(savedCart?.name??"");
+  const [cartBackground,setCartBackground]=useState(()=>typeof savedCart?.backgroundId==="string"&&isBackgroundId(savedCart.backgroundId)?savedCart.backgroundId:"");
   const cartCheckoutId = useRef<string | null>(savedCart?.checkoutId??null);
   const cartExpires=useRef(savedCart?.expires??0);
   const [cartError,setCartError]=useState("");
@@ -2430,9 +2432,9 @@ export function App() {
     try{
       if(!cart.length||cartProject===null){localStorage.removeItem(CART_KEY);return;}
       const checkoutId=cartCheckoutId.current??=crypto.randomUUID();
-      localStorage.setItem(CART_KEY,JSON.stringify({projectId:cartProject,name:cartName,lines:cart,checkoutId,expires:cartExpires.current}));
+      localStorage.setItem(CART_KEY,JSON.stringify({projectId:cartProject,name:cartName,backgroundId:cartBackground,lines:cart,checkoutId,expires:cartExpires.current}));
     }catch{/* storage unavailable */}
-  },[cart,cartProject,cartName]);
+  },[cart,cartProject,cartName,cartBackground]);
   const resumeCart=async()=>{
     if(cartProject===null||!cart.length)return;
     if(cartExpires.current<=Date.now()){changeCart([]);setCartError("Keranjang sudah kedaluwarsa.");return;}
@@ -2465,7 +2467,7 @@ export function App() {
       window.alert("Keranjang sudah mencapai batas jumlah pesanan.");
       return;
     }
-    if (!current.length) setCartName(shopSel.childName.trim());
+    if (!current.length) {setCartName(shopSel.childName.trim());setCartBackground(shopSel.backgroundId??"");}
     setCartProject(pid);
     changeCart(same < 0 ? [...current,line] : current.map((x,i) => i === same ? {...x, quantity:x.quantity+1} : x));
     go({ view: "finish" });
@@ -2497,7 +2499,7 @@ export function App() {
   };
 
   const startCustomize = (product: ProductId) => {
-    setShopSel((s) => ({ ...s, product, childName: cartLines.length ? cartName : projectRef.current.childName }));
+    setShopSel((s) => ({ ...s, product, backgroundId: cartLines.length ? cartBackground : "", childName: cartLines.length ? cartName : projectRef.current.childName }));
     go({ view: "customize" });
   };
 
@@ -2570,7 +2572,7 @@ export function App() {
         )}
         {route.view === "finish" && (
           <Masterpiece
-            project={project}
+            project={{...project,backgroundId:cartCount?cartBackground:""}}
             onBack={() => go({ view: "studio" })}
             onCustomize={startCustomize}
             cartCount={cartCount}
@@ -2592,7 +2594,7 @@ export function App() {
         )}
         {route.view === "checkout" && (
           <Checkout
-            project={project}
+            project={{...project,backgroundId:cartBackground}}
             cart={cartLines}
             childName={cartName}
             changeCart={changeCart}
