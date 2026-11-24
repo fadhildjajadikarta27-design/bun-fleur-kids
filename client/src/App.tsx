@@ -117,7 +117,7 @@ function parseHashRoute(): Route | null {
   // Rute khusus admin untuk Manajemen Afiliasi: SENGAJA tidak ditautkan
   // dari menu, header, footer, Dasbor Orang Tua, atau halaman publik mana
   // pun — admin membukanya langsung lewat potongan alamat ini.
-  if (h === "#/admin/affiliate" || h === "#/kelola-afiliasi-4821") return { view: "aff-admin" };
+  if (h === "#/admin" || h === "#/admin/" || h === "#/admin/affiliate" || h === "#/kelola-afiliasi-4821") return { view: "aff-admin" };
   if (h === "#/admin/orders" || h === "#/orang-tua") return { view: "parents" };
   if (h === "#/koleksi") return { view: "explore" };
   if (h === "#/kreasiku") return { view: "creations" };
@@ -2261,7 +2261,7 @@ function Creations({
 
 /* --------------------- Manajemen Afiliasi (admin) --------------------- */
 // Halaman admin mandiri yang HANYA bisa dibuka lewat rute khusus
-// #/kelola-afiliasi-4821 (lihat parseHashRoute). Tidak ada tautan ke
+// #/admin (rute lama tetap kompatibel; lihat parseHashRoute). Tidak ada tautan ke
 // halaman ini di header, footer, tab bar, Dasbor Orang Tua, atau halaman
 // publik mana pun. Seluruh fungsi manajemennya sama persis seperti
 // sebelumnya — yang berubah hanya lokasi aksesnya.
@@ -2518,7 +2518,7 @@ export function App() {
     else if (r.view === "aff-reset") window.location.hash = `/affiliate/reset/${r.token}`;
     else if (r.view === "aff-login") window.location.hash = "/affiliate/login";
     else if (r.view === "aff-dashboard") window.location.hash = "/affiliate/dashboard";
-    else if (r.view === "aff-admin") window.location.hash = "/admin/affiliate";
+    else if (r.view === "aff-admin") window.location.hash = "/admin";
     setRoute(r);
     window.scrollTo({ top: 0 });
   };
