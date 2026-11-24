@@ -58,6 +58,7 @@ const PUBLIC_ACTIONS = new Set([
   "getInvitation", "acceptInvitation", "affiliateLogin", "affiliateRequestPinReset",
   "resetPinWithToken", "affiliateLogout", "affiliateMe", "affiliateUpdateCoupon", "affiliateRequestPayout",
   "getAffiliateConfig", "affiliateApply",
+  "getBirthdayCatalog", "createBirthdayEvent", "listMyBirthdayEvents",
 ]);
 
 export function requiresAdmin(action: string): boolean {

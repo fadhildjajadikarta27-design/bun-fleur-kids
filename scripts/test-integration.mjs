@@ -33,7 +33,7 @@ async function call(action, args = {}, { cookie = "", ip = "127.10.1.1", expecte
 try {
   await ensureMigrations();
   const migrations = await sql`SELECT name FROM __port_migrations ORDER BY name`;
-  assert.equal(migrations.at(-1).name, "0016_order_cart.sql");
+  assert.ok(migrations.some(m=>m.name==="0017_birthday_events.sql"));
   assert.equal((await sql`SELECT has_table_privilege('anon', 'public.payment_proofs', 'SELECT') AS allowed`)[0].allowed, false);
 
   const first = await call("listProjects");
@@ -53,6 +53,19 @@ try {
   assert.equal((await call("adminStatus", {}, admin)).body.authenticated, true);
   assert.equal((await call("listProjects", {}, { cookie: admin.cookie + "; " + guest.cookie })).body.projects.length, 0);
   console.log("PASS migrations, RLS privileges, private artwork, authenticated admin");
+  const date=new Date();date.setUTCDate(date.getUTCDate()+35);
+  const eventArgs={requestId:randomUUID(),eventName:"QA Birthday",childAge:4,eventDate:date.toISOString().slice(0,10),theme:"Dinosaurus",guestCount:20,productIds:["poster","papercraft"],expectedPerGuest:49800,organizer:"QA Parent",whatsapp:phone,address:"Alamat QA Jakarta"};
+  const event=(await call("createBirthdayEvent",eventArgs,owner)).body.event;
+  assert.equal(event.total,996000);
+  assert.equal((await call("createBirthdayEvent",eventArgs,owner)).body.event.id,event.id);
+  assert.ok(!(await call("listMyBirthdayEvents",{},guest)).body.events.some(e=>e.id===event.id));
+  await call("adminListBirthdayEvents",{},{expected:401});
+  await call("adminUpdateBirthdayEvent",{id:event.id,status:"confirmed"},admin);
+  await call("adminUpdateBirthdayEvent",{id:event.id,status:"paid",paidAmount:1,paymentReference:"BD-"+token},{...admin,expected:400});
+  await call("adminUpdateBirthdayEvent",{id:event.id,status:"paid",paidAmount:event.total,paymentReference:"BD-"+token},admin);
+  assert.ok((await call("adminListBirthdayEvents",{},admin)).body.paidRevenue>=event.total);
+  console.log("PASS birthday event privacy, pricing, idempotency and payment validation");
+
 
   const affiliateArgs = { fullName: "QA Affiliate", email: `${token}@example.test`, whatsapp: "+62" + digits,
     pin: "5073", consent: true, couponCode: "QA" + token };

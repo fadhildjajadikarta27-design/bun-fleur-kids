@@ -4,6 +4,7 @@ import { api, type ApiResponse } from "../api";
 import { ACTIVE_PRODUCT_IDS, PRODUCT_META, formatIDR, type ProductId } from "../lib/shop";
 import { AdminOrders, AdminProductPrices } from "./Shop";
 import { AffiliateAdmin } from "./Affiliate";
+import { BirthdayAdmin } from "./Birthday";
 
 const tabs = [
   { id: "overview", label: "Ringkasan" },
@@ -11,6 +12,7 @@ const tabs = [
   { id: "payment", label: "Pembayaran QRIS" },
   { id: "fulfillment", label: "Produksi & Pengiriman" },
   { id: "products", label: "Produk & Harga" },
+  { id: "birthday", label: "Hampers Ulang Tahun" },
   { id: "affiliate", label: "Affiliate & Kupon" },
   { id: "finance", label: "Laporan Keuangan" },
   { id: "settings", label: "Pengaturan" },
@@ -217,6 +219,7 @@ export function AdminCenter({ brandName }: { brandName: string }) {
           <AdminOrders key={tab} scope={tab === "orders" ? "all" : tab} />
         </section>}
         {tab === "products" && <AdminProductPrices />}
+        {tab === "birthday" && <BirthdayAdmin />}
         {tab === "affiliate" && <section className={panel}><h2 className={heading}>Manajemen affiliate</h2><AffiliateAdmin /></section>}
         {tab === "finance" && <Finance />}
         {tab === "settings" && <Settings brandName={brandName} />}

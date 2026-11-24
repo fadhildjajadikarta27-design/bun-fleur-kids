@@ -28,6 +28,7 @@ import type { CartLine, OrderOut, ShopSelection } from "./components/Shop";
 import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
 import { logoUrl } from "./assets-inline";
 
+const BirthdayPage = lazy(() => import("./components/Birthday").then(m => ({default:m.BirthdayPage})));
 const AdminCenter = lazy(() => import("./components/AdminCenter").then((m) => ({ default: m.AdminCenter })));
 const Checkout = lazy(() => import("./components/Shop").then((m) => ({ default: m.Checkout })));
 const Customize = lazy(() => import("./components/Shop").then((m) => ({ default: m.Customize })));
@@ -79,6 +80,7 @@ export interface WorkProject {
 
 type Route =
   | { view: "home" }
+  | { view: "birthday" }
   | { view: "explore" }
   | { view: "custom" }
   | { view: "studio" }
@@ -113,6 +115,7 @@ function parseHashRoute(): Route | null {
   // dari menu, header, footer, Dasbor Orang Tua, atau halaman publik mana
   // pun — admin membukanya langsung lewat potongan alamat ini.
   if (h === "#/admin" || h === "#/admin/" || h === "#/admin/affiliate" || h === "#/admin/orders" || h === "#/kelola-afiliasi-4821") return { view: "aff-admin" };
+  if (h === "#/birthday") return { view: "birthday" };
   if (h === "#/orang-tua") return { view: "parents" };
   if (h === "#/koleksi") return { view: "explore" };
   if (h === "#/kreasiku") return { view: "creations" };
@@ -220,7 +223,7 @@ function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
 
 /* ------------------------------ Shell ------------------------------ */
 
-type NavView = "home" | "explore" | "custom" | "creations" | "parents";
+type NavView = "home" | "explore" | "custom" | "creations" | "parents" | "birthday";
 
 const NAV_ITEMS: { view: NavView; label: string; short: string; icon: ReactNode }[] = [
   {
@@ -254,6 +257,12 @@ const NAV_ITEMS: { view: NavView; label: string; short: string; icon: ReactNode 
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="4" width="18" height="16" rx="3" /><circle cx="9" cy="10" r="1.6" /><path d="m5 19 5-5 3 3 3.5-3.5L21 18" /></svg>
     ),
+  },
+  {
+    view: "birthday",
+    label: "Ulang Tahun",
+    short: "Ultah",
+    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="9" width="18" height="4" rx="1"/><path d="M5 13v8h14v-8M12 9v12M12 9C5 9 4 3 8 3c2 0 4 3 4 6ZM12 9c7 0 8-6 4-6-2 0-4 3-4 6Z"/></svg>,
   },
   {
     view: "parents",
@@ -338,7 +347,7 @@ function Header({
         {/* Navigasi atas hanya untuk tablet/desktop; di ponsel navigasi
             pindah ke tab bar bawah (MobileTabBar) supaya tidak ada item
             yang terpotong atau harus digeser menyamping. */}
-        <nav className="ml-auto hidden items-center gap-1 sm:flex" aria-label="Utama">
+        <nav className="ml-auto hidden items-center gap-0 lg:flex" aria-label="Utama">
           {NAV_ITEMS.map((n) => item(n.view, n.label))}
         </nav>
         <button
@@ -376,9 +385,9 @@ function MobileTabBar({
   return (
     <nav
       aria-label="Navigasi bawah"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[#F8F4EC]/95 pb-safe backdrop-blur-md sm:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[#F8F4EC]/95 pb-safe backdrop-blur-md lg:hidden"
     >
-      <div className="mx-auto grid max-w-md grid-cols-5">
+      <div className="mx-auto grid max-w-md grid-cols-6">
         {NAV_ITEMS.map((n) => {
           const isActive = active === n.view;
           return (
@@ -831,6 +840,12 @@ function Home({
       </section>
 
       {/* CTA PENUTUP — satu-satunya panel warna pekat: olive #667C3E */}
+      <section className="band-butter mt-12 rounded-[2rem] p-6 sm:p-9">
+        <p className="font-display text-xs font-bold uppercase tracking-widest text-olive-deep">Hampers Ulang Tahun</p>
+        <h2 className="mt-2 font-display text-3xl font-extrabold">Hadiah kecil, kenangan besar.</h2>
+        <p className="mt-2 max-w-xl font-semibold">Rencanakan hampers personalisasi untuk tamu ulang tahun si kecil. Pilih produk, jumlah tamu, dan tema acara. Minimum 20 paket.</p>
+        <button type="button" onClick={()=>go({view:"birthday"})} className="mt-4 rounded-full bg-olive px-6 py-3 font-bold text-white">Rencanakan Hampers</button>
+      </section>
       <section className="band-olive mt-20 rounded-[2.5rem] px-6 py-12 text-center sm:px-12">
         <h2 className="mx-auto max-w-xl font-display text-3xl font-semibold leading-tight sm:text-4xl">
           Little Hands. Big Creations.
@@ -2363,7 +2378,7 @@ export function App() {
   };
 
   const go = (r: Route) => {
-    const hash = r.view === "explore" ? "#/koleksi" : r.view === "parents" ? "#/orang-tua" : r.view === "creations" ? "#/kreasiku" : "";
+    const hash = r.view === "explore" ? "#/koleksi" : r.view === "parents" ? "#/orang-tua" : r.view === "creations" ? "#/kreasiku" : r.view === "birthday" ? "#/birthday" : "";
     const path = window.location.pathname + window.location.search + hash;
     if (window.location.hash !== hash) window.history.replaceState(window.history.state, "", path);
     setRoute(r);
@@ -2544,6 +2559,7 @@ export function App() {
             }}
           />
         )}
+        {route.view === "birthday" && <BirthdayPage />}
         {route.view === "explore" && <Explore key={exploreAge} initialAge={exploreAge} startTemplate={startTemplate} />}
         {route.view === "custom" && (
           <CustomBuilder

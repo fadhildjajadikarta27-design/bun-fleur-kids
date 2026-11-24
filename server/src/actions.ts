@@ -475,6 +475,30 @@ function toAffiliatePublic(row: Pick<AffiliateRow, "id" | "name" | "email" | "co
   };
 }
 
+const BIRTHDAY_DEFAULTS: Record<typeof ACTIVE_PRODUCT_IDS[number],number> = {poster:19900,papercraft:29900,placemat:44900,celengan:49900,puzzle:59900,growthchart:59900,tshirt:69900};
+const birthdayStatus = z.enum(["requested","confirmed","paid","production","shipped","completed","cancelled","refunded"]);
+const birthdayItem = z.object({productId:z.enum(ACTIVE_PRODUCT_IDS),unitPrice:z.number().int().positive()});
+const birthdayOut = z.object({
+ id:z.number(),code:z.string(),eventName:z.string(),childAge:z.number(),eventDate:z.string(),deadline:z.string(),theme:z.string(),guestCount:z.number(),
+ items:z.array(birthdayItem),perGuest:z.number(),total:z.number(),organizer:z.string(),whatsapp:z.string(),address:z.string(),notes:z.string(),
+ status:birthdayStatus,trackingNumber:z.string(),createdAt:z.string(),
+});
+type BirthdayRow = typeof schema.birthdayEvents.$inferSelect;
+function birthdayToOut(row:BirthdayRow):z.infer<typeof birthdayOut>{
+ return {id:row.id,code:row.code,eventName:row.eventName,childAge:row.childAge,eventDate:row.eventDate,deadline:row.deadline,theme:row.theme,
+ guestCount:row.guestCount,items:z.array(birthdayItem).parse(row.items),perGuest:row.perGuest,total:row.total,organizer:row.organizer,
+ whatsapp:row.whatsapp,address:row.address,notes:row.notes,status:row.status,trackingNumber:row.trackingNumber,createdAt:row.createdAt.toISOString()};
+}
+async function birthdayCatalog(db:Database){
+ const rows=await db.select().from(schema.birthdayPrices);
+ return ACTIVE_PRODUCT_IDS.map(productId=>({productId,unitPrice:rows.find(r=>r.productId===productId)?.price??BIRTHDAY_DEFAULTS[productId]}));
+}
+function birthdayDateMinus(date:string,days:number){
+ const d=new Date(date+"T00:00:00Z");
+ if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==date)throw new Error("Tanggal acara tidak valid.");
+ d.setUTCDate(d.getUTCDate()-days);return d.toISOString().slice(0,10);
+}
+
 export const Actions = {
   listProjects: defineAction({
     description: "Lists saved coloring projects, most recently updated first.",
@@ -778,6 +802,102 @@ export const Actions = {
           createdAt: r.createdAt.toISOString(),
         })),
       };
+    },
+  }),
+
+  getBirthdayCatalog: defineAction({
+    request:z.object({}), response:z.object({products:z.array(birthdayItem),minGuests:z.number()}),
+    async handler(ctx){return {products:await birthdayCatalog(schemaDb(ctx)),minGuests:20};},
+  }),
+  createBirthdayEvent: defineAction({
+    request:z.object({requestId:z.uuid(),eventName:z.string().trim().min(2).max(80),childAge:z.number().int().min(1).max(18),
+      eventDate:z.string().regex(/^20\d{2}-\d{2}-\d{2}$/),theme:z.string().trim().min(2).max(80),guestCount:z.number().int().min(20).max(500),
+      productIds:z.array(z.enum(ACTIVE_PRODUCT_IDS)).min(1).max(7).refine(ids=>new Set(ids).size===ids.length),
+      expectedPerGuest:z.number().int().positive(),organizer:z.string().trim().min(2).max(80),
+      whatsapp:z.string().trim().min(9).max(20),address:z.string().trim().min(10).max(500),notes:z.string().trim().max(500).default("")}),
+    response:z.object({event:birthdayOut}),
+    async handler(ctx,args){
+      if(!ctx.visitorId)throw new Error("Sesi browser tidak tersedia. Muat ulang halaman.");
+      const whatsapp=args.whatsapp.replace(/\D/g,"");
+      if(whatsapp.length<9||whatsapp.length>15)throw new Error("Nomor WhatsApp tidak valid.");
+      const requestKey=createHash("sha256").update(JSON.stringify([ctx.visitorId,args.requestId])).digest("hex");
+      return schemaDb(ctx).transaction(async db=>{
+        await lockCheckout(db);
+        const [old]=await db.select().from(schema.birthdayEvents).where(eq(schema.birthdayEvents.requestKey,requestKey)).limit(1);
+        if(old)return {event:birthdayToOut(old)};
+        const today=new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Jakarta",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+        if(birthdayDateMinus(args.eventDate,21)<today)throw new Error("Pilih tanggal acara minimal 21 hari dari hari ini.");
+        const deadline=birthdayDateMinus(args.eventDate,10);
+        const catalog=await birthdayCatalog(db);
+        const items=catalog.filter(p=>args.productIds.includes(p.productId));
+        const perGuest=items.reduce((n,p)=>n+p.unitPrice,0);
+        if(perGuest!==args.expectedPerGuest)throw new Error("Harga hampers berubah. Muat ulang harga sebelum mengirim.");
+        const now=new Date();
+        const [row]=await db.insert(schema.birthdayEvents).values({code:"BD-"+randomBytes(8).toString("hex").toUpperCase(),ownerId:ctx.visitorId,requestKey,
+          eventName:args.eventName,childAge:args.childAge,eventDate:args.eventDate,deadline,theme:args.theme,guestCount:args.guestCount,
+          items,perGuest,total:perGuest*args.guestCount,organizer:args.organizer,whatsapp,address:args.address,notes:args.notes,
+          status:"requested",createdAt:now,updatedAt:now}).returning();
+        if(!row)throw new Error("Permintaan tidak tersimpan.");
+        return {event:birthdayToOut(row)};
+      });
+    },
+  }),
+  listMyBirthdayEvents: defineAction({
+    request:z.object({}),response:z.object({events:z.array(birthdayOut)}),
+    async handler(ctx){
+      if(!ctx.visitorId)return {events:[]};
+      const rows=await schemaDb(ctx).select().from(schema.birthdayEvents).where(eq(schema.birthdayEvents.ownerId,ctx.visitorId)).orderBy(desc(schema.birthdayEvents.createdAt)).limit(50);
+      return {events:rows.map(birthdayToOut)};
+    },
+  }),
+  adminListBirthdayEvents: defineAction({
+    request:z.object({offset:z.number().int().min(0).max(100000).default(0)}),
+    response:z.object({events:z.array(birthdayOut.extend({paymentReference:z.string().nullable()})),totalRequests:z.number(),paidRevenue:z.number()}),
+    async handler(ctx,args){
+      const db=schemaDb(ctx);
+      const rows=await db.select().from(schema.birthdayEvents).orderBy(desc(schema.birthdayEvents.createdAt),desc(schema.birthdayEvents.id)).limit(50).offset(args.offset);
+      const [totals]=await db.select({totalRequests:count(),paidRevenue:sql<number>`coalesce(sum(total) FILTER (WHERE status IN ('paid','production','shipped','completed')),0)`.mapWith(Number)}).from(schema.birthdayEvents);
+      return {events:rows.map(r=>({...birthdayToOut(r),paymentReference:r.paymentReference})),totalRequests:totals?.totalRequests??0,paidRevenue:totals?.paidRevenue??0};
+    },
+  }),
+  adminSetBirthdayPrice: defineAction({
+    request:z.object({productId:z.enum(ACTIVE_PRODUCT_IDS),price:z.number().int().min(1000).max(10000000)}),
+    response:z.object({ok:z.literal(true)}),
+    async handler(ctx,args):Promise<{ok:true}>{
+      return schemaDb(ctx).transaction(async db=>{
+        await lockCheckout(db);
+        await db.insert(schema.birthdayPrices).values(args).onConflictDoUpdate({target:schema.birthdayPrices.productId,set:{price:args.price}});
+        await audit(db,null,"birthday.price_changed",args.productId+": "+args.price);
+        return {ok:true};
+      });
+    },
+  }),
+  adminUpdateBirthdayEvent: defineAction({
+    request:z.object({id:z.number().int().positive(),status:birthdayStatus,paymentReference:z.string().trim().max(80).optional(),paidAmount:z.number().int().nonnegative().optional(),trackingNumber:z.string().trim().max(100).optional()}),
+    response:z.object({event:birthdayOut}),
+    async handler(ctx,args){
+      return schemaDb(ctx).transaction(async db=>{
+        await lockCheckout(db);
+        const [row]=await db.select().from(schema.birthdayEvents).where(eq(schema.birthdayEvents.id,args.id)).limit(1).for("update");
+        if(!row)throw new Error("Acara tidak ditemukan.");
+        const next:Record<z.infer<typeof birthdayStatus>,readonly string[]>={requested:["confirmed","cancelled"],confirmed:["paid","cancelled"],paid:["production","refunded"],production:["shipped","refunded"],shipped:["completed","refunded"],completed:["refunded"],cancelled:[],refunded:[]};
+        if(row.status!==args.status&&!next[row.status].includes(args.status))throw new Error("Perubahan status tidak diizinkan.");
+        let paymentReference=row.paymentReference;
+        if(args.status==="paid"&&row.status!=="paid"){
+          const ref=(args.paymentReference??"").toUpperCase();
+          if(!/^[A-Z0-9-]{4,80}$/.test(ref)||args.paidAmount!==row.total)throw new Error("Cocokkan nominal penuh dan nomor referensi pembayaran terlebih dahulu.");
+          const [used]=await db.select({id:schema.orders.id}).from(schema.orders).where(eq(schema.orders.paymentReference,ref)).limit(1);
+          const [other]=await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,ref)).limit(1);
+          if(used||other)throw new Error("Nomor referensi sudah digunakan.");
+          paymentReference=ref;
+        }
+        const trackingNumber=args.trackingNumber??row.trackingNumber;
+        if(args.status==="shipped"&&!trackingNumber)throw new Error("Masukkan nomor resi.");
+        const [updated]=await db.update(schema.birthdayEvents).set({status:args.status,paymentReference,trackingNumber,updatedAt:new Date()}).where(eq(schema.birthdayEvents.id,row.id)).returning();
+        if(!updated)throw new Error("Acara tidak ditemukan.");
+        await audit(db,null,"birthday.status_changed",row.code+" "+row.status+" → "+args.status);
+        return {event:birthdayToOut(updated)};
+      });
     },
   }),
 
@@ -1351,7 +1471,8 @@ export const Actions = {
           if (!/^[A-Z0-9-]{4,80}$/.test(reference)) throw new Error("Masukkan nomor referensi dari mutasi QRIS.");
           const [used] = await db.select({ id: schema.orders.id }).from(schema.orders)
             .where(eq(schema.orders.paymentReference, reference)).limit(1);
-          if (used) throw new Error("Nomor referensi QRIS sudah dipakai untuk pesanan lain.");
+          const [birthdayUsed] = await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,reference)).limit(1);
+          if (used || birthdayUsed) throw new Error("Nomor referensi QRIS sudah dipakai untuk pesanan lain.");
           const result = await db
             .update(schema.orders)
             .set({

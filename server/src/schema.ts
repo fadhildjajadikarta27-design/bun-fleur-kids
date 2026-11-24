@@ -311,3 +311,32 @@ export const monthlyOperatingCosts = pgTable("monthly_operating_costs", {
   month: text("month").primaryKey(),
   amount: integer("amount").notNull(),
 });
+
+export const birthdayPrices = pgTable("birthday_prices", {
+  productId: text("product_id", {enum: ordersProductIds}).primaryKey(),
+  price: integer("price").notNull(),
+});
+export const birthdayEvents = pgTable("birthday_events", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  code: text("code").notNull().unique(),
+  ownerId: text("owner_id").notNull(),
+  requestKey: text("request_key").notNull().unique(),
+  eventName: text("event_name").notNull(),
+  childAge: integer("child_age").notNull(),
+  eventDate: text("event_date").notNull(),
+  deadline: text("deadline").notNull(),
+  theme: text("theme").notNull(),
+  guestCount: integer("guest_count").notNull(),
+  items: jsonb("items").$type<{productId:typeof ordersProductIds[number]; unitPrice:number}[]>().notNull(),
+  perGuest: integer("per_guest").notNull(),
+  total: integer("total").notNull(),
+  organizer: text("organizer").notNull(),
+  whatsapp: text("whatsapp").notNull(),
+  address: text("address").notNull(),
+  notes: text("notes").notNull(),
+  status: text("status", {enum:["requested","confirmed","paid","production","shipped","completed","cancelled","refunded"]}).notNull().default("requested"),
+  paymentReference: text("payment_reference").unique(),
+  trackingNumber: text("tracking_number").notNull().default(""),
+  createdAt: timestamp("created_at",{withTimezone:true,mode:"date"}).notNull(),
+  updatedAt: timestamp("updated_at",{withTimezone:true,mode:"date"}).notNull(),
+});
