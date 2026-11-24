@@ -325,6 +325,16 @@ try {
   assert.ok(!(await call("listOrders",{limit:100},admin)).body.orders.some(o=>o.id===watch.id));
   assert.equal((await sql`SELECT count(*)::int AS n FROM orders WHERE id=${watch.id} AND archived_at IS NOT NULL`)[0].n,1);
   console.log("PASS admin finance, bulk discount, new watch, blank name, archive and scoped orders");
+  // Restore current catalog after regression fixtures, before browser tests share this disposable database.
+  for(const [productId,price] of [["poster",29900],["papercraft",39900],["placemat",79900],["growthchart",99000]]) {
+    await call("adminSetProductPrice",{productId,price},admin);
+  }
+  await call("adminSetProductCost",{productId:"papercraft",unitCost:17000},admin);
+  await call("adminSaveBundle",{id:"little-artist",name:"Little Artist",productIds:["poster","papercraft"],price:64900,active:true},admin);
+  const restored=(await call("getShopConfig")).body;
+  assert.equal(restored.products.find(p=>p.id==="poster").basePrice,29900);
+  assert.equal(restored.bundles.find(b=>b.id==="little-artist").price,64900);
+  console.log("PASS revised catalog restored for browser QA");
 
 } finally {
   await sql.end();
