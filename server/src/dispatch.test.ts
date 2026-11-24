@@ -4,7 +4,7 @@ import { Actions } from "./actions.js";
 import { bestBundle } from "./bundles.js";
 
 describe("Active product catalog", () => {
-  test("exactly twelve active products at the revised fixed prices", async () => {
+  test("exactly fourteen active products at the revised fixed prices", async () => {
     const db = () => ({ select: () => ({ from: () => Object.assign(Promise.resolve([]), {orderBy: async () => []}) }) });
     const res = await Actions.getShopConfig.handler({ db } as never, {});
     expect(res.products).toEqual([
@@ -19,7 +19,9 @@ describe("Active product catalog", () => {
       { id: "growthchart", basePrice: 99000, priceLabel: "fixed" },
       { id: "wallclock", basePrice: 99000, priceLabel: "fixed" },
       { id: "nightlamp", basePrice: 129000, priceLabel: "fixed" },
-      { id: "kidswatch", basePrice: 179000, priceLabel: "fixed" },
+      { id: "kidswatch", basePrice: 239000, priceLabel: "fixed" },
+      { id: "lunchbox", basePrice: 199000, priceLabel: "fixed" },
+      { id: "tumbler", basePrice: 219000, priceLabel: "fixed" },
     ]);
     for (const productType of ["figurine", "accessory59"]) {
       expect(Actions.createOrder.request.safeParse({ projectId: 1, productType, customerName: "QA Parent",
