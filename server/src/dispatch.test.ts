@@ -2,24 +2,23 @@ import { describe, expect, test } from "bun:test";
 import { dispatchAction } from "./dispatch.js";
 import { Actions } from "./actions.js";
 
-describe("3D Papercraft product pricing", () => {
-  test("shop catalog includes fixed Rp49.000 papercraft", async () => {
-    // Call the pure catalog handler directly: the generic dispatch bootstraps
-    // DB, which is intentionally unavailable in unit tests.
+describe("Active product catalog", () => {
+  test("exactly seven active products at the approved fixed prices", async () => {
     const db = () => ({ select: () => ({ from: async () => [] }) });
     const res = await Actions.getShopConfig.handler({ db } as never, {});
-    const products = res.products;
-    expect(products.find((p) => p.id === "papercraft")).toEqual({
-      id: "papercraft", basePrice: 49000, priceLabel: "fixed",
-    });
-    expect(products.filter((p) => p.id === "papercraft")).toHaveLength(1);
-    expect(products).toHaveLength(8);
-    expect(products.find((p) => p.id === "celengan")).toEqual({
-      id: "celengan", basePrice: 29000, priceLabel: "fixed",
-    });
-    expect(products.find((p) => p.id === "accessory59")).toEqual({
-      id: "accessory59", basePrice: 59000, priceLabel: "fixed",
-    });
+    expect(res.products).toEqual([
+      { id: "poster", basePrice: 24900, priceLabel: "fixed" },
+      { id: "papercraft", basePrice: 36900, priceLabel: "fixed" },
+      { id: "placemat", basePrice: 54900, priceLabel: "fixed" },
+      { id: "celengan", basePrice: 59900, priceLabel: "fixed" },
+      { id: "puzzle", basePrice: 69000, priceLabel: "fixed" },
+      { id: "growthchart", basePrice: 69000, priceLabel: "fixed" },
+      { id: "tshirt", basePrice: 79000, priceLabel: "fixed" },
+    ]);
+    for (const productType of ["figurine", "accessory59"]) {
+      expect(Actions.createOrder.request.safeParse({ projectId: 1, productType, customerName: "QA Parent",
+        whatsapp: "081234567890", email: "qa@example.test", address: "Jalan Pengujian Jakarta" }).success).toBe(false);
+    }
   });
 
   test("rejects attempts to fake accessories prices using client-provided values", async () => {

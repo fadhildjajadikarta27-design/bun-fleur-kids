@@ -14,14 +14,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ApiResponse } from "../api";
-import { formatIDR, PRODUCT_META, type ProductId } from "../lib/shop";
+import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "../lib/shop";
 import { FIELDS } from "../fields";
 import { NAME_FONTS, type TemplateDef } from "../lib/model";
 import { getTemplate } from "../lib/registry";
 import { buildCustomTemplate, parseCustomDef } from "../lib/custom";
 import { buildPillowPdf, downloadBlob } from "../lib/pdf";
 import { papercraftSampleUrl } from "../papercraft-sample";
-import { celenganPhotoUrl } from "../celengan-photo";
+import { logoUrl } from "../assets-inline";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
@@ -67,16 +67,7 @@ export function templateForSnapshot(snap: { templateId: string; customDef?: stri
 
 
 const FALLBACK_CONFIG: ApiResponse<typeof api, "getShopConfig"> = {
-  products: [
-    { id: "poster", basePrice: 49000, priceLabel: "fixed" },
-    { id: "papercraft", basePrice: 49000, priceLabel: "fixed" },
-    { id: "celengan", basePrice: 29000, priceLabel: "fixed" },
-    { id: "accessory59", basePrice: 59000, priceLabel: "fixed" },
-    { id: "puzzle", basePrice: 59000, priceLabel: "fixed" },
-    { id: "placemat", basePrice: 69000, priceLabel: "fixed" },
-    { id: "figurine", basePrice: 120000, priceLabel: "from" },
-    { id: "tshirt", basePrice: 79000, priceLabel: "from" },
-  ],
+  products: ACTIVE_PRODUCT_IDS.map((id) => ({ id, basePrice: PRODUCT_DEFAULT_PRICES[id], priceLabel: "fixed" as const })),
   tshirtColors: ["Cream", "Mustard", "Terracotta", "Sage Green", "Brown"],
   tshirtSizes: ["2–3 tahun", "4–5 tahun", "6–7 tahun", "8–9 tahun", "10–12 tahun"],
   paymentGatewayConnected: false,
@@ -98,12 +89,12 @@ export function useShopConfig() {
 }
 
 function priceLine(cfg: ApiResponse<typeof api, "getShopConfig">, id: ProductId): string {
-  const p = cfg.products.find((x) => x.id === id) ?? FALLBACK_CONFIG.products.find((x) => x.id === id)!;
-  return p.priceLabel === "from" ? `Mulai ${formatIDR(p.basePrice)}` : formatIDR(p.basePrice);
+  const p = cfg.products.find((x) => x.id === id);
+  return p?.priceLabel === "from" ? `Mulai ${formatIDR(p.basePrice)}` : formatIDR(p?.basePrice ?? PRODUCT_DEFAULT_PRICES[id]);
 }
 
 function basePrice(cfg: ApiResponse<typeof api, "getShopConfig">, id: ProductId): number {
-  return (cfg.products.find((x) => x.id === id) ?? FALLBACK_CONFIG.products.find((x) => x.id === id)!).basePrice;
+  return cfg.products.find((x) => x.id === id)?.basePrice ?? PRODUCT_DEFAULT_PRICES[id];
 }
 
 /* ------------------------------ Previews ------------------------------ */
@@ -282,77 +273,116 @@ export function PapercraftPreview({
   );
 }
 
-/** The owner-provided product image is an example. The mini-artwork
- * beneath is rendered from the customer's actual saved coloring design. */
-export function CelenganPreview({
-  project, name, large = false,
-}: { project: ShopProject; name: string; large?: boolean }) {
-  const template = templateForSnapshot(project);
-  return (
-    <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
-      <div className="relative overflow-hidden rounded-2xl bg-[#F1F2E7] ring-1 ring-[var(--border)]">
-        <img src={celenganPhotoUrl} loading="lazy" className="aspect-square w-full object-cover"
-          alt="Contoh desain celengan tabung Bun & Fleur Kids: karakter dinosaurus dengan warna personal, nama anak, dan logo di sisi belakang" />
-        <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1.5 font-display text-xs font-bold text-olive-deep shadow-sm">
-          Contoh tampilan aksesori
-        </span>
-      </div>
-      <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white p-2.5 ring-1 ring-[var(--border)]">
-        <div className="w-20 shrink-0 overflow-hidden rounded-xl bg-white">
-          <ArtworkSvg template={template} colors={project.colors} strokes={project.strokes}
-            name={name} message={project.message} nameFont={project.nameFont}
-            nameColor={project.nameColor} nameAlign={project.nameAlign} />
-        </div>
-        <div className="min-w-0">
-          <p className="font-display text-xs font-extrabold text-olive-deep">Desain punyamu</p>
-          <p className="text-xs font-semibold leading-snug text-[var(--dim)]">
-            Gambar, warna, dan nama di celengan akan diambil dari karya yang kamu buat.
-          </p>
-        </div>
-      </div>
-      <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">
-        Foto celengan dinosaurus adalah contoh desain. Hasil pesanan dibuat dengan karya anak sendiri.
-      </p>
-    </div>
-  );
+/** Digital product mockups inspired by the sample photos.
+ * The artwork is rendered directly from the actual project, never regenerated.
+ * Product decorations stay separate from the saved printable source artwork. */
+function PersonalArtwork({ project, name, showLabel = true }: { project: ShopProject; name: string; showLabel?: boolean }) {
+  return <ArtworkSvg template={templateForSnapshot(project)} colors={project.colors}
+    strokes={project.strokes} name={name} message={project.message}
+    nameFont={project.nameFont} nameColor={project.nameColor}
+    nameAlign={project.nameAlign} showLabel={showLabel} />;
 }
 
-function ProductPreview({
-  product,
-  project,
-  name,
-  fabric,
-  large = false,
-}: {
-  product: ProductId;
-  project: ShopProject;
-  name: string;
-  fabric: string;
-  large?: boolean;
+function ProductDecor() {
+  return <svg aria-hidden="true" viewBox="0 0 320 240" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+    <path d="M0 240V193Q25 181 44 202Q67 170 89 205Q112 204 126 240Z" fill="#A6BC52" />
+    <path d="M225 240Q225 207 250 212Q268 188 290 212Q308 201 320 218V240Z" fill="#80C3E5" />
+    <path d="M274 240Q278 220 296 220Q304 202 320 208V240Z" fill="#FDB83B" />
+    <path d="M17 42Q10 31 26 27Q31 13 47 20Q55 10 67 24Q87 21 89 37Q89 46 70 46H34Q22 47 17 42Z" fill="#80C3E5" />
+    <g stroke="#F8BE35" strokeWidth="3" strokeLinecap="round">
+      <circle cx="285" cy="36" r="12" fill="#F8BE35" />
+      {Array.from({length: 8}, (_, i) => <line key={i} x1={285 + 17 * Math.cos(i * Math.PI / 4)} y1={36 + 17 * Math.sin(i * Math.PI / 4)} x2={285 + 23 * Math.cos(i * Math.PI / 4)} y2={36 + 23 * Math.sin(i * Math.PI / 4)} />)}
+    </g>
+  </svg>;
+}
+
+function MockupCaption({ children }: { children: string }) {
+  return <p className="mt-2 text-center text-xs font-semibold leading-relaxed text-[var(--dim)]">{children} · simulasi digital, bukan foto hasil cetak.</p>;
+}
+
+export function CelenganPreview({ project, name, large = false }: { project: ShopProject; name: string; large?: boolean }) {
+  return <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
+    <div role="img" aria-label="Mockup celengan depan dan belakang dengan karya pribadi"
+      className="flex items-end justify-center gap-3 rounded-3xl bg-[#EAF4F8] px-4 py-7">
+      {[false, true].map((back) => <div key={String(back)} className={`relative w-[45%] max-w-[154px] ${back ? "mb-5" : ""}`}>
+        <div className="absolute -top-2 z-20 flex h-5 w-full items-center justify-center rounded-[50%] border border-[#9A9B96] bg-gradient-to-b from-white via-[#C8CBC8] to-[#92958E] shadow-sm">
+          <div className="h-1 w-[40%] rounded-full bg-[#302D29]" />
+        </div>
+        <div className="relative flex aspect-[0.66] items-center justify-center overflow-hidden rounded-b-[14%] border-x border-[#D5CAB7] bg-[#FCF3DE] shadow-lg">
+          <ProductDecor />
+          {back ? <img src={logoUrl} alt="Bun & Fleur Kids" className="relative z-10 w-[68%] rounded-sm object-contain" /> :
+            <div className="relative z-10 w-[87%]"><PersonalArtwork project={project} name={name} /></div>}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-black/10" />
+        </div>
+        <div className="relative -mt-2 h-3 rounded-[50%] border-b border-[#A2A39C] bg-gradient-to-b from-[#E8E8E3] to-[#9CA29D]" />
+        <p className="mt-2 text-center text-[11px] font-bold text-olive-deep">{back ? "Belakang" : "Depan"}</p>
+      </div>)}
+    </div>
+    <MockupCaption>Celengan dengan gambar, warna, dan nama dari karya anak</MockupCaption>
+  </div>;
+}
+
+function FlatProductPreview({ product, project, name, large }: { product: "puzzle" | "placemat"; project: ShopProject; name: string; large: boolean }) {
+  const puzzle = product === "puzzle";
+  return <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
+    <div className="rounded-3xl bg-[#EBDCC5] p-4 sm:p-5">
+      <div role="img" aria-label={puzzle ? "Mockup puzzle dari karya anak" : "Mockup alas makan dari karya anak"}
+        className={`relative mx-auto flex items-center justify-center overflow-hidden bg-[#FCF3DE] shadow-md ${puzzle ? "aspect-square rounded-[12%] border-b-[5px] border-[#BBA382]" : "aspect-[3/2] rounded-[10%] border-2 border-[#E4D3BA]"}`}>
+        <ProductDecor />
+        {!puzzle && <div aria-hidden="true" className="pointer-events-none absolute inset-[3%] rounded-[8%] border border-dashed border-[#DCCCB4]" />}
+        <img src={logoUrl} alt="Bun & Fleur Kids" className="absolute left-1/2 top-[5%] z-10 w-[20%] -translate-x-1/2 rounded-sm object-contain" />
+        <div className={`relative z-10 mt-[10%] ${puzzle ? "w-[76%]" : "w-[56%]"}`}><PersonalArtwork project={project} name={name} /></div>
+        {puzzle && <svg aria-hidden="true" viewBox="0 0 300 300" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 z-20 h-full w-full" fill="none" stroke="#574B38" strokeOpacity=".48" strokeWidth="1.6">
+          <path d="M100 0V28c-26-13-26 29 0 16V100h28c-13-26 29-26 16 0h56V42c26 13 26-29 0-16V0 M100 100v30c26-13 26 29 0 16v54h28c-13 26 29 26 16 0h56v-29c-26 13-26-29 0-16v-55 M100 200v34c-26-13-26 29 0 16v50 M200 200v34c26-13 26 29 0 16v50 M0 100h29c-13-26 29-26 16 0h55 M200 100h28c-13 26 29 26 16 0h56 M0 200h29c13 26 29 26 16 0h55 M200 200h30c-13-26 29-26 16 0h54" />
+        </svg>}
+      </div>
+    </div>
+    <MockupCaption>{puzzle ? "Puzzle personalisasi dari karya anak" : "Alas makan personalisasi dari karya anak"}</MockupCaption>
+  </div>;
+}
+
+function GrowthChartPreview({ project, name, large }: { project: ShopProject; name: string; large: boolean }) {
+  const chartName = name.trim();
+  return <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
+    <div className="flex justify-center rounded-3xl bg-[#F2EAE0] p-4">
+      <div role="img" aria-label="Mockup growth chart tempel dengan karya anak dan skala ilustrasi 50 sampai 160 sentimeter"
+        className={`relative aspect-[1/3] w-full overflow-hidden rounded-xl bg-[#FCF3DE] shadow-md ${large ? "max-w-[175px]" : "max-w-[116px]"}`}>
+        <ProductDecor />
+        <img src={logoUrl} alt="Bun & Fleur Kids" className="absolute left-[9%] top-[4%] w-[63%] rounded-sm object-contain" />
+        <div className="absolute left-[4%] top-[22%] w-[65%]">
+          <PersonalArtwork project={project} name="" showLabel={false} />
+        </div>
+        <div className="absolute left-[5%] top-[48%] w-[65%] text-center">
+          {chartName && <p className="break-words rounded-md bg-white/80 px-1 py-1 font-extrabold leading-tight" style={{ fontFamily: fontFamilyOf(project.nameFont), color: project.nameColor, fontSize: large ? 18 : 12 }}>{chartName.toUpperCase()}</p>}
+          {project.message && <p className="mt-1 break-words text-[9px] font-bold text-olive-deep">{project.message}</p>}
+        </div>
+        <div className="absolute bottom-[9%] left-[4%] w-[65%] -scale-x-100">
+          <PersonalArtwork project={project} name="" showLabel={false} />
+        </div>
+        <div aria-hidden="true" className="absolute bottom-[7%] right-0 top-[15%] w-[30%] text-[#486126]">
+          {Array.from({length: 23}, (_, i) => {
+            const cm = 160 - i * 5;
+            return <div key={cm} className="absolute right-0 flex w-full -translate-y-1/2 items-center justify-end gap-1" style={{ top: `${i / 22 * 100}%` }}>
+              {cm % 10 === 0 && <span className="text-[9px] font-extrabold">{cm}</span>}
+              <span className={`h-px bg-current ${cm % 10 === 0 ? "w-[43%]" : "w-[22%]"}`} />
+            </div>;
+          })}
+        </div>
+      </div>
+    </div>
+    <MockupCaption>Growth chart tempel; skala pada mockup hanya ilustrasi ukuran</MockupCaption>
+  </div>;
+}
+
+export function ProductPreview({ product, project, name, fabric, large = false }: {
+  product: ProductId; project: ShopProject; name: string; fabric: string; large?: boolean;
 }) {
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
   if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
   if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
-  if (product === "accessory59" || product === "puzzle" || product === "placemat") {
-    return (
-      <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
-        <div className="rounded-3xl bg-[#EEF4E4] p-5 ring-1 ring-[var(--border)]">
-          <div className="mx-auto max-w-[250px] overflow-hidden rounded-3xl bg-white p-3 shadow-sm">
-            <ArtworkSvg template={templateForSnapshot(project)} colors={project.colors}
-              strokes={project.strokes} name={name} message={project.message}
-              nameFont={project.nameFont} nameColor={project.nameColor}
-              nameAlign={project.nameAlign} />
-          </div>
-          <p className="mt-3 text-center font-display text-sm font-bold text-olive-deep">
-            {PRODUCT_META[product].title}
-          </p>
-        </div>
-        <p className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">
-          Pratinjau gambar, warna, dan nama yang akan dicetak.
-        </p>
-      </div>
-    );
-  }
+  if (product === "puzzle" || product === "placemat") return <FlatProductPreview product={product} project={project} name={name} large={large} />;
+  if (product === "growthchart") return <GrowthChartPreview project={project} name={name} large={large} />;
+  if (product === "accessory59") return <div className="mx-auto max-w-sm rounded-3xl bg-[#EEF4E4] p-5"><PersonalArtwork project={project} name={name} /><MockupCaption>Aksesori dari pesanan lama</MockupCaption></div>;
   if (product === "figurine") return <FigurinePreview project={project} height={large ? 320 : 210} />;
   return <TshirtPreview project={project} name={name} fabric={fabric} large={large} />;
 }
@@ -459,7 +489,7 @@ export function Masterpiece({
 
       {/* Enam pilihan produk, termasuk dua aksesori */}
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Pilih bentuk kreasimu">
-        {(Object.keys(PRODUCT_META) as ProductId[]).map((id) => {
+        {ACTIVE_PRODUCT_IDS.map((id) => {
           const meta = PRODUCT_META[id];
           return (
             <article
@@ -481,12 +511,12 @@ export function Masterpiece({
               )}
               {id === "celengan" && (
                 <p className="mt-1 text-xs font-bold text-olive-deep">
-                  Accessories · Rp29.000 · custom sesuai gambar yang diwarnai · ongkir terpisah.
+                  Custom sesuai gambar yang diwarnai · ongkir terpisah.
                 </p>
               )}
               {id === "papercraft" && (
                 <p className="mt-1 text-xs font-bold text-olive-deep">
-                  Harga tetap Rp49.000 · kit lembar cetak untuk dirakit · gunting dan lem tidak termasuk.
+                  Kit lembar cetak untuk dirakit · gunting dan lem tidak termasuk.
                 </p>
               )}
               {id === "figurine" && (
@@ -594,7 +624,7 @@ export function Customize({
                       ? "Nama anak dan karakter kreasinya dicetak pada sisi depan celengan. Logo Bun & Fleur Kids pada sisi belakang."
                       : selection.product === "accessory59"
                         ? "Nama dan gambar kreasimu ikut dalam desain aksesori custom; spesifikasi cetak akhir disesuaikan produk."
-                  : "Bila diisi, nama anak dicetak di bawah desain pada kaos."}
+                  : selection.product === "tshirt" ? "Bila diisi, nama anak dicetak di bawah desain pada kaos." : "Nama dan gambar kreasimu tercetak pada produk pilihanmu."}
             </p>
           </div>
 
@@ -702,7 +732,7 @@ export function Customize({
           <dl className="mt-5 space-y-1.5 border-t-2 border-dashed border-[var(--border)] pt-4 text-sm font-semibold">
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Harga produk</dt>
-              <dd className="font-display">{(selection.product === "poster" || selection.product === "papercraft" || selection.product === "celengan" || selection.product === "accessory59" || selection.product === "puzzle" || selection.product === "placemat") ? formatIDR(price) : `${formatIDR(price)} (harga awal)`}</dd>
+              <dd className="font-display">{formatIDR(price)}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-[var(--dim)]">Ongkos kirim</dt>

@@ -25,7 +25,7 @@ import { ModelViewer } from "./components/ModelViewer";
 import { PillowViewer } from "./components/PillowViewer";
 import { NetPreview, PillowPreview, StandeePreview } from "./components/PrintPreview";
 import type { OrderOut, ShopSelection } from "./components/Shop";
-import { formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
+import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
 import { logoUrl } from "./assets-inline";
 
 const AdminProductPrices = lazy(() => import("./components/Shop").then((m) => ({ default: m.AdminProductPrices })));
@@ -35,10 +35,7 @@ const Customize = lazy(() => import("./components/Shop").then((m) => ({ default:
 const Masterpiece = lazy(() => import("./components/Shop").then((m) => ({ default: m.Masterpiece })));
 const OrderConfirmation = lazy(() => import("./components/Shop").then((m) => ({ default: m.OrderConfirmation })));
 const OrderTracking = lazy(() => import("./components/Shop").then((m) => ({ default: m.OrderTracking })));
-const PosterPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.PosterPreview })));
-const PapercraftPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.PapercraftPreview })));
-const CelenganPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.CelenganPreview })));
-const TshirtPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.TshirtPreview })));
+const ProductPreview = lazy(() => import("./components/Shop").then((m) => ({ default: m.ProductPreview })));
 const AffiliateAdmin = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateAdmin })));
 const AffiliateDashboard = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateDashboard })));
 const AffiliateInvitePage = lazy(() => import("./components/Affiliate").then((m) => ({ default: m.AffiliateInvitePage })));
@@ -479,8 +476,8 @@ function Home({
           </h1>
           <p className="mt-4 max-w-md text-lg leading-relaxed text-[var(--dim)]">
             Si kecil bebas memilih karakter, mewarnai, dan menambahkan namanya — selalu
-            gratis. Setelah selesai, wujudkan kreasinya menjadi papercraft 3D, poster, figurine 3D,
-            kaos custom, puzzle, alas makan atau aksesori personal yang dikirim langsung ke rumah.
+            gratis. Setelah selesai, wujudkan kreasinya menjadi poster, papercraft 3D, alas makan,
+            celengan, puzzle, growth chart atau kaos yang dikirim langsung ke rumah.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <button
@@ -551,7 +548,7 @@ function Home({
           {[
             { n: "01", title: "Pilih Karakter", body: "200 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun." },
             { n: "02", title: "Warnai & Custom Nama", body: "Ketuk untuk mengisi warna, gambar bebas dengan kuas, lalu tulis nama dan pesan si kecil dengan gaya huruf favoritnya." },
-            { n: "03", title: "Pilih Bentuk Kreasi", body: "Papercraft 3D, poster, figurine, kaos, atau aksesori celengan custom Rp29.000 — semuanya mengikuti warna karya anakmu." },
+            { n: "03", title: "Pilih Bentuk Kreasi", body: "Poster, papercraft 3D, alas makan, celengan, puzzle, growth chart, atau kaos — semuanya mengikuti warna karya anakmu." },
             { n: "04", title: "Kami Cetak & Kirim", body: "Pesan dari halaman karya, selesaikan pembayaran lewat konfirmasi tim kami, dan kami produksi lalu kirim langsung ke rumah." },
           ].map((s) => (
             <article key={s.n} className="relative">
@@ -565,187 +562,28 @@ function Home({
         </div>
       </section>
 
-      {/* EMPAT CARA MEWUJUDKAN KARYA — produk fisik yang bisa dipesan */}
-      <section className="mt-20" aria-label="Empat bentuk kreasi fisik">
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Empat Cara Mewujudkan Karya</p>
+      {/* Etalase: tujuh produk aktif; karya demo diberi label sebagai contoh. */}
+      <section className="mt-20" aria-label="Tujuh bentuk kreasi fisik">
+        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Tujuh Cara Mewujudkan Karya</p>
         <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Satu Karya, Banyak Cara <span className="hero-word-sky">untuk Jadi Nyata.</span></h2>
-        <p className="mt-3 max-w-2xl leading-relaxed text-[var(--dim)]">
-          Mewarnai selalu gratis. Bila ingin wujud fisiknya, pesan salah satu dari empat produk ini
-          dari halaman karya setelah si kecil selesai mewarnai — harga produk dan ongkir selalu
-          ditampilkan terpisah sebelum kamu membayar.
-        </p>
-        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <article className="overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">
-            <div className="bg-sky-soft p-5">
-              <DeferredPreview><PosterPreview project={demoProject} name="Adam" /></DeferredPreview>
-              <p className="pt-2 text-center text-xs font-semibold text-[var(--dim)]">Mockup poster dari karya contoh berlabel</p>
-            </div>
-            <div className="p-6">
-              <h3 className="font-display text-2xl font-semibold">{PRODUCT_META.poster.title}</h3>
-              <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META.poster.description}</p>
-              <p className="mt-3 font-display text-xl font-semibold text-olive-deep">{formatIDR(catalogPrices.poster ?? 49000)}</p>
-              <ul className="mt-2 space-y-1.5 font-semibold text-[var(--dim)]">
-                <li>· Karya anak persis, lengkap dengan namanya</li>
-                <li>· Diproduksi &amp; dikirim oleh tim kami</li>
-              </ul>
-              <button
-                type="button"
-                onClick={() => startTemplate("pb-dino")}
-                className="mt-5 rounded-full bg-olive px-6 py-2.5 font-display text-base font-semibold text-white transition hover:bg-olive-deep"
-              >
-                Mulai Mewarnai untuk Poster
-              </button>
-            </div>
-          </article>
-          <article className="relative overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-2 ring-olive">
-            <span className="absolute right-4 top-4 z-10 rounded-full bg-tang px-3 py-1 font-display text-xs font-extrabold text-ink">{formatIDR(catalogPrices.papercraft ?? 49000)}</span>
-            <div className="bg-[#EEF4E4] p-4">
-              <DeferredPreview><PapercraftPreview project={demoProject} name="Adam" /></DeferredPreview>
-            </div>
-            <div className="p-6">
-              <h3 className="font-display text-2xl font-extrabold">{PRODUCT_META.papercraft.title}</h3>
-              <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META.papercraft.description}</p>
-              <p className="mt-3 font-display text-xl font-extrabold text-olive-deep">{formatIDR(catalogPrices.papercraft ?? 49000)}</p>
-              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Belum termasuk ongkos kirim</p>
-              <ul className="mt-3 space-y-1.5 text-sm font-semibold text-[var(--dim)]">
-                <li>· Warna dan nama sesuai karya anak</li>
-                <li>· Lembar depan-belakang, strip sambungan &amp; penyangga</li>
-                <li>· Dikirim sebagai kit siap gunting dan lem</li>
-                <li>· Gunting dan lem tidak disertakan</li>
-              </ul>
-              <button
-                type="button"
-                onClick={() => startTemplate("pb-dino")}
-                className="mt-5 w-full rounded-full bg-tang px-5 py-2.5 font-display text-base font-bold text-ink transition hover:brightness-95"
-              >
-                Mulai Mewarnai untuk Papercraft
-              </button>
-            </div>
-          </article>
-          <article className="relative overflow-hidden rounded-[2rem] bg-olive text-white">
-            <span className="absolute right-5 top-5 z-10 rounded-full bg-tang px-3 py-1 font-display text-xs font-semibold text-ink">Premium</span>
-            <div className="bg-white/10 p-5">
-              <div className="mx-auto max-w-xs">
-                <ModelViewer
-                  template={dino}
-                  colors={demo}
-                  name="Adam"
-                  nameFontFamily={fontFamilyOf("baloo")}
-                  nameColor="#E4572E"
-                  height={230}
-                  showControls={false}
-                  autoRotate={false}
-                  restYaw={Math.PI + 0.6}
-                />
+        <p className="mt-3 max-w-2xl leading-relaxed text-[var(--dim)]">Mewarnai selalu gratis. Pilih produk setelah mewarnai dan lihat bagaimana karya serta nama si kecil tampil pada produk pilihanmu. Ongkir ditampilkan terpisah.</p>
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {ACTIVE_PRODUCT_IDS.map((id) => (
+            <article key={id} className="flex flex-col overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">
+              <div className="bg-[#EEF4E4] p-4">
+                <DeferredPreview><ProductPreview product={id} project={demoProject} name="Adam" fabric="Sage Green" /></DeferredPreview>
+                <p className="pt-2 text-center text-xs font-semibold text-[var(--dim)]">Contoh personalisasi</p>
               </div>
-              <p className="pt-1 text-center text-xs font-semibold text-white">Model 3D digital dari karya contoh — geometri yang sama dengan pratinjau di Studio Kreasi 3D</p>
-            </div>
-            <div className="p-6">
-              <h3 className="font-display text-2xl font-semibold">{PRODUCT_META.figurine.title}</h3>
-              <p className="mt-2 leading-relaxed text-[#EDF3E2]">{PRODUCT_META.figurine.description}</p>
-              <p className="mt-3 font-display text-xl font-semibold">Mulai {formatIDR(catalogPrices.figurine ?? 120000)}</p>
-              <ul className="mt-2 space-y-1.5 font-semibold text-[#EDF3E2]">
-                <li>· Warna &amp; nama persis dari karya anak</li>
-                <li>· Melewati Design Review tim kami sebelum produksi</li>
-                <li>· Diproduksi made-to-order &amp; dikirim oleh tim kami</li>
-              </ul>
-              <button
-                type="button"
-                onClick={() => startTemplate("pb-dino")}
-                className="mt-5 rounded-full bg-white px-6 py-2.5 font-display text-base font-semibold text-olive-deep transition hover:bg-[#EDF3E2]"
-              >
-                Mulai Desain Figurine
-              </button>
-            </div>
-          </article>
-          <article className="overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">
-            <div className="bg-butter-soft p-5">
-              <DeferredPreview><TshirtPreview project={demoProject} name="Adam" fabric="Sage Green" /></DeferredPreview>
-              <p className="pt-2 text-center text-xs font-semibold text-[var(--dim)]">Mockup kaos dari karya contoh berlabel</p>
-            </div>
-            <div className="p-6">
-              <h3 className="font-display text-2xl font-semibold">{PRODUCT_META.tshirt.title}</h3>
-              <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META.tshirt.description}</p>
-              <p className="mt-3 font-display text-xl font-semibold text-olive-deep">Mulai {formatIDR(catalogPrices.tshirt ?? 79000)}</p>
-              <ul className="mt-2 space-y-1.5 font-semibold text-[var(--dim)]">
-                <li>· Lima warna kain: Cream, Mustard, Terracotta, Sage Green, Brown</li>
-                <li>· Ukuran anak 2–12 tahun, semua harga sama</li>
-              </ul>
-              <button
-                type="button"
-                onClick={() => startTemplate("pb-dino")}
-                className="mt-5 rounded-full bg-olive px-6 py-2.5 font-display text-base font-semibold text-white transition hover:bg-olive-deep"
-              >
-                Mulai Mewarnai untuk Kaos
-              </button>
-            </div>
-          </article>
-        </div>
-        <section className="mt-7 grid items-center gap-6 rounded-[2.25rem] bg-[#EDF2E6] p-5 ring-1 ring-olive/20 sm:p-8 lg:grid-cols-2"
-          aria-label="Accessories Celengan Bun & Fleur Kids">
-          <div className="rounded-[1.5rem] bg-white p-3 shadow-sm ring-1 ring-[var(--border)]">
-            <DeferredPreview><CelenganPreview project={demoProject} name="Adam" large /></DeferredPreview>
-          </div>
-          <div>
-            <span className="inline-block rounded-full bg-olive px-4 py-1.5 font-display text-xs font-bold text-white">
-              ACCESSORIES · NEW
-            </span>
-            <h3 className="mt-3 font-display text-3xl font-extrabold text-olive-deep">Celengan Custom Si Kecil</h3>
-            <p className="mt-3 text-base font-semibold leading-relaxed text-[var(--dim)]">
-              Karya pertama mereka, kini bisa jadi celengan yang lucu dan fungsional. Gambar,
-              warna, dan nama anak dicetak di bagian depan tabung, dengan identitas Bun & Fleur Kids
-              di bagian belakang. Contoh foto menampilkan karakter dinosaurus.
-            </p>
-            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(catalogPrices.celengan ?? 29000)}</p>
-            <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Harga tetap per celengan · ongkir dihitung terpisah</p>
-            <button type="button" onClick={() => startTemplate("pb-dino")}
-              className="mt-5 w-full rounded-full bg-tang px-6 py-3 font-display text-base font-bold text-ink transition hover:brightness-95 sm:w-auto">
-              Warnai &amp; Buat Celengan
-            </button>
-          </div>
-        </section>
-        <section className="mt-5 grid items-center gap-6 rounded-[2.25rem] bg-[#EFF5FC] p-5 ring-1 ring-sky/20 sm:p-8 lg:grid-cols-2"
-          aria-label="Accessories custom premium">
-          <div className="rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-[var(--border)]">
-            <div className="mx-auto w-60 max-w-full overflow-hidden rounded-3xl bg-[#F7F4E9] p-3">
-              <ArtworkSvg template={dino} colors={demo} strokes={[]} name="Adam" nameFont="baloo"
-                nameColor="#E4572E" nameAlign="center" />
-            </div>
-            <p className="mt-3 text-center font-display text-xs font-bold text-sky-deep">
-              Contoh karya yang dipersonalisasi
-            </p>
-          </div>
-          <div>
-            <span className="inline-block rounded-full bg-sky-deep px-4 py-1.5 font-display text-xs font-bold text-white">
-              ACCESSORIES · PILIHAN BARU
-            </span>
-            <h3 className="mt-3 font-display text-3xl font-extrabold text-olive-deep">Aksesori Custom Premium</h3>
-            <p className="mt-3 text-base font-semibold leading-relaxed text-[var(--dim)]">
-              Desain aksesori lain dari gambar yang sudah diwarnai. Warna, karakter, dan nama anak
-              disesuaikan dari karya pribadi, seperti pada produk custom lainnya.
-            </p>
-            <p className="mt-4 font-display text-3xl font-extrabold text-olive-deep">{formatIDR(catalogPrices.accessory59 ?? 59000)}</p>
-            <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Harga per produk · ongkir terpisah</p>
-            <button type="button" onClick={() => startTemplate("pb-dino")}
-              className="mt-5 w-full rounded-full bg-olive px-6 py-3 font-display text-base font-bold text-white transition hover:brightness-95 sm:w-auto">
-              Warnai untuk Aksesori
-            </button>
-          </div>
-        </section>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          {(["puzzle", "placemat"] as const).map((id) => (
-            <article key={id} className="rounded-3xl bg-white p-5 ring-1 ring-[var(--border)]">
-              <h3 className="font-display text-xl font-bold">{PRODUCT_META[id].title}</h3>
-              <p className="mt-1 text-sm text-[var(--dim)]">{PRODUCT_META[id].description}</p>
-              <p className="mt-3 font-display text-xl font-bold text-olive-deep">{formatIDR(catalogPrices[id] ?? (id === "puzzle" ? 59000 : 69000))}</p>
-              <button type="button" onClick={() => startTemplate("pb-dino")}
-                className="mt-3 rounded-full bg-sky-soft px-4 py-2 text-sm font-bold text-sky-band">{PRODUCT_META[id].cta}</button>
+              <div className="flex flex-1 flex-col p-6">
+                <h3 className="font-display text-2xl font-extrabold">{PRODUCT_META[id].title}</h3>
+                <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META[id].description}</p>
+                <p className="mt-3 font-display text-xl font-extrabold text-olive-deep">{formatIDR(catalogPrices[id] ?? PRODUCT_DEFAULT_PRICES[id])}</p>
+                <button type="button" onClick={() => startTemplate("pb-dino")} className="mt-5 rounded-full bg-olive px-5 py-2.5 font-display text-base font-semibold text-white transition hover:bg-olive-deep">{PRODUCT_META[id].cta}</button>
+              </div>
             </article>
           ))}
         </div>
-        <p className="mt-4 text-sm font-semibold text-[var(--dim)]">
-          Pola DIY gratis tetap tersedia di Studio Cetak. Harga {formatIDR(catalogPrices.papercraft ?? 49000)} khusus kit papercraft fisik yang dicetak sesuai karya anak dan dikirim oleh tim kami.
-        </p>
+        <p className="mt-4 text-sm font-semibold text-[var(--dim)]">Pola DIY gratis tetap tersedia di Studio Cetak. Harga papercraft fisik {formatIDR(catalogPrices.papercraft ?? PRODUCT_DEFAULT_PRICES.papercraft)} belum termasuk ongkir.</p>
       </section>
 
       {/* KOLEKSI — kartu editorial ala kemasan mainan, di panel putih */}

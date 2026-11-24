@@ -92,7 +92,7 @@ export const orders = pgTable("orders", {
     .default("center"),
   colors: text("colors").notNull().default("{}"),
   strokes: text("strokes").notNull().default("[]"),
-  productType: text("product_type", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat"] }).notNull(),
+  productType: text("product_type", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart"] }).notNull(),
   variant: text("variant").notNull().default(""),
   productPrice: integer("product_price").notNull(),
   // Affiliate attribution (brief Part 3): the coupon code the customer
@@ -155,7 +155,7 @@ export const orders = pgTable("orders", {
 });
 
 export const productPrices = pgTable("product_prices", {
-  productId: text("product_id", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat"] }).primaryKey(),
+  productId: text("product_id", { enum: ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart"] }).primaryKey(),
   price: integer("price").notNull(),
 });
 

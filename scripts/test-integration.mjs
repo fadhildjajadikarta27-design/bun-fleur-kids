@@ -106,7 +106,7 @@ try {
   console.log("PASS affiliate signup, phone normalization, coupon, hashed PIN and token, concurrent PIN lockout");
 
   const orderArgs = {
-    checkoutId: randomUUID(), quantity: 5, projectId: project.id, productType: "papercraft", childName: "",
+    checkoutId: randomUUID(), quantity: 7, projectId: project.id, productType: "papercraft", childName: "",
     customerName: "QA Parent", whatsapp: phone, email: `parent-${token}@example.test`,
     address: "Jalan Pengujian, Jakarta, Indonesia", couponCode: coupon.code, productPrice: 1, total: 1,
   };
@@ -117,8 +117,8 @@ try {
   assert.equal(order.id, retry.id);
   assert.notEqual(order.id, another.id);
   assert.notEqual(order.payableTotal, another.payableTotal);
-  assert.equal(order.productPrice, 245000);
-  assert.equal(order.discountAmount, 24500);
+  assert.equal(order.productPrice, 258300);
+  assert.equal(order.discountAmount, 25830);
   assert.equal(order.childName, "");
   assert.deepEqual(order.colors, project.colors);
   await call("updateOrder", { id: order.id, paymentStatus: "paid" }, { ...admin, expected: 400 });
@@ -143,36 +143,36 @@ try {
   await call("updateOrder", { id: order.id, orderStatus: "completed" }, admin);
   const commission = await sql`SELECT status, amount FROM commissions WHERE order_id = ${order.id}`;
   assert.equal(commission.length, 1);
-  assert.deepEqual(commission[0], { status: "payable", amount: 66150 });
+  assert.deepEqual(commission[0], { status: "payable", amount: 69741 });
   console.log("PASS verified-only payment, QRIS uniqueness, idempotent checkout, proofs, tracking and commissions");
 
   const requestPayout = { sessionToken: registered.sessionToken, amount: 50000,
     bankName: "Bank QA", accountName: "QA Affiliate", accountNumber: "10001234" };
   const [{ body: payout }] = await Promise.all([
     call("affiliateRequestPayout", requestPayout, affiliateSession),
-    call("affiliateRequestPayout", { ...requestPayout, amount: 67000 }, { ...affiliateSession, expected: 400 }),
+    call("affiliateRequestPayout", { ...requestPayout, amount: 70000 }, { ...affiliateSession, expected: 400 }),
   ]);
   const accountSummary = (await call("adminListAffiliates", {}, admin)).body.affiliates.find(({ id }) => id === registered.affiliate.id);
   assert.equal(accountSummary.totalOrders, 1);
-  assert.equal(accountSummary.netSales, 220500);
-  assert.equal(accountSummary.totalCommission, 66150);
+  assert.equal(accountSummary.netSales, 232470);
+  assert.equal(accountSummary.totalCommission, 69741);
   assert.equal(accountSummary.pendingPayout, 50000);
   await call("adminUpdatePayout", { id: payout.payoutId, decision: "approve" }, admin);
   await call("adminUpdatePayout", { id: payout.payoutId, decision: "paid" }, admin);
   await call("adminUpdatePayout", { id: payout.payoutId, decision: "paid" }, admin);
   const wallet = (await call("affiliateMe", { sessionToken: registered.sessionToken }, affiliateSession)).body;
   assert.equal(wallet.wallet.paid, 50000);
-  assert.equal(wallet.availablePayout, 16150);
+  assert.equal(wallet.availablePayout, 19741);
   console.log("PASS payout approval, partial commission settlement, idempotent payout and wallet balance");
 
   const summary = (await call("listOrders", { limit: 1 }, admin)).body;
   assert.equal(summary.orders.length, 1);
-  assert.ok(summary.orderCount >= 2 && summary.paidCount >= 1 && summary.netProductRevenue >= 220500);
+  assert.ok(summary.orderCount >= 2 && summary.paidCount >= 1 && summary.netProductRevenue >= 232470);
   await call("adminSetProductPrice", { productId: "puzzle", price: 60000 }, { expected: 401 });
   await call("adminSetProductPrice", { productId: "puzzle", price: 60000 }, admin);
   const catalog = (await call("getShopConfig")).body;
   assert.equal(catalog.products.find(({ id }) => id === "puzzle").basePrice, 60000);
-  await call("adminSetProductPrice", { productId: "puzzle", price: 59000 }, admin);
+  await call("adminSetProductPrice", { productId: "puzzle", price: 69000 }, admin);
   console.log("PASS admin metrics, paginated orders and authorized catalog price changes");
 
   const rule = { affiliateId: registered.affiliate.id, productType: "puzzle", discountPct: 20 };
@@ -197,23 +197,28 @@ try {
 
   const puzzle = { ...orderArgs, checkoutId: randomUUID(), quantity: 2, productType: "puzzle", expectedCouponDiscountPct: 20 };
   const puzzleOrder = (await call("createOrder", puzzle, owner)).body.order;
-  assert.equal(puzzleOrder.productPrice, 118000);
-  assert.equal(puzzleOrder.discountAmount, 23600);
-  assert.equal(puzzleOrder.total, 94400);
+  assert.equal(puzzleOrder.productPrice, 138000);
+  assert.equal(puzzleOrder.discountAmount, 27600);
+  assert.equal(puzzleOrder.total, 110400);
   const [puzzleCommission] = await sql`SELECT commission_pct, net_subtotal, amount FROM commissions WHERE order_id = ${puzzleOrder.id}`;
-  assert.deepEqual(puzzleCommission, { commission_pct: 30, net_subtotal: 94400, amount: 28320 });
+  assert.deepEqual(puzzleCommission, { commission_pct: 30, net_subtotal: 110400, amount: 33120 });
 
   const placemat = (await call("createOrder", {
     ...orderArgs, checkoutId: randomUUID(), quantity: 1, productType: "placemat", expectedCouponDiscountPct: 0,
   }, owner)).body.order;
+  assert.equal(placemat.productPrice, 54900);
   assert.equal(placemat.discountAmount, 0);
+  const growth = (await call("createOrder", { ...orderArgs, checkoutId: randomUUID(), quantity: 1, productType: "growthchart" }, owner)).body.order;
+  assert.equal(growth.productPrice, 69000);
+  assert.equal(growth.variant, "Growth chart tempel personalisasi");
+  assert.deepEqual(growth.colors, project.colors);
   assert.equal(placemat.affiliateId, rule.affiliateId);
 
   await call("adminSetAffiliateProductDiscount", { ...rule, discountPct: null }, admin);
   assert.equal(await rate("puzzle"), 10);
   const stale = await call("createOrder", { ...puzzle, checkoutId: randomUUID() }, { ...owner, expected: 400 });
   assert.match(stale.body.error, /Diskon kupon berubah/);
-  assert.equal((await call("createOrder", puzzle, owner)).body.order.discountAmount, 23600);
+  assert.equal((await call("createOrder", puzzle, owner)).body.order.discountAmount, 27600);
   console.log("PASS admin-only per-product coupon rates, 0%, standard fallback, quantity, commission, and stale totals");
 
 } finally {

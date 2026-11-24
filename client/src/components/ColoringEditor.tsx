@@ -40,6 +40,7 @@ export function ArtworkSvg({
   nameColor,
   nameAlign = "center",
   svgRef,
+  showLabel = true,
   onRegionTap,
   children,
 }: {
@@ -52,6 +53,7 @@ export function ArtworkSvg({
   nameColor: string;
   nameAlign?: "left" | "center" | "right";
   svgRef?: React.RefObject<SVGSVGElement | null>;
+  showLabel?: boolean;
   onRegionTap?: (regionId: string) => void;
   children?: React.ReactNode;
 }) {
@@ -84,7 +86,7 @@ export function ArtworkSvg({
         </clipPath>
       </defs>
       {/* Name plaque behind the artwork's label area */}
-      <rect
+      {showLabel && <rect
         x={template.label.x - 8}
         y={template.label.y - 4}
         width={template.label.w + 16}
@@ -95,7 +97,7 @@ export function ArtworkSvg({
         strokeWidth={3}
         strokeDasharray="1 7"
         strokeLinecap="round"
-      />
+      />}
       {template.regions.map((r) => (
         <g key={r.id}>
           {r.els.map((el, i) => (
@@ -155,7 +157,7 @@ export function ArtworkSvg({
           />
         );
       })}
-      {displayName && (
+      {showLabel && displayName && (
         <text
           x={nameX}
           y={
@@ -174,7 +176,7 @@ export function ArtworkSvg({
           {displayName.toUpperCase()}
         </text>
       )}
-      {displayName && message?.trim() && (
+      {showLabel && displayName && message?.trim() && (
         <text
           x={nameX}
           y={template.label.y + template.label.h - 5}

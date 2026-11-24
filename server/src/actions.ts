@@ -86,7 +86,9 @@ function toOut(row: ProjectRow): z.infer<typeof projectOut> {
 // Centralized pricing (brief §5): the ONLY place product prices live on
 // the server. Orders always recompute from these constants — a price
 // sent by the client is never trusted.
-const PRODUCT_IDS = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat"] as const;
+const PRODUCT_IDS = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat", "growthchart"] as const;
+const ACTIVE_PRODUCT_IDS = ["poster", "papercraft", "placemat", "celengan", "puzzle", "growthchart", "tshirt"] as const;
+const purchasableProduct = z.enum(PRODUCT_IDS).refine(id => ACTIVE_PRODUCT_IDS.some(active => active === id), "Produk ini tidak lagi tersedia.");
 type ProductId = typeof PRODUCT_IDS[number];
 const discountPct = z.number().int().min(0).max(90);
 const productDiscounts = z.partialRecord(z.enum(PRODUCT_IDS), discountPct);
@@ -95,8 +97,8 @@ function couponDiscountFor(affiliate: { discountPct: number; productDiscounts: P
   return (product ? affiliate.productDiscounts[product] : undefined) ?? affiliate.discountPct;
 }
 const DEFAULT_PRICES: Record<ProductId, number> = {
-  poster: 49000, papercraft: 49000, figurine: 120000, tshirt: 79000,
-  celengan: 29000, accessory59: 59000, puzzle: 59000, placemat: 69000,
+  poster: 24900, papercraft: 36900, figurine: 120000, tshirt: 79000,
+  celengan: 59900, accessory59: 59000, puzzle: 69000, placemat: 54900, growthchart: 69000,
 };
 // Fabric colors fixed by the brand (brief §2C) and the configured kids
 // t-shirt sizes; all sizes are priced at the base price (no invented
@@ -767,10 +769,10 @@ export const Actions = {
     async handler(ctx) {
       const prices = await catalogPrices(schemaDb(ctx));
       return {
-        products: PRODUCT_IDS.map((id) => ({
+        products: ACTIVE_PRODUCT_IDS.map((id) => ({
           id,
           basePrice: prices[id],
-          priceLabel: id === "figurine" || id === "tshirt" ? "from" as const : "fixed" as const,
+          priceLabel: "fixed" as const,
         })),
         tshirtColors: [...TSHIRT_COLORS],
         tshirtSizes: [...TSHIRT_SIZES],
@@ -790,7 +792,7 @@ export const Actions = {
       checkoutId: z.uuid().optional(),
       quantity: z.number().int().min(1).max(20).default(1),
       expectedUnitPrice: z.number().int().positive().optional(),
-      productType: z.enum(PRODUCT_IDS),
+      productType: purchasableProduct,
       tshirtColor: z.string().max(40).default(""),
       tshirtSize: z.string().max(40).default(""),
       childName: z.string().trim().max(24).optional(),
@@ -856,6 +858,8 @@ export const Actions = {
           variant = "Puzzle personalisasi";
         } else if (args.productType === "placemat") {
           variant = "Alas makan personalisasi";
+        } else if (args.productType === "growthchart") {
+          variant = "Growth chart tempel personalisasi";
         } else if (args.productType === "figurine") {
           variant = "Figurine custom — melewati Design Review";
         } else {
@@ -975,7 +979,7 @@ export const Actions = {
 
   adminSetProductPrice: defineAction({
     description: "Changes the catalog price for future orders.",
-    request: z.object({ productId: z.enum(PRODUCT_IDS), price: z.number().int().min(1000).max(10000000) }),
+    request: z.object({ productId: purchasableProduct, price: z.number().int().min(1000).max(10000000) }),
     response: z.object({ ok: z.literal(true) }),
     async handler(ctx, args): Promise<{ ok: true }> {
       return schemaDb(ctx).transaction(async (db) => {
@@ -1591,7 +1595,7 @@ export const Actions = {
     description: "Admin: sets a product-specific percentage for an affiliate coupon, or clears it to use the standard percentage.",
     request: z.object({
       affiliateId: z.number().int().positive(),
-      productType: z.enum(PRODUCT_IDS),
+      productType: purchasableProduct,
       discountPct: discountPct.nullable(),
     }),
     response: z.object({ productDiscounts }),
@@ -2311,7 +2315,7 @@ export const Actions = {
         if (series.length > 366) break;
       }
       const productLabel = (t: string) =>
-        t === "poster" ? "Printed Poster" : t === "papercraft" ? "3D Papercraft Kit" : t === "celengan" ? "Celengan Custom" : t === "accessory59" ? "Aksesori Custom 59K" : t === "puzzle" ? "Puzzle" : t === "placemat" ? "Personalized Placemat" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
+        t === "poster" ? "Printed Poster" : t === "papercraft" ? "3D Papercraft Kit" : t === "celengan" ? "Celengan Custom" : t === "accessory59" ? "Aksesori Custom 59K" : t === "puzzle" ? "Puzzle" : t === "placemat" ? "Personalized Placemat" : t === "growthchart" ? "Growth Chart" : t === "figurine" ? "Custom 3D Figurine" : "Custom Printed T-Shirt";
       const orders = comms.slice(0, 50).map((c) => {
         const o = orderById.get(c.orderId);
         return {

@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ApiResponse } from "../api";
 import { FIELDS } from "../fields";
-import { formatIDR, PRODUCT_META, type ProductId } from "../lib/shop";
+import { ACTIVE_PRODUCT_IDS, formatIDR, PRODUCT_META, type ProductId } from "../lib/shop";
 import { logoUrl } from "../assets-inline";
 const SESSION_KEY = "bfk-aff-session";
 
@@ -899,7 +899,7 @@ export function AffiliateDashboard({
 
 type AdminAffiliate = ApiResponse<typeof api, "adminListAffiliates">["affiliates"][number];
 
-const catalogProductIds = Object.keys(PRODUCT_META) as ProductId[];
+const catalogProductIds = ACTIVE_PRODUCT_IDS;
 
 function AffiliateProductDiscounts({ account }: { account: AdminAffiliate }) {
   const queryClient = useQueryClient();
