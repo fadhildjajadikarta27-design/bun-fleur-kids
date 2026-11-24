@@ -141,6 +141,10 @@ export const FIELDS: FieldsShape<typeof Actions> = {
     "couponCode": {
       "maxLength": 24
     },
+    "expectedCouponDiscountPct": {
+      "min": 0,
+      "max": 90
+    },
     "customerName": {
       "maxLength": 80,
       "minLength": 2
@@ -203,7 +207,8 @@ export const FIELDS: FieldsShape<typeof Actions> = {
     "code": {
       "maxLength": 24,
       "minLength": 3
-    }
+    },
+    "productType": {}
   },
   "confirmTransfer": {
     "code": {
@@ -286,6 +291,11 @@ export const FIELDS: FieldsShape<typeof Actions> = {
     }
   },
   "adminListAffiliates": {},
+  "adminSetAffiliateProductDiscount": {
+    "affiliateId": {},
+    "productType": {},
+    "discountPct": {}
+  },
   "adminUpdateAffiliate": {
     "id": {},
     "status": {},

@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ApiResponse } from "../api";
 import { FIELDS } from "../fields";
-import { formatIDR } from "../lib/shop";
+import { formatIDR, PRODUCT_META, type ProductId } from "../lib/shop";
 import { logoUrl } from "../assets-inline";
 const SESSION_KEY = "bfk-aff-session";
 
@@ -652,8 +652,15 @@ export function AffiliateDashboard({
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--dim)]">Kode kupon kamu</p>
             <p className="mt-1 font-display text-2xl font-semibold tracking-wide">{a.couponCode}</p>
             <p className="text-sm font-semibold text-[var(--dim)]">
-              Pelanggan dapat diskon {a.discountPct}% · komisi kamu {a.commissionPct}% dari subtotal bersih
+              Diskon standar pelanggan {a.discountPct}% · komisi kamu {a.commissionPct}% dari subtotal bersih
             </p>
+            {catalogProductIds.some((id) => d.productDiscounts[id] !== undefined) && (
+              <ul className="mt-2 text-sm text-[var(--dim)]" aria-label="Diskon khusus per produk">
+                {catalogProductIds.map((id) => d.productDiscounts[id] === undefined ? null : (
+                  <li key={id}>{PRODUCT_META[id].title} · {d.productDiscounts[id]}%</li>
+                ))}
+              </ul>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               <CopyButton text={a.couponCode} label="Salin Kode Kupon" />
               {!editingCoupon && (
@@ -892,6 +899,70 @@ export function AffiliateDashboard({
 
 type AdminAffiliate = ApiResponse<typeof api, "adminListAffiliates">["affiliates"][number];
 
+const catalogProductIds = Object.keys(PRODUCT_META) as ProductId[];
+
+function AffiliateProductDiscounts({ account }: { account: AdminAffiliate }) {
+  const queryClient = useQueryClient();
+  const [productType, setProductType] = useState<ProductId>("papercraft");
+  const [draft, setDraft] = useState<string | null>(null);
+  const current = account.productDiscounts[productType];
+  const value = draft ?? (current === undefined ? "" : String(current));
+  const save = useMutation({
+    mutationFn: () => api.adminSetAffiliateProductDiscount({
+      affiliateId: account.id,
+      productType,
+      discountPct: value === "" ? null : Number(value),
+    }),
+    onSuccess: ({ productDiscounts }) => {
+      queryClient.setQueryData<{ affiliates: AdminAffiliate[] }>(["adminAffiliates"], (list) => list && ({
+        affiliates: list.affiliates.map((a) => a.id === account.id ? { ...a, productDiscounts } : a),
+      }));
+      setDraft(null);
+      void queryClient.invalidateQueries({ queryKey: ["affiliateAudit"] });
+    },
+  });
+
+  return (
+    <details className="mt-3 rounded-2xl bg-[var(--surface)] p-3 ring-1 ring-[var(--border)]">
+      <summary className="cursor-pointer font-display text-sm font-bold">Diskon kupon per produk</summary>
+      <p className="mt-2 text-sm text-[var(--dim)]">
+        Kosongkan untuk memakai diskon standar {account.discountPct}%. Isi 0 jika produk ini tidak mendapat potongan.
+      </p>
+      <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(event) => {
+        event.preventDefault();
+        if (!save.isPending) save.mutate();
+      }}>
+        <label className="grid gap-0.5 text-xs font-bold">
+          Produk
+          <select className={inputCls} value={productType} disabled={save.isPending} onChange={(event) => {
+            setProductType(event.target.value as ProductId);
+            setDraft(null);
+            save.reset();
+          }}>
+            {catalogProductIds.map((id) => (
+              <option key={id} value={id}>
+                {PRODUCT_META[id].title}{account.productDiscounts[id] !== undefined ? ` · ${account.productDiscounts[id]}%` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-0.5 text-xs font-bold">
+          Diskon khusus (%)
+          <input type="number" min={0} max={90} step={1} inputMode="numeric" value={value}
+            disabled={save.isPending} className={`w-28 ${inputCls}`}
+            onChange={(event) => { setDraft(event.target.value); save.reset(); }} />
+        </label>
+        <button type="submit" disabled={save.isPending} className="rounded-full bg-olive px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+          {save.isPending ? "Menyimpan…" : "Simpan diskon produk"}
+        </button>
+      </form>
+      {save.isError && <p role="alert" className="mt-2 text-sm text-berry">{save.error.message}</p>}
+      {save.isSuccess && <p role="status" className="mt-2 text-sm text-olive-deep">Diskon produk tersimpan.</p>}
+    </details>
+  );
+}
+
+
 const INVITE_LABELS: Record<AdminAffiliate["inviteState"], string> = {
   none: "Belum ada undangan",
   pending: "Undangan menunggu aktivasi",
@@ -999,7 +1070,7 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
           <input id={`af-coupon-${a.id}`} {...FIELDS.adminUpdateAffiliate.couponCode} value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} className="mt-0.5 w-full rounded-xl bg-[var(--bg)] px-3 py-2 font-display text-sm font-bold uppercase ring-1 ring-[var(--border)]" />
         </div>
         <div>
-          <label htmlFor={`af-disc-${a.id}`} className="font-display text-xs font-bold text-[var(--dim)]">Diskon pelanggan %</label>
+          <label htmlFor={`af-disc-${a.id}`} className="font-display text-xs font-bold text-[var(--dim)]">Diskon standar (%)</label>
           <input id={`af-disc-${a.id}`} {...FIELDS.adminUpdateAffiliate.discountPct} type="number" value={discountPct} onChange={(e) => setDiscountPct(e.target.value)} className={`mt-0.5 ${numCls}`} />
         </div>
         <div>
@@ -1021,6 +1092,8 @@ function AdminAffiliateCard({ a }: { a: AdminAffiliate }) {
         </button>
         {msg && <span className="text-sm font-bold text-olive-deep" role="status">{msg}</span>}
       </div>
+
+      <AffiliateProductDiscounts account={a} />
 
       {!a.hasPin && (
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-dashed border-[var(--border)] pt-3">
@@ -1269,7 +1342,7 @@ export function AffiliateAdmin() {
             <input id="na-coupon" {...FIELDS.adminCreateAffiliate.couponCode} value={form.couponCode} onChange={(e) => setForm((f) => ({ ...f, couponCode: e.target.value.toUpperCase() }))} className={`${inputCls} uppercase`} />
           </div>
           <div>
-            <label htmlFor="na-disc" className="font-display text-xs font-bold text-[var(--dim)]">Diskon pelanggan %</label>
+            <label htmlFor="na-disc" className="font-display text-xs font-bold text-[var(--dim)]">Diskon standar (%)</label>
             <input id="na-disc" {...FIELDS.adminCreateAffiliate.discountPct} type="number" value={form.discountPct} onChange={setF("discountPct")} className={inputCls} />
           </div>
           <div>

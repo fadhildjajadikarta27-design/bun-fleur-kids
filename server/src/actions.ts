@@ -88,6 +88,12 @@ function toOut(row: ProjectRow): z.infer<typeof projectOut> {
 // sent by the client is never trusted.
 const PRODUCT_IDS = ["poster", "papercraft", "figurine", "tshirt", "celengan", "accessory59", "puzzle", "placemat"] as const;
 type ProductId = typeof PRODUCT_IDS[number];
+const discountPct = z.number().int().min(0).max(90);
+const productDiscounts = z.partialRecord(z.enum(PRODUCT_IDS), discountPct);
+
+function couponDiscountFor(affiliate: { discountPct: number; productDiscounts: Partial<Record<string, number>> }, product?: ProductId) {
+  return (product ? affiliate.productDiscounts[product] : undefined) ?? affiliate.discountPct;
+}
 const DEFAULT_PRICES: Record<ProductId, number> = {
   poster: 49000, papercraft: 49000, figurine: 120000, tshirt: 79000,
   celengan: 29000, accessory59: 59000, puzzle: 59000, placemat: 69000,
@@ -789,6 +795,7 @@ export const Actions = {
       tshirtSize: z.string().max(40).default(""),
       childName: z.string().trim().max(24).optional(),
       couponCode: z.string().trim().max(24).default(""),
+      expectedCouponDiscountPct: discountPct.optional(),
       customerName: z.string().trim().min(2, "Nama pemesan wajib diisi.").max(80),
       whatsapp: z.string().trim().min(9, "Nomor WhatsApp wajib diisi.").max(20),
       email: z.string().trim().email("Format email belum benar.").max(120),
@@ -874,13 +881,18 @@ export const Actions = {
             .select()
             .from(schema.affiliates)
             .where(eq(schema.affiliates.couponCode, couponInput))
-            .limit(1);
+            .limit(1)
+            .for("update");
           const found = rows[0];
           if (!found || found.status !== "active") {
             throw new Error("Kode kupon tidak ditemukan atau sudah tidak aktif. Periksa lagi kode-nya, atau lanjutkan tanpa kupon.");
           }
           affiliate = found;
-          discountAmount = Math.floor((price * found.discountPct) / 100);
+          const pct = couponDiscountFor(found, args.productType);
+          if (args.expectedCouponDiscountPct !== undefined && args.expectedCouponDiscountPct !== pct) {
+            throw new Error("Diskon kupon berubah. Periksa ringkasan terbaru sebelum membuat pesanan.");
+          }
+          discountAmount = Math.floor((price * pct) / 100);
         }
         const netSubtotal = price - discountAmount;
 
@@ -1114,7 +1126,7 @@ export const Actions = {
   validateCoupon: defineAction({
     description:
       "Validates an affiliate coupon code at checkout and returns the customer discount percentage configured for it. Invalid, unknown, or non-active codes are rejected.",
-    request: z.object({ code: z.string().trim().min(3).max(24) }),
+    request: z.object({ code: z.string().trim().min(3).max(24), productType: z.enum(PRODUCT_IDS).optional() }),
     response: z.object({
       valid: z.boolean(),
       code: z.string(),
@@ -1138,11 +1150,12 @@ export const Actions = {
           message: "Kode kupon tidak ditemukan atau sudah tidak aktif.",
         };
       }
+      const pct = couponDiscountFor(affiliate, args.productType);
       return {
         valid: true,
         code,
-        discountPct: affiliate.discountPct,
-        message: `Kupon aktif — diskon ${affiliate.discountPct}% dari harga produk.`,
+        discountPct: pct,
+        message: pct === 0 ? "Kupon aktif. Produk ini tidak mendapat potongan harga." : `Kupon aktif. Diskon ${pct}% dari harga produk.`,
       };
     },
   }),
@@ -1459,6 +1472,7 @@ export const Actions = {
       affiliates: z.array(
         affiliatePublicOut.extend({
           whatsapp: z.string(),
+          productDiscounts,
           instagram: z.string(),
           tiktok: z.string(),
           inviteState: z.enum(["none", "pending", "used", "expired", "revoked"]),
@@ -1510,6 +1524,7 @@ export const Actions = {
           email: affiliates.email,
           couponCode: affiliates.couponCode,
           discountPct: affiliates.discountPct,
+          productDiscounts: affiliates.productDiscounts,
           commissionPct: affiliates.commissionPct,
           status: affiliates.status,
           createdAt: affiliates.createdAt,
@@ -1550,6 +1565,7 @@ export const Actions = {
         return {
           ...toAffiliatePublic(a),
           whatsapp: a.whatsapp,
+          productDiscounts: a.productDiscounts,
           instagram: a.instagram,
           tiktok: a.tiktok,
           inviteState,
@@ -1566,6 +1582,35 @@ export const Actions = {
         };
       });
       return { affiliates: out };
+    },
+  }),
+
+  adminSetAffiliateProductDiscount: defineAction({
+    description: "Admin: sets a product-specific percentage for an affiliate coupon, or clears it to use the standard percentage.",
+    request: z.object({
+      affiliateId: z.number().int().positive(),
+      productType: z.enum(PRODUCT_IDS),
+      discountPct: discountPct.nullable(),
+    }),
+    response: z.object({ productDiscounts }),
+    async handler(ctx, args) {
+      return schemaDb(ctx).transaction(async (db) => {
+        const { affiliateId, productType, discountPct } = args;
+        const [account] = await db.select({ productDiscounts: schema.affiliates.productDiscounts })
+          .from(schema.affiliates).where(eq(schema.affiliates.id, affiliateId)).for("update");
+        if (!account) throw new Error("Afiliasi tidak ditemukan.");
+        const previousPct = account.productDiscounts[productType] ?? null;
+        if (previousPct === discountPct) return { productDiscounts: account.productDiscounts };
+
+        const updated = { ...account.productDiscounts };
+        if (discountPct === null) delete updated[productType];
+        else updated[productType] = discountPct;
+        await db.update(schema.affiliates).set({ productDiscounts: updated, updatedAt: new Date() })
+          .where(eq(schema.affiliates.id, affiliateId));
+        const label = (pct: number | null) => pct === null ? "diskon standar" : `${pct}%`;
+        await audit(db, affiliateId, "affiliate.product_discount_changed", `${productType}: ${label(previousPct)} → ${label(discountPct)}`);
+        return { productDiscounts: updated };
+      });
     },
   }),
 
@@ -2182,6 +2227,7 @@ export const Actions = {
     }),
     response: z.object({
       affiliate: affiliatePublicOut,
+      productDiscounts,
       minWithdrawal: z.number(),
       totalSales: z.number(),
       totalRevenue: z.number(),
@@ -2288,6 +2334,7 @@ export const Actions = {
           inArray(schema.payouts.status, ["requested", "approved"])));
       return {
         affiliate: toAffiliatePublic(affiliate),
+        productDiscounts: affiliate.productDiscounts,
         minWithdrawal: cfg.minWithdrawal,
         totalSales: counted.length,
         totalRevenue: sum(counted, "netSubtotal"),

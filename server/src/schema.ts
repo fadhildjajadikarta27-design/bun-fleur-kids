@@ -5,7 +5,7 @@
 // export. Region colors and freehand strokes are stored as JSON text.
 // `settings` holds the configurable brand name (single row, id = 1).
 
-import { doublePrecision, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { doublePrecision, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const projects = pgTable("projects", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
@@ -193,6 +193,7 @@ export const affiliates = pgTable("affiliates", {
   tiktok: text("tiktok").notNull().default(""),
   couponCode: text("coupon_code").notNull().unique(),
   discountPct: integer("discount_pct").notNull().default(10),
+  productDiscounts: jsonb("product_discounts").$type<Partial<Record<string, number>>>().notNull().default({}),
   commissionPct: integer("commission_pct").notNull().default(30),
   // pending = invited, not yet activated · active · suspended
   status: text("status", { enum: ["pending", "active", "suspended"] })

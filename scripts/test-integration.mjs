@@ -33,7 +33,7 @@ async function call(action, args = {}, { cookie = "", ip = "127.10.1.1", expecte
 try {
   await ensureMigrations();
   const migrations = await sql`SELECT name FROM __port_migrations ORDER BY name`;
-  assert.equal(migrations.at(-1).name, "0013_catalog_prices.sql");
+  assert.equal(migrations.at(-1).name, "0014_affiliate_product_discounts.sql");
   assert.equal((await sql`SELECT has_table_privilege('anon', 'public.payment_proofs', 'SELECT') AS allowed`)[0].allowed, false);
 
   const first = await call("listProjects");
@@ -167,6 +167,48 @@ try {
   assert.equal(catalog.products.find(({ id }) => id === "puzzle").basePrice, 60000);
   await call("adminSetProductPrice", { productId: "puzzle", price: 59000 }, admin);
   console.log("PASS admin metrics, paginated orders and authorized catalog price changes");
+
+  const rule = { affiliateId: registered.affiliate.id, productType: "puzzle", discountPct: 20 };
+  await call("adminSetAffiliateProductDiscount", rule, { ...affiliateSession, expected: 401 });
+  await call("adminSetAffiliateProductDiscount", { ...rule, discountPct: 91 }, { ...admin, expected: 400 });
+  await call("adminSetAffiliateProductDiscount", { ...rule, productType: "unknown" }, { ...admin, expected: 400 });
+  await Promise.all([
+    call("adminSetAffiliateProductDiscount", rule, admin),
+    call("adminSetAffiliateProductDiscount", { ...rule, productType: "placemat", discountPct: 0 }, admin),
+  ]);
+
+  const code = affiliateArgs.couponCode.toUpperCase();
+  const rate = async (productType) => (await call("validateCoupon", { code, productType })).body.discountPct;
+  assert.equal(await rate("puzzle"), 20);
+  assert.equal(await rate("placemat"), 0);
+  assert.equal(await rate("papercraft"), 10);
+  assert.equal(await rate(), 10);
+  const productDiscounts = { puzzle: 20, placemat: 0 };
+  const updatedAffiliate = (await call("adminListAffiliates", {}, admin)).body.affiliates.find(({ id }) => id === rule.affiliateId);
+  assert.deepEqual(updatedAffiliate.productDiscounts, productDiscounts);
+  assert.deepEqual((await call("affiliateMe", { sessionToken: registered.sessionToken }, affiliateSession)).body.productDiscounts, productDiscounts);
+
+  const puzzle = { ...orderArgs, checkoutId: randomUUID(), quantity: 2, productType: "puzzle", expectedCouponDiscountPct: 20 };
+  const puzzleOrder = (await call("createOrder", puzzle, owner)).body.order;
+  assert.equal(puzzleOrder.productPrice, 118000);
+  assert.equal(puzzleOrder.discountAmount, 23600);
+  assert.equal(puzzleOrder.total, 94400);
+  const [puzzleCommission] = await sql`SELECT commission_pct, net_subtotal, amount FROM commissions WHERE order_id = ${puzzleOrder.id}`;
+  assert.deepEqual(puzzleCommission, { commission_pct: 30, net_subtotal: 94400, amount: 28320 });
+
+  const placemat = (await call("createOrder", {
+    ...orderArgs, checkoutId: randomUUID(), quantity: 1, productType: "placemat", expectedCouponDiscountPct: 0,
+  }, owner)).body.order;
+  assert.equal(placemat.discountAmount, 0);
+  assert.equal(placemat.affiliateId, rule.affiliateId);
+
+  await call("adminSetAffiliateProductDiscount", { ...rule, discountPct: null }, admin);
+  assert.equal(await rate("puzzle"), 10);
+  const stale = await call("createOrder", { ...puzzle, checkoutId: randomUUID() }, { ...owner, expected: 400 });
+  assert.match(stale.body.error, /Diskon kupon berubah/);
+  assert.equal((await call("createOrder", puzzle, owner)).body.order.discountAmount, 23600);
+  console.log("PASS admin-only per-product coupon rates, 0%, standard fallback, quantity, commission, and stale totals");
+
 } finally {
   await sql.end();
   await closeDatabase();

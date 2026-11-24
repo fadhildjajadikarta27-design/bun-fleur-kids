@@ -758,7 +758,7 @@ export function Checkout({
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPct: number } | null>(null);
   const [couponMsg, setCouponMsg] = useState("");
   const validate = useMutation({
-    mutationFn: async (code: string) => await api.validateCoupon({ code }),
+    mutationFn: async (code: string) => await api.validateCoupon({ code, productType: selection.product }),
     onError: (e) => {
       setAppliedCoupon(null);
       setCouponMsg(e.message);
@@ -801,6 +801,7 @@ export function Checkout({
         tshirtSize: selection.product === "tshirt" ? selection.tshirtSize : "",
         childName: selection.childName.trim(),
         couponCode: appliedCoupon?.code ?? "",
+        expectedCouponDiscountPct: appliedCoupon?.discountPct,
         customerName: customerName.trim(),
         whatsapp: whatsapp.trim(),
         email: email.trim(),
@@ -809,11 +810,13 @@ export function Checkout({
       }),
     onError: (e) => {
       setError(e.message);
+      if (appliedCoupon) validate.mutate(appliedCoupon.code);
       void queryClient.invalidateQueries({ queryKey: ["shopConfig"] });
     },
     onSuccess: (res) => onPlaced(res.order),
   });
   const submit = () => {
+    if (validate.isPending || create.isPending) return;
     setError("");
     if (project.id == null) {
       setError("Karya ini belum tersimpan. Kembali ke Studio Mewarnai sebentar supaya tersimpan, lalu coba lagi.");
@@ -921,6 +924,7 @@ export function Checkout({
                   id="co-coupon"
                   {...FIELDS.validateCoupon.code}
                   value={couponInput}
+                  disabled={validate.isPending || create.isPending}
                   onChange={(e) => {
                     setCouponInput(e.target.value.toUpperCase());
                     setAppliedCoupon(null);
@@ -931,7 +935,7 @@ export function Checkout({
                 />
                 <button
                   type="button"
-                  disabled={validate.isPending || couponInput.trim().length < 3}
+                  disabled={create.isPending || validate.isPending || couponInput.trim().length < 3}
                   onClick={() => validate.mutate(couponInput.trim())}
                   className="rounded-full bg-olive px-5 py-2.5 font-display text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -949,7 +953,7 @@ export function Checkout({
           {error && <p className="mt-3 text-sm font-bold text-berry" role="alert">{error}</p>}
           <button
             type="submit"
-            disabled={create.isPending}
+            disabled={create.isPending || validate.isPending}
             className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink shadow transition hover:bg-tang-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
             {create.isPending ? "Membuat pesanan…" : "Buat Pesanan"}
