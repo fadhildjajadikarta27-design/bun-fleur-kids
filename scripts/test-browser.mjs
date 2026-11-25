@@ -10,6 +10,17 @@ try {
   page.setDefaultTimeout(15000);
   const errors=[];
   page.on("pageerror", e=>errors.push(e.message));
+  await page.goto(base);
+  await page.getByRole("combobox",{name:"Bahasa website"}).selectOption("en");
+  await page.getByRole("button",{name:"Start Coloring",exact:true}).first().waitFor();
+  await page.reload();
+  assert.equal(await page.getByRole("combobox",{name:"Website language"}).inputValue(),"en");
+  await page.getByRole("combobox",{name:"Website language"}).selectOption("id");
+  await page.getByRole("button",{name:"Mulai Mewarnai",exact:true}).first().click();
+  await page.getByRole("heading",{name:"Pilih Karakter",exact:true}).waitFor();
+  await page.getByRole("button",{name:"Keranjang (0)",exact:true}).click();
+  await page.getByText("Keranjang kosong",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"Tutup",exact:true}).click();
   await page.goto(base+"/#/kreasiku");
   await page.getByRole("heading",{name:"Kreasiku",exact:true}).waitFor();
   // Ensure the server has issued the anonymous visitor cookie before seeding a project.
@@ -29,6 +40,9 @@ try {
   console.log("PASS mobile canvas zoom and right palette");
   await page.goto(base+"/#/kreasiku");
   await artwork.getByRole("button",{name:"Jadikan Nyata — Pesan Produk"}).click();
+  await page.getByRole("heading",{name:"Pilih latar karyamu",exact:true}).waitFor();
+  await page.getByRole("button",{name:"Taman",exact:true}).click();
+  await page.getByRole("button",{name:"Lanjut ke pilihan produk",exact:true}).click();
   const productGrid=page.getByRole("region",{name:"Pilih bentuk kreasimu"});
   const productCards=productGrid.locator("article");
   await productCards.nth(13).waitFor({state:"visible"});
@@ -41,25 +55,29 @@ try {
     const input=page.locator("#order-child-name");
     await preview.waitFor({state:"visible"});
     await input.fill("");
-    assert.ok(await preview.locator('path[fill="#AB57CC"]').count()>0,name+" artwork color missing");
-    assert.equal(await preview.locator('rect[stroke-dasharray="1 7"]').count(),0,name+" blank name frame");
-    assert.doesNotMatch(await preview.textContent(),/\bADAM\b|QA BROWSER/i,name+" unexpected name");
-    const backgrounds=page.getByRole("radiogroup",{name:"Pilihan background"});
-    assert.equal(await backgrounds.getByRole("radio").count(),10);
-    await backgrounds.getByRole("radio",{name:"Luar Angkasa",exact:true}).click();
-    assert.ok(await preview.locator('image[data-background][href="/backgrounds/05_Luar_Angkasa.png"]').count()>0,name+" background missing");
-    await backgrounds.getByRole("radio",{name:"Tanpa background",exact:true}).click();
-    assert.equal(await preview.locator('image[data-background]').count(),0,name+" background removal failed");
-    await input.fill("QA PERSONA");
-    assert.match(await preview.textContent(),/QA PERSONA/i,name+" personalized name missing");
+    if(name==="Poster"){
+      assert.ok(await preview.locator('path[fill="#AB57CC"]').count()>0,"Poster artwork color missing");
+      assert.ok(await preview.locator('svg[viewBox="0 0 1200 900"]').count()>0,"Poster must be landscape");
+      assert.ok(await preview.locator('image[data-background][href="/backgrounds/02_Taman.png"]').count()>0,"Poster background missing");
+      assert.doesNotMatch(await preview.textContent(),/\bADAM\b|QA BROWSER/i,"Blank name must not show dummy name");
+      await input.fill("QA PERSONA");
+      assert.match(await preview.textContent(),/QA PERSONA/i,"Poster personalized name missing");
+    } else {
+      const photo=preview.locator('img[src^="/products/"]');
+      await photo.waitFor({state:"visible"});
+      await photo.evaluate(img=>img.decode());
+      const src=await photo.getAttribute("src");
+      await input.fill("QA PERSONA");
+      assert.equal(await photo.getAttribute("src"),src,"Original product photo must remain unchanged");
+      assert.equal(await input.inputValue(),"QA PERSONA");
+    }
     await page.getByRole("button",{name:"Semua pilihan",exact:false}).click();
     await productCards.nth(13).waitFor({state:"visible"});
   }
-  console.log("PASS all 14 product previews use artwork color, optional name, no dummy name or empty plaque");
+  console.log("PASS 14 products: landscape poster uses real artwork and selected background; original photos preserved");
   async function addProduct(name){
     const card=page.locator("article").filter({has:page.getByRole("heading",{name,exact:true})});
     await card.getByRole("button",{name:"Pilih & Tambah ke Keranjang"}).click();
-    if(name==="Poster")await page.getByRole("radio",{name:"Taman",exact:true}).click();
     await page.getByRole("button",{name:"Tambah ke Keranjang",exact:true}).click();
   }
   await addProduct("Poster");
@@ -68,7 +86,8 @@ try {
   await page.getByRole("heading",{name:"Keranjang & Pemesanan (2)"}).waitFor();
   await page.getByText("Paket Little Artist aktif",{exact:false}).waitFor();
   await page.reload();
-  await page.getByRole("button",{name:"Lanjutkan Keranjang (2)"}).click();
+  await page.getByRole("button",{name:"Keranjang (2)",exact:true}).click();
+  await page.getByRole("button",{name:"Lihat Keranjang",exact:true}).click();
   await page.getByRole("heading",{name:"Keranjang & Pemesanan (2)"}).waitFor();
   await page.getByText("Paket Little Artist aktif",{exact:false}).waitFor();
   await page.locator("#co-name").fill("QA Browser Parent");
@@ -89,7 +108,13 @@ try {
   assert.equal(order.total,74900);
   assert.equal(order.items.length,2);
   assert.equal(order.gift.recipient,"QA Penerima");
-  console.log("PASS mobile two-product cart, reload restore, bundle, gift and checkout");
+  await page.getByRole("button",{name:"Sudah Checkout di Shopee"}).click();
+  const submitShopee=page.getByRole("button",{name:"Submit Konfirmasi",exact:true});
+  assert.equal(await submitShopee.isDisabled(),true);
+  await page.getByLabel("Nama akun Shopee").fill("qa-browser-shopee");
+  await submitShopee.click();
+  await page.getByRole("heading",{name:"Checkout Shopee Dilaporkan"}).waitFor();
+  console.log("PASS mobile cart, language, character picker, reload restore, checkout and Shopee confirmation");
   await page.goto(base+"/#/birthday");
   await page.getByLabel("Nama acara",{exact:true}).fill("QA Browser Birthday");
   const date=new Date();date.setUTCDate(date.getUTCDate()+40);

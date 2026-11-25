@@ -174,10 +174,12 @@ const orderOut = z.object({
   gift:giftOut.nullable(),
   couponCode: z.string(),
   affiliateId: z.number().nullable(),
+  affiliateSelfOrder: z.boolean(),
   discountAmount: z.number(),
   uniqueCode: z.number(),
   payState: z.enum(["awaiting", "waiting_verification", "verified", "rejected", "unmatched", "refunded"]),
   payableTotal: z.number(),
+  shopeeUsername: z.string(),
   paymentConfirmedAt: z.string().nullable(),
   shippingCost: z.number().nullable(),
   total: z.number(),
@@ -243,10 +245,12 @@ function orderToOut(row: OrderRow): z.infer<typeof orderOut> {
     gift:row.gift,
     couponCode: row.couponCode,
     affiliateId: row.affiliateId,
+    affiliateSelfOrder: row.affiliateSelfOrder,
     discountAmount: row.discountAmount,
     uniqueCode: row.uniqueCode,
     payState: row.payState,
     payableTotal: row.total + row.uniqueCode,
+    shopeeUsername: row.shopeeUsername,
     paymentConfirmedAt: row.paymentConfirmedAt ? row.paymentConfirmedAt.toISOString() : null,
     shippingCost: row.shippingCost,
     total: row.total,
@@ -428,7 +432,7 @@ async function syncCommission(
   order: OrderRow,
   event: "created" | "verified" | "completed" | "reversed",
 ): Promise<void> {
-  if (!order.affiliateId) return;
+  if (order.affiliateSelfOrder || !order.affiliateId) return;
   await db.select({ id: schema.affiliates.id }).from(schema.affiliates).where(eq(schema.affiliates.id, order.affiliateId)).for("update");
   const rows = await db.select().from(schema.commissions).where(eq(schema.commissions.orderId, order.id)).limit(1);
   const existing = rows[0];
@@ -1040,6 +1044,10 @@ export const Actions = {
         const totalQuantity = requested.reduce((n, item) => n + item.quantity, 0);
         if (totalQuantity > 140) throw new Error("Maksimal 140 unit per pesanan.");
         const prices = await catalogPrices(db);
+        const normalizedBuyer = normalizeWa(digits);
+        const [buyerAffiliate] = await db.select({ id: schema.affiliates.id }).from(schema.affiliates)
+          .where(sql`regexp_replace(regexp_replace(${schema.affiliates.whatsapp}, '[^0-9]', '', 'g'), '^62', '0') = ${normalizedBuyer}`).limit(1);
+        const affiliateSelfOrder = Boolean(buyerAffiliate);
         let affiliate: AffiliateRow | null = null;
         const couponInput = args.couponCode.trim().toUpperCase();
         if (couponInput) {
@@ -1121,6 +1129,7 @@ export const Actions = {
             productPrice: price,
             couponCode: affiliate ? affiliate.couponCode : "",
             affiliateId: affiliate ? affiliate.id : null,
+            affiliateSelfOrder,
             discountAmount,
             uniqueCode,
             payState: "awaiting",
@@ -1188,6 +1197,7 @@ export const Actions = {
       limit: z.number().int().positive().max(100).default(20),
       offset: z.number().int().min(0).max(100000).default(0),
       scope: z.enum(["all", "payment", "fulfillment"]).default("all"),
+      buyerType: z.enum(["all", "self", "referral", "organic"]).default("all"),
     }),
     response: z.object({
       orders: z.array(orderOut), orderCount: z.number(), paidCount: z.number(),
@@ -1200,7 +1210,11 @@ export const Actions = {
         : args.scope === "fulfillment"
           ? and(eq(schema.orders.paymentStatus, "paid"), inArray(schema.orders.orderStatus, ["paid", "confirmed", "design_review", "production", "ready_to_ship", "shipped"]))
           : undefined;
-      const scope=and(sql`${schema.orders.archivedAt} IS NULL`,scopeFilter);
+      const buyerFilter = args.buyerType === "self" ? eq(schema.orders.affiliateSelfOrder, true)
+        : args.buyerType === "referral" ? and(eq(schema.orders.affiliateSelfOrder, false), sql`${schema.orders.affiliateId} IS NOT NULL`)
+        : args.buyerType === "organic" ? and(eq(schema.orders.affiliateSelfOrder, false), sql`${schema.orders.affiliateId} IS NULL`)
+        : undefined;
+      const scope=and(sql`${schema.orders.archivedAt} IS NULL`,scopeFilter,buyerFilter);
       const rows = await db
         .select()
         .from(schema.orders)
@@ -1402,7 +1416,7 @@ export const Actions = {
       const row = rows[0];
       if (!row) return { order: null };
       if (normalizeWa(row.whatsapp) !== normalizeWa(args.whatsapp)) return { order: null };
-      return { order: orderToOut({ ...row, customerName: "", email: "", address: "", notes: "", gift:null, affiliateId: null }) };
+      return { order: orderToOut({ ...row, customerName: "", email: "", address: "", notes: "", gift:null, affiliateId: null, affiliateSelfOrder: false }) };
     },
   }),
 
@@ -1449,6 +1463,7 @@ export const Actions = {
     request: z.object({
       code: z.string().trim().min(4).max(24),
       whatsapp: z.string().trim().min(9).max(20),
+      shopeeUsername: z.string().trim().min(1, "Nama akun Shopee wajib diisi.").max(80).regex(/^[^\p{Cc}]+$/u, "Nama akun Shopee tidak valid.").optional(),
       proof: z.object({
         mime: z.enum(["image/jpeg", "image/png"]),
         data: z.base64().min(32).max(1000000),
@@ -1471,6 +1486,18 @@ export const Actions = {
         if (normalizeWa(row.whatsapp) !== normalizeWa(args.whatsapp)) return { ok: false, payState: "not_found" as const };
         if (row.payState === "verified") return { ok: true, payState: "verified" as const };
         if (row.orderStatus === "cancelled" || row.payState === "rejected" || row.payState === "refunded") return { ok: false, payState: row.payState };
+        if (args.shopeeUsername !== undefined) {
+          if (args.proof) throw new Error("Pilih satu metode pembayaran.");
+          if (row.shopeeUsername && row.shopeeUsername !== args.shopeeUsername) throw new Error("Nama akun Shopee sudah tercatat. Hubungi admin untuk koreksi.");
+          if (!row.shopeeUsername && row.payState !== "awaiting") throw new Error("Pembayaran sudah dilaporkan melalui metode lain. Hubungi admin.");
+          if (row.payState === "waiting_verification") return { ok: true, payState: "waiting_verification" as const };
+          const now = new Date();
+          await db.update(schema.orders).set({ shopeeUsername: args.shopeeUsername, payState: "waiting_verification", paymentStatus: "waiting_verification", paymentConfirmedAt: now, updatedAt: now }).where(eq(schema.orders.id, row.id));
+          await audit(db, row.affiliateId, "payment.shopee_reported", `Pesanan ${row.code} — pelanggan melaporkan checkout Shopee.`);
+          ctx.invalidateQueries();
+          return { ok: true, payState: "waiting_verification" as const };
+        }
+        if (row.shopeeUsername) throw new Error("Checkout Shopee sudah dilaporkan. Jangan bayar ulang melalui QRIS.");
         if (row.checkoutKey && row.shippingCost === null) throw new Error("Tunggu ongkir dikonfirmasi sebelum melakukan pembayaran.");
         if (args.proof) {
           const { mime, data } = args.proof;
@@ -1533,12 +1560,17 @@ export const Actions = {
           if (row.payState === "refunded" || row.orderStatus === "cancelled") {
             throw new Error("Pesanan ini sudah dibatalkan atau direfund.");
           }
-          const reference = args.paymentReference.toUpperCase();
-          if (!/^[A-Z0-9-]{4,80}$/.test(reference)) throw new Error("Masukkan nomor referensi dari mutasi QRIS.");
-          const [used] = await db.select({ id: schema.orders.id }).from(schema.orders)
-            .where(eq(schema.orders.paymentReference, reference)).limit(1);
-          const [birthdayUsed] = await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,reference)).limit(1);
-          if (used || birthdayUsed) throw new Error("Nomor referensi QRIS sudah dipakai untuk pesanan lain.");
+          // Shopee orders are manually matched by account name; no marketplace order number is required.
+          const reference = row.shopeeUsername ? null : args.paymentReference.toUpperCase();
+          if (reference !== null) {
+            if (!/^[A-Z0-9-]{4,80}$/.test(reference)) throw new Error("Masukkan nomor referensi dari mutasi QRIS.");
+            const [used] = await db.select({ id: schema.orders.id }).from(schema.orders)
+              .where(eq(schema.orders.paymentReference, reference)).limit(1);
+            const [birthdayUsed] = await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,reference)).limit(1);
+            if (used || birthdayUsed) throw new Error("Nomor referensi pembayaran sudah dipakai untuk pesanan lain.");
+          } else if (!["waiting_verification", "unmatched"].includes(row.payState)) {
+            throw new Error("Checkout Shopee belum menunggu verifikasi.");
+          }
           const result = await db
             .update(schema.orders)
             .set({
@@ -1793,7 +1825,8 @@ export const Actions = {
         netSales: sql<number>`sum(${commissions.netSubtotal})`.mapWith(Number).as("net_sales"),
         totalCommission: sql<number>`sum(${commissions.amount})`.mapWith(Number).as("total_commission"),
       }).from(commissions)
-        .where(inArray(commissions.status, ["confirmed", "payable", "paid"]))
+        .innerJoin(schema.orders, eq(schema.orders.id, commissions.orderId))
+        .where(and(inArray(commissions.status, ["confirmed", "payable", "paid"]), eq(schema.orders.affiliateSelfOrder, false)))
         .groupBy(commissions.affiliateId)
         .as("commission_totals");
       const payoutTotals = db.select({
@@ -2580,7 +2613,12 @@ export const Actions = {
           .from(schema.orders).where(inArray(schema.orders.id, recentOrderIds))
         : [];
       const orderById = new Map(orderRows.map((o) => [o.id, o]));
-      const counted = comms.filter((c) => c.status === "confirmed" || c.status === "payable" || c.status === "paid");
+      // Preserve historical payouts in the wallet, but exclude self orders from sales and KPI.
+      const selfOrders = await db.select({ id: schema.orders.id }).from(schema.orders)
+        .innerJoin(schema.commissions, eq(schema.commissions.orderId, schema.orders.id))
+        .where(and(eq(schema.commissions.affiliateId, affiliate.id), eq(schema.orders.affiliateSelfOrder, true)));
+      const selfOrderIds = new Set(selfOrders.map(o => o.id));
+      const counted = comms.filter((c) => !selfOrderIds.has(c.orderId) && (c.status === "confirmed" || c.status === "payable" || c.status === "paid"));
       const sum = (list: typeof comms, key: "amount" | "netSubtotal") => list.reduce((s, c) => s + c[key], 0);
       const wallet = {
         pending: sum(comms.filter((c) => c.status === "pending"), "amount"),

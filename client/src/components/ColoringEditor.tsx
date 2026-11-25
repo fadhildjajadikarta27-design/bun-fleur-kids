@@ -1,3 +1,4 @@
+import { useT } from "../lib/i18n";
 // The coloring studio: a structured SVG artwork whose regions fill with
 // the shared color map, plus a freehand brush layer clipped to the
 // artwork, undo/redo, zoom & pan, and the personalized name plaque.
@@ -394,6 +395,7 @@ export function ColoringEditor({
   nameAlign?: "left" | "center" | "right";
   onChange: (colors: Record<string, string>, strokes: Stroke[]) => void;
 }) {
+  const tr = useT();
   const [tool, setTool] = useState<Tool>("scribble");
   const [palette, setPalette] = useState<"vibrant" | "pastel">("vibrant");
   const [color, setColor] = useState("#3E92CC");
@@ -845,22 +847,22 @@ export function ColoringEditor({
 
       {/* Tools */}
       <div className="mt-3 flex items-stretch gap-2 overflow-x-auto overscroll-x-contain pb-2 sm:flex-wrap sm:justify-center sm:overflow-visible">
-        {toolBtn("scribble", "Coret & Isi", (
+        {toolBtn("scribble", tr("Coret & Isi"), (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 17 C6 10 9 20 12 12 C14 7 17 15 21 8" /><path d="M4 21 H20" /></svg>
         ))}
-        {toolBtn("brush", "Kuas", (
+        {toolBtn("brush", tr("Kuas"), (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 20 C4 16 6 14 9 13 L20 2 L22 4 L11 15 C10 18 8 20 4 20 Z" /></svg>
         ))}
-        {toolBtn("eraser", "Penghapus", (
+        {toolBtn("eraser", tr("Penghapus"), (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M7 15 L16 6 L20 10 L13 17 H9 L5 13 Z" /><path d="M9 21 H21" /></svg>
         ))}
-        {toolBtn("move", "Geser", (
+        {toolBtn("move", tr("Geser"), (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 3 V21 M3 12 H21 M12 3 L9 6 M12 3 L15 6 M12 21 L9 18 M12 21 L15 18 M3 12 L6 9 M3 12 L6 15 M21 12 L18 9 M21 12 L18 15" /></svg>
         ))}
         <button
           type="button"
           aria-pressed={soundOn}
-          aria-label={soundOn ? "Matikan suara krayon" : "Nyalakan suara krayon"}
+          aria-label={soundOn ? tr("Matikan suara krayon") : tr("Nyalakan suara krayon")}
           onClick={() => {
             const next = !soundOn;
             setSoundOn(next);
@@ -876,25 +878,25 @@ export function ColoringEditor({
           ) : (
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9 H3 v6 h3 l5 4 Z" /><path d="m16 9 6 6 M22 9 l-6 6" /></svg>
           )}
-          {soundOn ? "Suara Nyala" : "Suara Mati"}
+          {soundOn ? tr("Suara Nyala") : tr("Suara Mati")}
         </button>
         <div className="flex items-center gap-1">
-          <button type="button" aria-label="Urungkan" disabled={undoRef.current.length === 0} onClick={undo} className="rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)] disabled:opacity-40">
-            ↩ Urungkan
+          <button type="button" aria-label={tr("Urungkan")} disabled={undoRef.current.length === 0} onClick={undo} className="rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)] disabled:opacity-40">
+            {tr("↩ Urungkan")}
           </button>
-          <button type="button" aria-label="Ulangi" disabled={redoRef.current.length === 0} onClick={redo} className="rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)] disabled:opacity-40">
+          <button type="button" aria-label={tr("Ulangi")} disabled={redoRef.current.length === 0} onClick={redo} className="rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)] disabled:opacity-40">
             Ulangi ↪
           </button>
         </div>
-        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Zoom kanvas">
-          <button type="button" aria-label="Perkecil gambar" disabled={zoom <= MIN_ART_ZOOM}
+        <div className="flex shrink-0 items-center gap-1" role="group" aria-label={tr("Zoom kanvas")}>
+          <button type="button" aria-label={tr("Perkecil gambar")} disabled={zoom <= MIN_ART_ZOOM}
             onClick={() => zoomAt(zoom - 0.25)}
             className="min-h-11 min-w-11 touch-manipulation rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-lg font-bold ring-1 ring-[var(--border)] disabled:opacity-40">−</button>
           <span className="min-w-12 text-center font-display text-xs font-bold text-[var(--dim)]" aria-live="polite">{Math.round(zoom * 100)}%</span>
-          <button type="button" aria-label="Perbesar gambar" disabled={zoom >= 4}
+          <button type="button" aria-label={tr("Perbesar gambar")} disabled={zoom >= 4}
             onClick={() => zoomAt(zoom + 0.25)}
             className="min-h-11 min-w-11 touch-manipulation rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-lg font-bold ring-1 ring-[var(--border)] disabled:opacity-40">+</button>
-          <button type="button" aria-label="Tampilkan keseluruhan gambar"
+          <button type="button" aria-label={tr("Tampilkan keseluruhan gambar")}
             onClick={() => applyView({ zoom: 1, pan: { x: 0, y: 0 } })}
             className="min-h-11 touch-manipulation rounded-2xl bg-[var(--surface)] px-3 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)]">
             Paskan
@@ -913,7 +915,7 @@ export function ColoringEditor({
           }}
           className={`rounded-2xl px-3 py-2 font-display text-sm font-bold ring-1 ${confirmReset ? "bg-berry text-white ring-berry" : "bg-[var(--surface)] ring-[var(--border)]"}`}
         >
-          {confirmReset ? "Ketuk lagi untuk menghapus semua" : "Mulai ulang"}
+          {confirmReset ? tr("Ketuk lagi untuk menghapus semua") : tr("Mulai ulang")}
         </button>
       </div>
 
@@ -921,7 +923,7 @@ export function ColoringEditor({
       {(tool === "brush" || tool === "eraser") && (
         <div className="mt-3 flex items-center justify-center gap-3">
           <label htmlFor="brush-size" className="font-display text-sm font-bold">
-            {tool === "brush" ? "Ukuran krayon" : "Ukuran penghapus"}
+            {tool === "brush" ? tr("Ukuran krayon") : tr("Ukuran penghapus")}
           </label>
           <input
             id="brush-size"
@@ -942,8 +944,8 @@ export function ColoringEditor({
 
       </div>
       {/* Palettes */}
-      <aside className="min-w-0 rounded-2xl bg-[var(--surface)] p-1.5 sm:p-2" aria-label="Pilihan warna">
-        <div className="mb-2 flex flex-col gap-1" role="tablist" aria-label="Palet warna">
+      <aside className="min-w-0 rounded-2xl bg-[var(--surface)] p-1.5 sm:p-2" aria-label={tr("Pilihan warna")}>
+        <div className="mb-2 flex flex-col gap-1" role="tablist" aria-label={tr("Palet warna")}>
           <button
             type="button"
             role="tab"
@@ -951,7 +953,7 @@ export function ColoringEditor({
             onClick={() => setPalette("vibrant")}
             className={`rounded-xl px-1 py-2 font-display text-[10px] sm:text-xs font-bold ${palette === "vibrant" ? "bg-tang-deep text-ink" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
           >
-            Krayon cerah
+            {tr("Krayon cerah")}
           </button>
           <button
             type="button"
@@ -960,10 +962,10 @@ export function ColoringEditor({
             onClick={() => setPalette("pastel")}
             className={`rounded-xl px-1 py-2 font-display text-[10px] sm:text-xs font-bold ${palette === "pastel" ? "bg-tang-deep text-ink" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
           >
-            Pastel lembut
+            {tr("Pastel lembut")}
           </button>
         </div>
-        <div className="grid grid-cols-1 justify-items-center gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Warna krayon">
+        <div className="grid grid-cols-1 justify-items-center gap-2 sm:grid-cols-2" role="radiogroup" aria-label={tr("Warna krayon")}>
           {paletteColors.map((c) => (
             <button
               key={c.hex}

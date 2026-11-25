@@ -18,10 +18,10 @@ try{
   await tx`INSERT INTO affiliates(name,email,whatsapp,coupon_code,status,pin_hash,created_at,updated_at)
   SELECT 'QA '||i,'qa'||i||'@example.test','08123456'||lpad(i::text,4,'0'),'QA'||i,'active','synthetic-test-hash',now(),now() FROM generate_series(1,12) i`;
   await tx`INSERT INTO orders(code,template_id,product_type,product_price,total,customer_name,whatsapp,email,address,unique_code,created_at,updated_at)
-  SELECT 'QA-OLD-'||i,'pb-dino','poster',24900,24900,'QA','081234560000','qa@example.test','Test only',i,now(),now() FROM generate_series(1,3) i`;
+  SELECT 'QA-OLD-'||i,'pb-dino','poster',24900,24900,'QA',CASE WHEN i=1 THEN '081234560001' WHEN i=2 THEN '+62 81234560002' ELSE '081234560099' END,'qa@example.test','Test only',i,now(),now() FROM generate_series(1,3) i`;
   await tx`INSERT INTO affiliate_sessions(affiliate_id,token,expires_at,created_at) SELECT 1,'qa-session-'||i,now()+interval '1 day',now() FROM generate_series(1,20) i`;
   await tx`INSERT INTO affiliate_invitations(affiliate_id,token,expires_at,created_at) VALUES(1,'qa-invite',now()+interval '1 day',now())`;
-  await tx`INSERT INTO commissions(order_id,affiliate_id,net_subtotal,commission_pct,amount,status,created_at,updated_at) VALUES(1,1,24900,30,7470,'paid',now(),now())`;
+  await tx`INSERT INTO commissions(order_id,affiliate_id,net_subtotal,commission_pct,amount,status,created_at,updated_at) VALUES(1,1,24900,30,7470,'paid',now(),now()),(2,2,24900,30,7470,'pending',now(),now())`;
  });
  const oldAff=await db`SELECT id,name,email,whatsapp,coupon_code,status,pin_hash FROM affiliates ORDER BY id`;
  const oldOrders=await db`SELECT id,code,product_type,product_price,total,pay_state,unique_code FROM orders ORDER BY id`;
@@ -31,6 +31,9 @@ try{
  assert.equal((await db`SELECT count(*)::int AS n FROM affiliate_sessions WHERE revoked_at IS NOT NULL AND token LIKE 'retired:%'`)[0].n,20);
  assert.equal((await db`SELECT count(*)::int AS n FROM affiliate_invitations WHERE revoked_at IS NOT NULL AND token LIKE 'retired:%'`)[0].n,1);
  assert.equal((await db`SELECT paid_amount FROM commissions WHERE order_id=1`)[0].paid_amount,7470);
+ assert.deepEqual((await db`SELECT affiliate_self_order FROM orders ORDER BY id`).map(o=>o.affiliate_self_order),[true,true,false]);
+ assert.deepEqual((await db`SELECT status FROM commissions ORDER BY order_id`).map(c=>c.status),["paid","reversed"]);
+ assert.equal((await db`SELECT count(*)::int AS n FROM affiliate_audit WHERE action='commission.self_order_reversed'`)[0].n,1);
  assert.equal((await db`SELECT count(*)::int AS n FROM orders WHERE quantity=1 AND items='[]'::jsonb AND bundle_name='' AND gift IS NULL`)[0].n,3);
  const applied=await db`SELECT name FROM __port_migrations ORDER BY name`;
  assert.deepEqual(applied.map(x=>x.name),files);

@@ -18,3 +18,11 @@ Status 24 November 2026 WIB. Branch GitHub `development-audit` adalah branch rev
 2. Rollback aplikasi tidak perlu menghapus tabel dan kolom baru. Pertahankan snapshot pesanan, referensi pembayaran, dan ledger yang ditulis oleh versi baru. Revisi mundur database hanya dari backup terverifikasi dengan rencana rekonsiliasi transaksi baru.
 3. Versi lama tidak mengenali dua SKU baru dan tidak memakai token terenkripsi. Sebelum rollback penuh, batasi sementara workflow yang terdampak dan rekonsiliasi pesanan Puzzle/Alas Makan, harga override, serta payout yang sedang berjalan. Pemulihan token plaintext lama bukan bagian dari rollback.
 4. Setelah rollback, verifikasi status pesanan dan ledger serta cocokkan mutasi merchant. Catat perubahan runtime dan database aktual bersama operator.
+
+## Rilis 26 November — fitur baru
+
+- Jalankan CI audit-only pada commit kandidat. Jangan merge atau deploy bila satu langkah gagal.
+- Sebelum deployment production, operator wajib membackup dan memeriksa migration journal, kemudian menjalankan migrasi belum diterapkan 0023, 0024, 0025 (juga migrasi sebelumnya bila belum tercatat) dalam satu transaksi dengan advisory lock. Jangan jalankan ulang migration yang tercatat.
+- Review daftar order lama yang cocok dengan nomor affiliate, komisi belum cair, payout requested/approved, serta payout paid. Payout lama tidak dihapus; permintaan yang melebihi saldo setelah reversal wajib ditinjau admin sebelum dibayar.
+- Uji bahwa laporan checkout Shopee tidak otomatis lunas, username wajib, admin tidak membutuhkan nomor pesanan Shopee, dan QRIS masih memerlukan referensi unik.
+- UI bahasa Inggris merupakan terjemahan bertahap; nama/deskripsi karakter dan halaman admin/affiliate yang belum diterjemahkan memakai bahasa Indonesia sebagai fallback.
