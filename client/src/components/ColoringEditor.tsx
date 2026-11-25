@@ -44,6 +44,7 @@ export function ArtworkSvg({
   svgRef,
   showLabel = true,
   backgroundId,
+  landscape = false,
   onRegionTap,
   children,
 }: {
@@ -58,11 +59,17 @@ export function ArtworkSvg({
   svgRef?: React.RefObject<SVGSVGElement | null>;
   showLabel?: boolean;
   backgroundId?: string;
+  landscape?: boolean;
   onRegionTap?: (regionId: string) => void;
   children?: React.ReactNode;
 }) {
   const clipId = useId();
   const [vw, vh] = template.viewBox;
+  const width = landscape ? 1200 : vw;
+  const height = landscape ? 900 : vh;
+  const scale = landscape ? Math.min(width * 0.76 / vw, height * 0.72 / vh) : 1;
+  const offsetX = (width - vw * scale) / 2;
+  const offsetY = landscape ? (height - vh * scale) / 2 + height * 0.06 : 0;
   const font = NAME_FONTS.find((f) => f.id === nameFont) ?? NAME_FONTS[0]!;
   const displayName = name.trim();
   const nameSize = fitFontSize(displayName, template.label.w, template.label.h);
@@ -76,7 +83,7 @@ export function ArtworkSvg({
   return (
     <svg
       ref={svgRef}
-      viewBox={`0 0 ${vw} ${vh}`}
+      viewBox={`0 0 ${width} ${height}`}
       className="h-auto w-full"
       role="img"
       aria-label={`Halaman mewarnai ${template.name}`}
@@ -89,9 +96,11 @@ export function ArtworkSvg({
           )}
         </clipPath>
       </defs>
-      {backgroundUrl(backgroundId) && <image data-background="true" href={backgroundUrl(backgroundId)} x={0} y={0} width={vw} height={vh} preserveAspectRatio="xMidYMid slice" pointerEvents="none" />}
+      {backgroundUrl(backgroundId) && <image data-background="true" href={backgroundUrl(backgroundId)} x={0} y={0} width={width} height={height} preserveAspectRatio="xMidYMid meet" pointerEvents="none" />}
+      {landscape && <rect x={0} y={0} width={width} height={height} fill={backgroundId ? "none" : "#FFFFFF"} />}
+      <g transform={`translate(${offsetX} ${offsetY}) scale(${scale})`}>
       {/* Name plaque behind the artwork's label area */}
-      {showLabel && displayName && <rect
+      {!landscape && showLabel && displayName && <rect
         x={template.label.x - 8}
         y={template.label.y - 4}
         width={template.label.w + 16}
@@ -196,6 +205,7 @@ export function ArtworkSvg({
         </text>
       )}
       {children}
+      </g>
     </svg>
   );
 }

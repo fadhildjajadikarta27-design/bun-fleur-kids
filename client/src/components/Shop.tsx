@@ -21,14 +21,13 @@ import { NAME_FONTS, type TemplateDef } from "../lib/model";
 import { getTemplate } from "../lib/registry";
 import { buildCustomTemplate, parseCustomDef } from "../lib/custom";
 import { buildPillowPdf, downloadBlob } from "../lib/pdf";
-import { papercraftSampleUrl } from "../papercraft-sample";
 import { logoUrl } from "../assets-inline";
 import { ArtworkSvg, type Stroke } from "./ColoringEditor";
 import { ModelViewer } from "./ModelViewer";
 import { PillowViewer } from "./PillowViewer";
 import { officialQrisUrl } from "../official-qris";
 import { bestBundle } from "../../../server/src/bundles";
-import { BACKGROUNDS, backgroundUrl } from "../../../server/src/backgrounds";
+import { BACKGROUNDS } from "../../../server/src/backgrounds";
 
 export type OrderOut = ApiResponse<typeof api, "listOrders">["orders"][number];
 function linesOf(order: OrderOut): OrderOut["items"] {
@@ -124,18 +123,12 @@ function basePrice(cfg: ApiResponse<typeof api, "getShopConfig">, id: ProductId)
 /* ------------------------------ Previews ------------------------------ */
 
 export function PosterPreview({ project, name, large = false }: { project: ShopProject; name: string; large?: boolean }) {
-  return <div className={`mx-auto w-full ${large ? "max-w-sm" : "max-w-[250px]"}`}>
-    <div role="img" aria-label="Pratinjau poster dengan karya dan nama anak" className="rounded-xl bg-[#E7DCCB] p-3">
-      <div className="relative flex aspect-[2/3] flex-col overflow-hidden bg-[#FCF3DE] shadow-md">
-        <ProductDecor />
-        <img src={logoUrl} alt="Bun & Fleur Kids" className="absolute left-[7%] top-[5%] w-[28%] object-contain" />
-        <div className="absolute inset-x-[7%] top-[27%] bottom-[9%] flex items-center justify-center">
-          <div className="w-full"><PersonalArtwork project={project} name={name} /></div>
-        </div>
-      </div>
+  return <figure className={`mx-auto w-full ${large ? "max-w-xl" : ""}`}>
+    <div className="overflow-hidden rounded-lg bg-white ring-1 ring-black/5">
+      <ArtworkSvg landscape template={templateForSnapshot(project)} colors={project.colors} strokes={project.strokes} name={name} message={project.message} nameFont={project.nameFont} nameColor={project.nameColor} nameAlign={project.nameAlign} backgroundId={project.backgroundId} />
     </div>
-    <MockupCaption>Poster dengan karakter, warna, coretan, dan nama pilihan anak</MockupCaption>
-  </div>;
+    <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Desain poster horizontal sesuai karya dan background pilihanmu.</figcaption>
+  </figure>;
 }
 
 export function FigurinePreview({
@@ -242,21 +235,22 @@ export function PapercraftPreview({ project, name, large = false }: { project: S
   </div>;
 }
 
-/** Only public catalog uses example photos, never a customer's product preview.
- * If a new photo has not been installed yet, the example SVG mockup remains visible. */
 const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
   lunchbox: '/products/lunchbox.png', tumbler: '/products/tumbler.png',
   nightlamp: '/products/nightlamp.png', wallclock: '/products/wallclock.png', namestickers: '/products/namestickers.png', rewardchart: '/products/rewardchart.png', kidswatch: '/products/kidswatch.png',
   tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: "/products/papercraft.webp",
   celengan: "/products/celengan.webp", puzzle: "/products/puzzle.webp", placemat: "/products/placemat.webp", growthchart: "/products/growthchart.webp",
 };
-export function CatalogProductPreview({ product, project }: { product: ProductId; project: ShopProject }) {
-  const [failures, setFailures] = useState(0);
-  const src = failures === 0 ? CATALOG_PHOTOS[product] : failures === 1 && product === "papercraft" ? papercraftSampleUrl : undefined;
-  return src ? <figure>
-    <img src={src} alt={`Contoh produk ${PRODUCT_META[product].title}`} loading="lazy" decoding="async" onError={() => setFailures(n=>n+1)} className="mx-auto aspect-square w-full rounded-2xl object-contain" />
-    <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Foto contoh produk; desain pesanan mengikuti hasil mewarnai anak.</figcaption>
-  </figure> : <ProductPreview product={product} project={project} name={project.childName} fabric="Cream" />;
+function OriginalProductPhoto({ product }: { product: ProductId }) {
+  const [failed, setFailed] = useState(false);
+  const src = CATALOG_PHOTOS[product];
+  return <figure>
+    {src && !failed ? <img src={src} alt={`Foto produk ${PRODUCT_META[product].title}`} loading="lazy" decoding="async" onError={() => setFailed(true)} className="mx-auto aspect-square w-full rounded-2xl object-contain" /> : <div className="flex aspect-square items-center justify-center rounded-2xl bg-white p-4 text-center text-sm text-[var(--dim)]">Foto produk belum tersedia</div>}
+    <figcaption className="mt-2 text-center text-xs font-semibold text-[var(--dim)]">Foto contoh produk. Desain pesanan mengikuti karya anak dan pilihan personalisasi.</figcaption>
+  </figure>;
+}
+export function CatalogProductPreview({ product }: { product: ProductId; project: ShopProject }) {
+  return <OriginalProductPhoto key={product} product={product} />;
 }
 
 /** Digital product mockups inspired by the sample photos.
@@ -308,7 +302,7 @@ export function CelenganPreview({ project, name, large = false }: { project: Sho
   </div>;
 }
 
-function FlatProductPreview({ product, project, name, large }: { product: "puzzle" | "placemat"; project: ShopProject; name: string; large: boolean }) {
+export function FlatProductPreview({ product, project, name, large }: { product: "puzzle" | "placemat"; project: ShopProject; name: string; large: boolean }) {
   const puzzle = product === "puzzle";
   return <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
     <div className="rounded-3xl bg-[#EBDCC5] p-4 sm:p-5">
@@ -327,7 +321,7 @@ function FlatProductPreview({ product, project, name, large }: { product: "puzzl
   </div>;
 }
 
-function GrowthChartPreview({ project, name, large }: { project: ShopProject; name: string; large: boolean }) {
+export function GrowthChartPreview({ project, name, large }: { project: ShopProject; name: string; large: boolean }) {
   const chartName = name.trim();
   return <div className={`mx-auto w-full ${large ? "max-w-md" : "max-w-sm"}`}>
     <div className="flex justify-center rounded-3xl bg-[#F2EAE0] p-4">
@@ -360,7 +354,7 @@ function GrowthChartPreview({ project, name, large }: { project: ShopProject; na
   </div>;
 }
 
-function NewPersonalizedPreview({product,project,name,large}:{product:"rewardchart"|"namestickers"|"wallclock"|"nightlamp"|"kidswatch"|"lunchbox"|"tumbler";project:ShopProject;name:string;large:boolean}){
+export function NewPersonalizedPreview({product,project,name,large}:{product:"rewardchart"|"namestickers"|"wallclock"|"nightlamp"|"kidswatch"|"lunchbox"|"tumbler";project:ShopProject;name:string;large:boolean}){
  const label=name.trim();
  const art=(flip=false)=><div className={flip?"-scale-x-100":""}><PersonalArtwork project={project} name="" showLabel={false}/></div>;
  const title=label?<p className="relative z-10 mx-auto max-w-full break-words rounded-full border border-[#89965A] bg-[#FFF8E8] px-2 py-1 text-center font-extrabold leading-tight" style={{color:project.nameColor,fontFamily:fontFamilyOf(project.nameFont),fontSize:large?16:10}}>{label}</p>:null;
@@ -382,18 +376,11 @@ function NewPersonalizedPreview({product,project,name,large}:{product:"rewardcha
  </div><MockupCaption>Personalisasi dari warna dan karakter karya anak</MockupCaption></div>;
 }
 
-export function ProductPreview({ product, project, name, fabric, large = false }: {
+export function ProductPreview({ product, project, name, large }: {
   product: ProductId; project: ShopProject; name: string; fabric: string; large?: boolean;
 }) {
-  if (product === "rewardchart" || product === "namestickers" || product === "wallclock" || product === "nightlamp" || product === "kidswatch" || product === "lunchbox" || product === "tumbler") return <NewPersonalizedPreview product={product} project={project} name={name} large={large} />;
   if (product === "poster") return <PosterPreview project={project} name={name} large={large} />;
-  if (product === "papercraft") return <PapercraftPreview project={project} name={name} large={large} />;
-  if (product === "celengan") return <CelenganPreview project={project} name={name} large={large} />;
-  if (product === "puzzle" || product === "placemat") return <FlatProductPreview product={product} project={project} name={name} large={large} />;
-  if (product === "growthchart") return <GrowthChartPreview project={project} name={name} large={large} />;
-  if (product === "accessory59") return <div className="mx-auto max-w-sm rounded-3xl bg-[#EEF4E4] p-5"><PersonalArtwork project={project} name={name} /><MockupCaption>Aksesori dari pesanan lama</MockupCaption></div>;
-  if (product === "figurine") return <FigurinePreview project={project} height={large ? 320 : 210} />;
-  return <TshirtPreview project={project} name={name} fabric={fabric} large={large} />;
+  return <OriginalProductPhoto key={product} product={product} />;
 }
 
 /* ---------------------------- Masterpiece ---------------------------- */
@@ -601,7 +588,7 @@ export function Customize({
             large
           />
           <p className="mt-2 text-center text-sm font-semibold text-[var(--dim)]">
-            Pratinjau memakai warna persis dari karya anakmu — bukan contoh generik.
+            {selection.product === "poster" ? "Desain poster mengikuti pilihan personalisasi." : "Foto produk tidak berubah saat personalisasi. Nama, background dan hasil mewarnai tetap digunakan untuk pesanan."}
           </p>
         </section>
 
@@ -638,13 +625,8 @@ export function Customize({
             </p>
           </div>
 
-          <fieldset className="mt-5" disabled={nameLocked}><legend className="font-display text-sm font-bold">{tr("Pilih background (opsional)")}</legend>
-            <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label={tr("Pilihan background")}>
-              {[{id:"",label:"Tanpa background"},...BACKGROUNDS].map(b=><button key={b.id} type="button" role="radio" aria-checked={(selection.backgroundId??"")===b.id} onClick={()=>setSelection({...selection,backgroundId:b.id})} className={`overflow-hidden rounded-xl border p-1 text-xs font-bold ${(selection.backgroundId??"")===b.id?"border-olive ring-2 ring-olive":"border-[var(--border)]"}`}>
-                {b.id?<img src={backgroundUrl(b.id)} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-lg object-cover"/>:<div className="aspect-[4/3] rounded-lg bg-white ring-1 ring-black/5"/>}<span className="block py-1">{b.label}</span>
-              </button>)}
-            </div><p className="mt-2 text-xs text-[var(--dim)]">{nameLocked?"Background sama untuk seluruh isi keranjang. Kosongkan keranjang untuk menggantinya.":"Gratis. Pilihan background tidak mengubah warna karya."}</p>
-          </fieldset>
+          <p className="mt-4 text-xs font-semibold text-[var(--dim)]">Background: {BACKGROUNDS.find(b => b.id === selection.backgroundId)?.label ?? "Tanpa background"}. Dipilih sebelum masuk katalog.</p>
+
           {selection.product==="kidswatch"&&<section className="mt-4 rounded-2xl bg-[#EEF4E4] p-3 text-sm"><p className="font-bold text-olive-deep">{tr("Garansi 1 tahun ganti baru")}</p><p>Untuk kerusakan mesin, layar, tombol atau cacat produksi dalam 12 bulan sejak produk diterima. Hubungi admin dengan nomor pesanan dan bukti foto/video. Tidak termasuk kehilangan, benturan, salah penggunaan, atau baterai habis normal.</p></section>}
           {selection.product === "tshirt" && (
             <>
@@ -1703,6 +1685,7 @@ export function OrderTracking() {
               <div className="sr-only" aria-hidden>
                 <ArtworkSvg
                   svgRef={exportRef}
+                  landscape
                   template={templateForSnapshot(snap)}
                 backgroundId={snap.backgroundId}
                   colors={snap.colors}
@@ -1827,6 +1810,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
         <div className="w-24 shrink-0 rounded-3xl bg-white p-1.5 ring-1 ring-black/5">
           <ArtworkSvg
             svgRef={artworkRef}
+            landscape={includesProduct(order, "poster")}
             message={snap.message}
             template={templateForSnapshot(snap)}
                 backgroundId={snap.backgroundId}
@@ -1894,12 +1878,12 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
             {["awaiting", "waiting_verification", "unmatched", "rejected"].includes(order.payState) && order.orderStatus !== "cancelled" && (
               <>
                 {order.shopeeUsername ? <p className="text-xs font-semibold">Cocokkan nama akun, produk, jumlah, dan pembayaran di Shopee sebelum verifikasi.</p> : <label className="text-xs font-semibold">
-                  Referensi mutasi QRIS
+                  Nomor referensi pembayaran (wajib)
                   <input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)}
-                    maxLength={80} autoComplete="off" className="ml-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2" />
+                    maxLength={80} placeholder="Contoh: QRIS123456" autoComplete="off" className="ml-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2" />
                 </label>}
-                <button type="button" disabled={verify.isPending || (order.shopeeUsername ? !["waiting_verification","unmatched"].includes(order.payState) : paymentReference.trim().length < 4)} onClick={() => {if (!order.shopeeUsername || window.confirm("Sudah cocok dan pembayaran di Shopee terverifikasi?")) verify.mutate("verify");}} className="rounded-full bg-olive px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
-                  Verifikasi Pembayaran
+                <button type="button" disabled={verify.isPending || (order.shopeeUsername ? !["waiting_verification","unmatched"].includes(order.payState) : !/^[A-Z0-9-]{4,80}$/i.test(paymentReference.trim()))} onClick={() => {if (window.confirm(order.shopeeUsername ? "Sudah cocok dan pembayaran di Shopee terverifikasi?" : `Tandai pesanan ${order.code} sebagai LUNAS? Pastikan pembayaran ${formatIDR(order.payableTotal)} benar-benar diterima.`)) verify.mutate("verify");}} className="rounded-full bg-olive px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
+                  Tandai Paid / Lunas
                 </button>
                 <button type="button" disabled={verify.isPending} onClick={() => verify.mutate("reject")} className="rounded-full bg-berry px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
                   Tolak Pembayaran
@@ -1934,7 +1918,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
           <label htmlFor={`status-${order.id}`} className="block font-display text-xs font-bold text-[var(--dim)]">Status pesanan</label>
           <select id={`status-${order.id}`} value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value as OrderOut["orderStatus"]); setSaved(false); }} className={selectCls}>
             <option value="pending_payment">Menunggu Pembayaran</option>
-            <option value="paid">Lunas</option>
+            <option value="paid" disabled={order.paymentStatus !== "paid"}>Lunas</option>
             <option value="confirmed">Terkonfirmasi</option>
             <option value="design_review">Design Review</option>
             <option value="production">Produksi</option>

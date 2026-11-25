@@ -26,7 +26,7 @@ import { PillowViewer } from "./components/PillowViewer";
 import { NetPreview, PillowPreview, StandeePreview } from "./components/PrintPreview";
 import type { CartLine, OrderOut, ShopSelection } from "./components/Shop";
 import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
-import { isBackgroundId } from "../../server/src/backgrounds";
+import { isBackgroundId, BACKGROUNDS, backgroundUrl } from "../../server/src/backgrounds";
 import { logoUrl } from "./assets-inline";
 import { LanguageContext, useT, translate, loadLanguage, type Language } from "./lib/i18n";
 
@@ -88,6 +88,7 @@ type Route =
   | { view: "studio" }
   | { view: "magic" }
   | { view: "print" }
+  | { view: "choose-background" }
   | { view: "finish" }
   | { view: "customize" }
   | { view: "checkout" }
@@ -275,6 +276,7 @@ function navActiveView(route: Route): NavView {
     route.view === "studio" ||
     route.view === "magic" ||
     route.view === "print" ||
+    route.view === "choose-background" ||
     route.view === "finish" ||
     route.view === "customize" ||
     route.view === "checkout" ||
@@ -1812,7 +1814,7 @@ function PrintStudio({
           </p>
           <button
             type="button"
-            onClick={() => go({ view: "finish" })}
+            onClick={() => go({ view: "choose-background" })}
             className="mt-2 rounded-full bg-olive px-5 py-2.5 font-display text-sm font-semibold text-white transition hover:bg-olive-deep"
           >
             Jadikan Nyata — Pesan Produk Fisiknya
@@ -2388,7 +2390,7 @@ export function App() {
       });
       setLastOrder(null);
     }
-    go({ view });
+    go({ view: view === "finish" ? "choose-background" : view });
   };
 
   /* -------- Buat Karakter Sendiri session -------- */
@@ -2525,11 +2527,11 @@ export function App() {
       childName: saved.childName,
     });
     setLastOrder(null);
-    go({ view: "finish" });
+    go({ view: "choose-background" });
   };
 
   const startCustomize = (product: ProductId) => {
-    setShopSel((s) => ({ ...s, product, backgroundId: cartLines.length ? cartBackground : "", childName: cartLines.length ? cartName : projectRef.current.childName }));
+    setShopSel((s) => ({ ...s, product, backgroundId: cartLines.length ? cartBackground : s.backgroundId ?? "", childName: cartLines.length ? cartName : projectRef.current.childName }));
     go({ view: "customize" });
   };
 
@@ -2601,10 +2603,25 @@ export function App() {
         {route.view === "magic" && (
           <Magic project={project} brandName={brandName} go={go} onMakeReal={() => void handleFinish()} />
         )}
+        {route.view === "choose-background" && (
+          <section className="mx-auto max-w-3xl px-4 py-6">
+            <button type="button" onClick={() => go({view:"studio"})} className="rounded-full bg-white px-4 py-2 font-bold">← Kembali</button>
+            <h1 className="mt-4 text-center font-display text-3xl font-bold">Pilih latar karyamu</h1>
+            <p className="mt-2 text-center">Pilih tema untuk desain pesananmu, atau tanpa background.</p>
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3" role="group" aria-label="Pilihan background">
+              {[{id:"",label:"Tanpa background"},...BACKGROUNDS].map(b => <button key={b.id} type="button" disabled={cartCount>0} aria-pressed={(cartCount?cartBackground:shopSel.backgroundId??"")===b.id} onClick={()=>setShopSel(s=>({...s,backgroundId:b.id,childName:project.childName}))} className={`rounded-xl border bg-white p-2 font-bold ${(cartCount?cartBackground:shopSel.backgroundId??"")===b.id?"ring-2 ring-olive":""}`}>
+                {b.id?<img src={backgroundUrl(b.id)} alt="" className="aspect-[4/3] w-full rounded-lg object-contain"/>:<div className="aspect-[4/3] rounded-lg bg-white ring-1 ring-black/10"/>}
+                <span className="block py-2">{b.label}</span>
+              </button>)}
+            </div>
+            {cartCount>0&&<p className="mt-3 text-sm">Background mengikuti keranjang aktif. Kosongkan keranjang untuk mengganti tema.</p>}
+            <button type="button" onClick={()=>{setShopSel(s=>({...s,childName:cartCount?cartName:project.childName,backgroundId:cartCount?cartBackground:s.backgroundId??""}));go({view:"finish"});}} className="mt-5 w-full rounded-full bg-olive px-6 py-3 font-bold text-white">Lanjut ke pilihan produk</button>
+          </section>
+        )}
         {route.view === "finish" && (
           <Masterpiece
-            project={{...project,backgroundId:cartCount?cartBackground:""}}
-            onBack={() => go({ view: "studio" })}
+            project={{...project,backgroundId:cartCount?cartBackground:shopSel.backgroundId,childName:cartCount?cartName:shopSel.childName}}
+            onBack={() => go({ view: "choose-background" })}
             onCustomize={startCustomize}
             cartCount={cartCount}
             onCart={() => go({ view: "checkout" })}
