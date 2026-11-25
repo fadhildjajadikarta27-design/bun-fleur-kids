@@ -25,7 +25,7 @@ import { ModelViewer } from "./components/ModelViewer";
 import { PillowViewer } from "./components/PillowViewer";
 import { NetPreview, PillowPreview, StandeePreview } from "./components/PrintPreview";
 import type { CartLine, OrderOut, ShopSelection } from "./components/Shop";
-import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
+import { ACTIVE_PRODUCT_IDS, CATALOG_PHOTOS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
 import { isBackgroundId, BACKGROUNDS, backgroundUrl } from "../../server/src/backgrounds";
 import { logoUrl } from "./assets-inline";
 import { LanguageContext, useT, translate, loadLanguage, type Language } from "./lib/i18n";
@@ -435,6 +435,60 @@ function MobileTabBar({
 
 /* ------------------------------ Home ------------------------------ */
 
+function ProductSlideshow() {
+  const tr = useT();
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(() => !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [visible, setVisible] = useState(!document.hidden);
+  const [failed, setFailed] = useState(false);
+  const count = ACTIVE_PRODUCT_IDS.length;
+  const product = ACTIVE_PRODUCT_IDS[index]!;
+  useEffect(() => {
+    const onVisibility = () => setVisible(!document.hidden);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+  useEffect(() => {
+    if (!playing || hovered || focused || !visible) return;
+    const timer = window.setInterval(() => setIndex(i => (i + 1) % count), 4000);
+    return () => window.clearInterval(timer);
+  }, [playing, hovered, focused, visible, count]);
+  useEffect(() => { setFailed(false); }, [product]);
+  useEffect(() => {
+    const next = CATALOG_PHOTOS[ACTIVE_PRODUCT_IDS[(index + 1) % count]!];
+    if (next) { const image = new Image(); image.src = next; }
+  }, [index, count]);
+  const step = (direction: number) => setIndex(i => (i + direction + count) % count);
+  return (
+    <section aria-label={tr("Slideshow produk")} aria-roledescription="carousel" className="relative mx-auto w-full max-w-md rounded-[2.5rem] bg-[#E7F3FB] p-3 sm:p-5 lg:max-w-none"
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      onFocusCapture={() => setFocused(true)} onBlurCapture={e => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}
+      onKeyDown={e => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); step(e.key === "ArrowLeft" ? -1 : 1); } }}>
+      <div className="relative overflow-hidden rounded-[1.75rem] bg-white shadow-md ring-1 ring-black/5">
+        <div className="relative aspect-square w-full overflow-hidden" aria-live={playing ? "off" : "polite"}>
+          {CATALOG_PHOTOS[product] && !failed ? <img key={product} src={CATALOG_PHOTOS[product]} alt={tr(PRODUCT_META[product].title)} onError={() => setFailed(true)} className="h-full w-full object-contain" decoding="async" /> :
+          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-[var(--dim)]">{tr("Foto produk belum tersedia")}</div>}
+          <button type="button" onClick={() => step(-1)} aria-label={tr("Produk sebelumnya")} className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-xl font-bold text-olive-deep shadow ring-1 ring-black/10">‹</button>
+          <button type="button" onClick={() => step(1)} aria-label={tr("Produk berikutnya")} className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-xl font-bold text-olive-deep shadow ring-1 ring-black/10">›</button>
+          <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-olive-deep shadow">{index + 1} / {count}</span>
+        </div>
+        <div className="px-4 pb-4 pt-2 text-center">
+          <h2 className="font-display text-xl font-bold text-olive-deep">{tr(PRODUCT_META[product].title)}</h2>
+          <p className="mt-1 text-xs text-[var(--dim)]">{tr("Contoh produk personalisasi")}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-1" role="group" aria-label={tr("Pilih slide produk")}>
+          {ACTIVE_PRODUCT_IDS.map((id, i) => <button key={id} type="button" onClick={() => setIndex(i)} aria-label={tr(PRODUCT_META[id].title)} aria-current={i === index ? "true" : undefined} className="flex h-7 w-5 items-center justify-center rounded-full"><span className={`block h-2 rounded-full transition-all ${i === index ? "w-4 bg-olive" : "w-2 bg-[#9CB4C1]"}`} /></button>)}
+        </div>
+        <button type="button" onClick={() => setPlaying(p => !p)} aria-label={tr(playing ? "Jeda slideshow" : "Putar slideshow")} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-olive-deep ring-1 ring-black/5">{playing ? "Ⅱ" : "▶"}</button>
+      </div>
+    </section>
+  );
+}
+
 function Home({
   brandName,
   catalogPrices,
@@ -519,46 +573,11 @@ function Home({
           </div>
           <ul className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[var(--dim)]">
             <li>{tr("Custom Nama")}</li>
-            <li>Preview 3D</li>
+            <li>{tr("14 Pilihan Produk")}</li>
             <li>{tr("Dicetak & Dikirim")}</li>
           </ul>
         </div>
-        <div className="relative mx-auto w-full max-w-md lg:max-w-none" aria-label="Contoh transformasi dari gambar warna menjadi model 3D">
-          <div aria-hidden className="absolute -inset-3 rounded-[3rem] bg-[#E7F3FB]" />
-          <div aria-hidden className="absolute -right-2 -top-5 h-24 w-24 rounded-full bg-butter ring-4 ring-[var(--bg)]" />
-          <div className="anim-floaty relative ml-auto w-[84%] rounded-[1.75rem] bg-white p-3 shadow-lg ring-1 ring-black/5 sm:w-[62%]">
-            <PillowViewer
-              template={dino}
-              colors={demo}
-              strokes={[]}
-              name="Adam"
-              nameFontFamily={fontFamilyOf("baloo")}
-              nameColor="#E4572E"
-              height={215}
-              showControls={false}
-              autoRotate
-              restYaw={Math.PI + 0.6}
-            />
-          </div>
-          <div className="relative -mt-5 w-[78%] rounded-[1.75rem] bg-white p-3 shadow-lg ring-1 ring-black/5 sm:-mt-6 sm:w-[58%]">
-            <ArtworkSvg
-              template={dino}
-              colors={demo}
-              strokes={[]}
-              name="Adam"
-              nameFont="baloo"
-              nameColor="#E4572E"
-            />
-            <p className="pb-1 pt-2 text-center font-display text-sm font-semibold text-[var(--dim)]">{tr("Hasil warnai anak (contoh)")}</p>
-          </div>
-          <p className="relative mt-3 text-center text-xs font-semibold text-[var(--dim)]">
-            Atas: model digital Bantal Kertas dari karya contoh di bawah — kedua sisinya
-            persis gambar anak, tepinya strip gusset, berdiri di alas lipat bernama.
-            Pratinjau digital, bukan foto produk jadi. Untuk wujud fisik yang diproduksi
-            &amp; dikirim tim kami, pesan Poster, Figurine 3D, atau Kaos dari karya anakmu
-            lewat tombol Jadikan Nyata setelah mewarnai (lihat bagian Tiga Cara di bawah).
-          </p>
-        </div>
+        <ProductSlideshow />
       </section>
 
       {/* CARA KERJA — linimasa empat langkah di panel sage pucat #EDF2E6 */}

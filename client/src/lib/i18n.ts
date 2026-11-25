@@ -362,7 +362,16 @@ const english: Record<string,string> = {
   "Pakai": "Apply",
   "Memeriksa…": "Checking…",
   "Konfirmasi checkout Shopee": "Shopee Checkout Confirmation",
-  "Konfirmasi Shopee belum berhasil dicatat. Hubungi tim kami.": "Shopee confirmation could not be recorded. Contact our team."
+  "Konfirmasi Shopee belum berhasil dicatat. Hubungi tim kami.": "Shopee confirmation could not be recorded. Contact our team.",
+  "Slideshow produk": "Product slideshow",
+  "Produk sebelumnya": "Previous product",
+  "Produk berikutnya": "Next product",
+  "Contoh produk personalisasi": "Personalized product example",
+  "Pilih slide produk": "Choose a product slide",
+  "Jeda slideshow": "Pause slideshow",
+  "Putar slideshow": "Play slideshow",
+  "14 Pilihan Produk": "14 Product Options",
+  "Foto produk belum tersedia": "Product photo unavailable"
 };
 export function translate(language: Language, text: string): string { return language === "en" && Object.prototype.hasOwnProperty.call(english,text) ? english[text]! : text; }
 export function useT() { const language = useContext(LanguageContext); return useCallback((text: string) => translate(language,text),[language]); }

@@ -15,7 +15,7 @@ import { useT } from "../lib/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ApiResponse } from "../api";
-import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "../lib/shop";
+import { CATALOG_PHOTOS, ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "../lib/shop";
 import { FIELDS } from "../fields";
 import { NAME_FONTS, type TemplateDef } from "../lib/model";
 import { getTemplate } from "../lib/registry";
@@ -235,12 +235,6 @@ export function PapercraftPreview({ project, name, large = false }: { project: S
   </div>;
 }
 
-const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
-  lunchbox: '/products/lunchbox.png', tumbler: '/products/tumbler.png',
-  nightlamp: '/products/nightlamp.png', wallclock: '/products/wallclock.png', namestickers: '/products/namestickers.png', rewardchart: '/products/rewardchart.png', kidswatch: '/products/kidswatch.png',
-  tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: "/products/papercraft.webp",
-  celengan: "/products/celengan.webp", puzzle: "/products/puzzle.webp", placemat: "/products/placemat.webp", growthchart: "/products/growthchart.webp",
-};
 function OriginalProductPhoto({ product }: { product: ProductId }) {
   const [failed, setFailed] = useState(false);
   const src = CATALOG_PHOTOS[product];

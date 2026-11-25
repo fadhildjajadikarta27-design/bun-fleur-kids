@@ -14,6 +14,20 @@ try {
   const errors=[];
   page.on("pageerror", e=>errors.push(e.message));
   await page.goto(base);
+  const slides=page.getByRole("region",{name:"Slideshow produk"});
+  await slides.getByRole("button",{name:"Jeda slideshow",exact:true}).click();
+  const seenPhotos=new Set();
+  for(let i=0;i<14;i++){
+    const photo=slides.locator('img[src^="/products/"]');
+    await photo.waitFor({state:"visible"});
+    await photo.evaluate(img=>img.decode());
+    seenPhotos.add(await photo.getAttribute("src"));
+    await slides.getByRole("button",{name:"Produk berikutnya",exact:true}).click();
+  }
+  assert.equal(seenPhotos.size,14);
+  await slides.getByRole("button",{name:"Produk sebelumnya",exact:true}).click();
+  assert.equal(await slides.locator("img").getAttribute("src"),"/products/tumbler.png");
+  console.log("PASS homepage slideshow, all 14 original photos, navigation and pause");
   await page.getByRole("combobox",{name:"Bahasa website"}).selectOption("en");
   await page.getByRole("button",{name:"Start Coloring",exact:true}).first().waitFor();
   await page.reload();

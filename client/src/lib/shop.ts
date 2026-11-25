@@ -85,3 +85,10 @@ export const PRODUCT_META: Record<
     see: "Lihat Desain Kaos",
   },
 };
+
+export const CATALOG_PHOTOS: Partial<Record<ProductId, string>> = {
+  lunchbox: '/products/lunchbox.png', tumbler: '/products/tumbler.png',
+  nightlamp: '/products/nightlamp.png', wallclock: '/products/wallclock.png', namestickers: '/products/namestickers.png', rewardchart: '/products/rewardchart.png', kidswatch: '/products/kidswatch.png',
+  tshirt: "/products/kaos.webp", poster: "/products/poster.webp", papercraft: "/products/papercraft.webp",
+  celengan: "/products/celengan.webp", puzzle: "/products/puzzle.webp", placemat: "/products/placemat.webp", growthchart: "/products/growthchart.webp",
+};
