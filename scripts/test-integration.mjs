@@ -127,9 +127,11 @@ try {
   // Regression fixtures preserve legacy checkout prices; new defaults tested separately.
   for(const [productId,price] of [["poster",24900],["papercraft",36900],["placemat",54900],["growthchart",69000]])await call("adminSetProductPrice",{productId,price},admin);
   await call("adminSaveBundle",{id:"little-artist",name:"Little Artist",productIds:["poster","papercraft"],price:54900,active:true},admin);
+  const customerPhone = "0817" + phone.slice(-8);
+  const customerDigits = customerPhone.slice(1);
   const orderArgs = {
     checkoutId: randomUUID(), quantity: 7, projectId: project.id, productType: "papercraft", childName: "",
-    customerName: "QA Parent", whatsapp: phone, email: `parent-${token}@example.test`,
+    customerName: "QA Parent", whatsapp: customerPhone, email: `parent-${token}@example.test`,
     address: "Jalan Pengujian, Jakarta, Indonesia", couponCode: coupon.code, productPrice: 1, total: 1,
   };
   await call("createOrder", orderArgs, { ...guest, expected: 400 });
@@ -148,16 +150,16 @@ try {
   await call("updateOrder", { id: order.id, paymentStatus: "paid" }, { ...admin, expected: 400 });
   await call("updateOrder", { id: order.id, shippingCost: 12000 }, {...admin, expected:400});
   assert.equal((await call("trackOrder", { code: order.code, whatsapp: "089000000000" })).body.order, null);
-  const tracked = (await call("trackOrder", { code: order.code, whatsapp: "+62" + digits })).body.order;
+  const tracked = (await call("trackOrder", { code: order.code, whatsapp: "+62" + customerDigits })).body.order;
   assert.equal(tracked.shippingCost, 0);
   assert.equal(tracked.address, "");
   const data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR7sAAAAASUVORK5CYII=";
-  await call("confirmTransfer", { code: order.code, whatsapp: phone, proof: { mime: "image/jpeg", data } }, { expected: 400 });
-  const confirmation = await call("confirmTransfer", { code: order.code, whatsapp: phone, proof: { mime: "image/png", data } });
+  await call("confirmTransfer", { code: order.code, whatsapp: customerPhone, proof: { mime: "image/jpeg", data } }, { expected: 400 });
+  const confirmation = await call("confirmTransfer", { code: order.code, whatsapp: customerPhone, proof: { mime: "image/png", data } });
   assert.equal(confirmation.body.payState, "waiting_verification");
   const adminProof = await call("adminGetPaymentProof", { id: order.id }, admin);
   assert.equal(adminProof.body.proof.data, data);
-  assert.equal((await call("trackOrder", { code: order.code, whatsapp: phone })).body.order.paymentStatus, "waiting_verification");
+  assert.equal((await call("trackOrder", { code: order.code, whatsapp: customerPhone })).body.order.paymentStatus, "waiting_verification");
   const decision = { decision: "verify", paymentReference: "QA-" + token };
   await call("verifyOrderPayment", { id: order.id, decision: "verify" }, { ...admin, expected: 400 });
   const paid = await call("verifyOrderPayment", { ...decision, id: order.id }, admin);
@@ -261,7 +263,7 @@ try {
   await call("createOrder", { ...cartArgs, checkoutId: randomUUID(),
     items: [...cartArgs.items, { productType: "tshirt", quantity: 1, tshirtSize: "invalid" }] }, { ...owner, expected: 400 });
   await call("verifyOrderPayment", { id: cart.id, decision: "verify", paymentReference: "CART-" + token }, admin);
-  assert.equal((await call("trackOrder", { code: cart.code, whatsapp: phone })).body.order.items.length, 3);
+  assert.equal((await call("trackOrder", { code: cart.code, whatsapp: customerPhone })).body.order.items.length, 3);
   // Boundary and stale shipping amount; shipping is based on net product subtotal.
   const shippingArgs = { ...orderArgs, productType: "poster", quantity: 4, couponCode: "", checkoutId: randomUUID() };
   const below = (await call("createOrder", shippingArgs, owner)).body.order;
@@ -290,7 +292,7 @@ try {
   assert.equal(packaged.total,64900);
   assert.equal(packaged.items.reduce((n,i)=>n+i.discount,0),6900);
   assert.equal(packaged.gift.recipient,"QA Friend");
-  assert.equal((await call("trackOrder",{code:packaged.code,whatsapp:phone})).body.order.gift,null);
+  assert.equal((await call("trackOrder",{code:packaged.code,whatsapp:customerPhone})).body.order.gift,null);
   await call("adminListBundles",{},{expected:401});
   await call("adminSaveBundle",{id:"little-artist",name:"Little Artist",productIds:["poster","papercraft"],price:54900,active:false},admin);
   await call("createOrder",{...packageArgs,checkoutId:randomUUID()},{...owner,expected:400});
@@ -337,6 +339,25 @@ try {
   assert.equal(restored.products.find(p=>p.id==="poster").basePrice,29900);
   assert.equal(restored.bundles.find(b=>b.id==="little-artist").price,64900);
   console.log("PASS revised catalog restored for browser QA");
+  // New checkout channels and purchaser classification.
+  const self=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,whatsapp:phone},owner)).body.order;
+  const selfNoCoupon=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,whatsapp:"+62"+digits,couponCode:""},owner)).body.order;
+  assert.equal(self.affiliateSelfOrder,true);assert.equal(selfNoCoupon.affiliateSelfOrder,true);
+  assert.equal(order.affiliateSelfOrder,false);
+  await call("confirmTransfer",{code:self.code,whatsapp:phone,shopeeUsername:"   "},{expected:400});
+  assert.equal((await call("confirmTransfer",{code:self.code,whatsapp:"089999999999",shopeeUsername:"qa-shopee"})).body.ok,false);
+  const claimed=(await call("confirmTransfer",{code:self.code,whatsapp:phone,shopeeUsername:"qa-shopee"})).body;
+  assert.equal(claimed.payState,"waiting_verification");
+  await call("confirmTransfer",{code:self.code,whatsapp:phone},{expected:400});
+  await call("verifyOrderPayment",{id:self.id,decision:"verify"},{expected:401});
+  const selfPaid=(await call("verifyOrderPayment",{id:self.id,decision:"verify"},admin)).body.order;
+  assert.equal(selfPaid.paymentStatus,"paid");assert.equal(selfPaid.shopeeUsername,"qa-shopee");
+  await call("updateOrder",{id:self.id,orderStatus:"completed"},admin);
+  assert.equal((await sql`SELECT count(*)::int AS n FROM commissions WHERE order_id IN (${self.id},${selfNoCoupon.id})`)[0].n,0);
+  const filtered=(await call("listOrders",{buyerType:"self",limit:100},admin)).body.orders;
+  assert.ok(filtered.some(o=>o.id===self.id)&&filtered.some(o=>o.id===selfNoCoupon.id));assert.ok(filtered.every(o=>o.affiliateSelfOrder));
+  assert.ok((await call("listOrders",{buyerType:"referral",limit:100},admin)).body.orders.some(o=>o.id===order.id));
+  console.log("PASS Shopee required username, manual verification without order number, self order labels and zero commissions");
 
 } finally {
   await sql.end();

@@ -10,6 +10,17 @@ try {
   page.setDefaultTimeout(15000);
   const errors=[];
   page.on("pageerror", e=>errors.push(e.message));
+  await page.goto(base);
+  await page.getByRole("combobox",{name:"Bahasa website"}).selectOption("en");
+  await page.getByRole("button",{name:"Start Coloring",exact:true}).first().waitFor();
+  await page.reload();
+  assert.equal(await page.getByRole("combobox",{name:"Website language"}).inputValue(),"en");
+  await page.getByRole("combobox",{name:"Website language"}).selectOption("id");
+  await page.getByRole("button",{name:"Mulai Mewarnai",exact:true}).first().click();
+  await page.getByRole("heading",{name:"Pilih Karakter",exact:true}).waitFor();
+  await page.getByRole("button",{name:"Keranjang (0)",exact:true}).click();
+  await page.getByText("Keranjang kosong",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"Tutup",exact:true}).click();
   await page.goto(base+"/#/kreasiku");
   await page.getByRole("heading",{name:"Kreasiku",exact:true}).waitFor();
   // Ensure the server has issued the anonymous visitor cookie before seeding a project.
@@ -68,7 +79,8 @@ try {
   await page.getByRole("heading",{name:"Keranjang & Pemesanan (2)"}).waitFor();
   await page.getByText("Paket Little Artist aktif",{exact:false}).waitFor();
   await page.reload();
-  await page.getByRole("button",{name:"Lanjutkan Keranjang (2)"}).click();
+  await page.getByRole("button",{name:"Keranjang (2)",exact:true}).click();
+  await page.getByRole("button",{name:"Lihat Keranjang",exact:true}).click();
   await page.getByRole("heading",{name:"Keranjang & Pemesanan (2)"}).waitFor();
   await page.getByText("Paket Little Artist aktif",{exact:false}).waitFor();
   await page.locator("#co-name").fill("QA Browser Parent");
@@ -89,7 +101,13 @@ try {
   assert.equal(order.total,74900);
   assert.equal(order.items.length,2);
   assert.equal(order.gift.recipient,"QA Penerima");
-  console.log("PASS mobile two-product cart, reload restore, bundle, gift and checkout");
+  await page.getByRole("button",{name:"Sudah Checkout di Shopee"}).click();
+  const submitShopee=page.getByRole("button",{name:"Submit Konfirmasi",exact:true});
+  assert.equal(await submitShopee.isDisabled(),true);
+  await page.getByLabel("Nama akun Shopee").fill("qa-browser-shopee");
+  await submitShopee.click();
+  await page.getByRole("heading",{name:"Checkout Shopee Dilaporkan"}).waitFor();
+  console.log("PASS mobile cart, language, character picker, reload restore, checkout and Shopee confirmation");
   await page.goto(base+"/#/birthday");
   await page.getByLabel("Nama acara",{exact:true}).fill("QA Browser Birthday");
   const date=new Date();date.setUTCDate(date.getUTCDate()+40);
