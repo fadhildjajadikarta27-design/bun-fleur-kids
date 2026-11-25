@@ -156,11 +156,11 @@ try {
   const svgFile=await pendingDownload;
   assert.equal(svgFile.suggestedFilename(),"artwork-"+selfCode+".svg");
   const xml=await readFile(await svgFile.path(),"utf8");
-  assert.match(xml,/<svg[\\s>]/);
+  assert.match(xml,/<svg[\s>]/);
   assert.match(xml,/viewBox="0 0 1200 900"/);
   assert.match(xml,/QA SVG/);
   assert.match(xml,/#AB57CC/i);
-  assert.match(xml,/data:image\\/png;base64,/);
+  assert.ok(xml.includes("data:image/png;base64,"));
   assert.equal(await svgFile.failure(),null);
   console.log("PASS admin self-order SVG before payment; regular unpaid download stays locked");
   await page.getByRole("button",{name:"Hampers Ulang Tahun",exact:true}).click();
