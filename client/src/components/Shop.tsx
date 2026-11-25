@@ -1830,6 +1830,10 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
             <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${order.affiliateSelfOrder ? "bg-[#FFE4C7] text-[#964509]" : order.affiliateId ? "bg-sage-soft text-olive-deep" : "bg-[#E5F2FA] text-[#205E80]"}`}>{order.affiliateSelfOrder ? "Affiliate Self Order" : order.affiliateId ? "Affiliate Customer Order" : "Organic Order"}</span>
             {order.affiliateSelfOrder && <span className="text-xs font-semibold text-[#964509]">Pesanan pribadi · tanpa komisi & KPI</span>}
           </div>
+          {order.affiliateSelfOrder && <div className="mb-3 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => { void downloadArtworkSvg(artworkRef.current, `artwork-${order.code}.svg`); }} className="rounded-full bg-olive px-4 py-2.5 text-xs font-bold text-white">Unduh SVG langsung</button>
+            <span className="text-xs font-semibold text-[var(--dim)]">Khusus pesanan pribadi affiliate · tidak perlu menunggu lunas.</span>
+          </div>}
           <p className="text-sm font-semibold text-[var(--dim)]">
             {order.variant || "—"} · {new Date(order.createdAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}
           </p>
@@ -1858,7 +1862,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
               </dd>
             </div>
           </dl>
-          <button type="button" disabled={order.paymentStatus !== "paid"} onClick={() => { void downloadArtworkSvg(artworkRef.current, `artwork-${order.code}.svg`); }} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">Unduh artwork SVG pesanan</button>
+          {!order.affiliateSelfOrder && <button type="button" disabled={order.paymentStatus !== "paid"} onClick={() => { void downloadArtworkSvg(artworkRef.current, `artwork-${order.code}.svg`); }} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-bold ring-1 ring-[var(--border)] disabled:opacity-50">Unduh artwork SVG pesanan</button>}
           {includesProduct(order, "papercraft") && (
             <div className="mt-3 rounded-2xl bg-[#EDF2E6] p-3 ring-1 ring-[var(--border)]">
               <p className="font-display text-sm font-bold text-olive-deep">Berkas Produksi Papercraft 3D</p>
