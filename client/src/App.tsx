@@ -1096,6 +1096,7 @@ function CustomBuilder({
   onDone: (def: CustomDef, colors?: Record<string, string>) => void;
   go: (r: Route) => void;
 }) {
+  const tr = useT();
   const [def, setDef] = useState<CustomDef>(initial);
   const [nameError, setNameError] = useState("");
   const [mode, setMode] = useState<"ai" | "parts">(editing ? "parts" : "ai");
@@ -1535,6 +1536,7 @@ function Magic({
   go: (r: Route) => void;
   onMakeReal: () => void;
 }) {
+  const tr = useT();
   const template = templateForProject(project);
   const exportRef = useRef<SVGSVGElement | null>(null);
   const [reveal, setReveal] = useState(0);
