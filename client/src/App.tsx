@@ -28,6 +28,7 @@ import type { CartLine, OrderOut, ShopSelection } from "./components/Shop";
 import { ACTIVE_PRODUCT_IDS, PRODUCT_DEFAULT_PRICES, formatIDR, PRODUCT_META, type ProductId } from "./lib/shop";
 import { isBackgroundId } from "../../server/src/backgrounds";
 import { logoUrl } from "./assets-inline";
+import { LanguageContext, useT, translate, loadLanguage, type Language } from "./lib/i18n";
 
 const BirthdayPage = lazy(() => import("./components/Birthday").then(m => ({default:m.BirthdayPage})));
 const AdminCenter = lazy(() => import("./components/AdminCenter").then((m) => ({ default: m.AdminCenter })));
@@ -296,13 +297,23 @@ function Header({
   brandName,
   route,
   go,
-  onCustom,
+  onCustom, language, onLanguage, cartCount, cartBusy, onCart, onClearCart, onStart,
 }: {
   brandName: string;
   route: Route;
   go: (r: Route) => void;
   onCustom: () => void;
+  language: Language;
+  onLanguage: (language: Language) => void;
+  cartCount: number;
+  cartBusy: boolean;
+  onCart: () => void;
+  onClearCart: () => void;
+  onStart: () => void;
 }) {
+  const tr = useT();
+  const [cartOpen, setCartOpen] = useState(false);
+  useEffect(() => setCartOpen(false), [route.view]);
   const active = navActiveView(route);
   const item = (view: NavView, label: string) => (
     <button
@@ -326,7 +337,7 @@ function Header({
           type="button"
           onClick={() => go({ view: "home" })}
           className="flex min-w-0 shrink items-center gap-2.5"
-          aria-label={`${brandName} beranda`}
+          aria-label={`${brandName} ${tr("Beranda")}`}
         >
           <img
             src={logoUrl}
@@ -340,16 +351,25 @@ function Header({
         {/* Navigasi atas hanya untuk tablet/desktop; di ponsel navigasi
             pindah ke tab bar bawah (MobileTabBar) supaya tidak ada item
             yang terpotong atau harus digeser menyamping. */}
-        <nav className="ml-auto hidden items-center gap-0 lg:flex" aria-label="Utama">
-          {NAV_ITEMS.map((n) => item(n.view, n.label))}
+        <nav className="ml-auto hidden items-center gap-0 lg:flex" aria-label={tr("Utama")}>
+          {NAV_ITEMS.map((n) => item(n.view, tr(n.label)))}
         </nav>
-        <button
-          type="button"
-          onClick={() => go({ view: "explore" })}
-          className="ml-auto shrink-0 rounded-full bg-tang px-4 py-2 font-display text-sm font-semibold text-ink shadow-sm transition hover:bg-tang-deep sm:ml-1"
-        >
-          Mulai Berkreasi
-        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-0">
+          <button type="button" onClick={onStart} className="hidden rounded-full bg-tang px-3 py-2 font-display text-sm font-semibold text-ink shadow-sm transition hover:bg-tang-deep xl:block">{tr("Mulai Berkreasi")}</button>
+          <select aria-label={language === "en" ? "Website language" : "Bahasa website"} value={language} onChange={(e) => onLanguage(e.target.value === "en" ? "en" : "id")} className="max-w-[5.5rem] rounded-full bg-white px-2 py-2 text-xs font-bold text-olive-deep ring-1 ring-[var(--border)] sm:max-w-none">
+            <option value="id">Indonesia</option><option value="en">English</option>
+          </select>
+          <div className="relative">
+            <button type="button" aria-expanded={cartOpen} aria-controls={cartOpen ? "header-cart-panel" : undefined} aria-label={tr("Keranjang") + " (" + cartCount + ")"} onClick={() => setCartOpen(v => !v)} className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white text-olive-deep ring-1 ring-[var(--border)] hover:bg-sage-soft">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 3h3l2.5 12h11l3-9H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-tang px-1 text-[10px] font-extrabold text-ink">{cartCount}</span>
+            </button>
+            {cartOpen && <div id="header-cart-panel" className="absolute right-0 top-full z-40 mt-3 w-[min(19rem,calc(100vw-2rem))] rounded-2xl bg-white p-4 text-sm text-ink shadow-xl ring-1 ring-[var(--border)]">
+              <div className="flex items-center justify-between gap-2"><h2 className="font-display text-lg font-bold">{tr("Keranjang")} ({cartCount})</h2><button type="button" onClick={() => setCartOpen(false)} aria-label={tr("Tutup")} className="rounded-full px-2 py-1 text-xl">×</button></div>
+              {cartCount > 0 ? <><p className="mt-2 text-[var(--dim)]">{language === "en" ? "Your personalized products are ready to review." : "Produk personalisasi siap ditinjau."}</p><button type="button" disabled={cartBusy} onClick={() => {setCartOpen(false);onCart();}} className="mt-3 w-full rounded-full bg-olive px-4 py-3 font-bold text-white disabled:opacity-50">{cartBusy ? tr("Membuka…") : tr("Lihat Keranjang")}</button><button type="button" onClick={onClearCart} className="mt-2 w-full rounded-full px-4 py-2 font-bold text-olive-deep">{tr("Kosongkan")}</button></> : <><p className="mt-2 text-[var(--dim)]">{tr("Keranjang kosong")}</p><button type="button" onClick={() => {setCartOpen(false);onStart();}} className="mt-3 w-full rounded-full bg-tang px-4 py-3 font-bold text-ink">{tr("Mulai Mewarnai")}</button></>}
+            </div>}
+          </div>
+        </div>
       </div>
       {/* Pita empat warna logo di bawah header — penanda warna merek
           yang tampil di semua halaman, terang maupun gelap. */}
@@ -374,10 +394,11 @@ function MobileTabBar({
   go: (r: Route) => void;
   onCustom: () => void;
 }) {
+  const tr = useT();
   const active = navActiveView(route);
   return (
     <nav
-      aria-label="Navigasi bawah"
+      aria-label={tr("Navigasi bawah")}
       className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[#F8F4EC]/95 pb-safe backdrop-blur-md lg:hidden"
     >
       <div className="mx-auto grid max-w-md grid-cols-6">
@@ -388,7 +409,7 @@ function MobileTabBar({
               key={n.view}
               type="button"
               aria-current={isActive ? "page" : undefined}
-              aria-label={n.label}
+              aria-label={tr(n.label)}
               onClick={() => (n.view === "custom" ? onCustom() : go({ view: n.view } as Route))}
               className={`flex flex-col items-center gap-0.5 px-1 pb-1.5 pt-2 font-display text-[11px] font-semibold leading-tight transition ${
                 isActive ? "text-olive" : "text-[var(--dim)]"
@@ -401,7 +422,7 @@ function MobileTabBar({
               >
                 {n.icon}
               </span>
-              {n.short}
+              {tr(n.short)}
             </button>
           );
         })}
@@ -428,6 +449,7 @@ function Home({
   onAge: (bandId: string) => void;
   onCustom: () => void;
 }) {
+  const tr = useT();
   const dino = getTemplate("pb-dino");
   // Contoh hasil warnai untuk etalase transformasi — diberi label jelas
   // sebagai contoh. Katalog & halaman awal tetap hitam putih; warna di
@@ -467,17 +489,15 @@ function Home({
       <section className="grid items-center gap-10 pt-8 sm:pt-12 lg:grid-cols-2">
         <div>
           <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-tang-ink">
-            Bermain Kreatif, Karya Milik Sendiri
+            {tr("Bermain Kreatif, Karya Milik Sendiri")}
           </p>
           <h1 className="mt-3 font-display text-[clamp(2.5rem,6vw,4.25rem)] font-semibold leading-[1.04] text-[var(--text)]">
-            <span className="text-olive">Warnai Sendiri.</span>
+            <span className="text-olive">{tr("Warnai Sendiri.")}</span>
             <br />
-            Kami <span className="text-tang-ink">Wujudkan.</span>
+            {tr("Kami")} <span className="text-tang-ink">{tr("Wujudkan.")}</span>
           </h1>
           <p className="mt-4 max-w-md text-lg leading-relaxed text-[var(--dim)]">
-            Si kecil bebas memilih karakter, mewarnai, dan menambahkan namanya — selalu
-            gratis. Setelah selesai, wujudkan kreasinya menjadi poster, papercraft 3D, alas makan,
-            celengan, puzzle, growth chart atau kaos yang dikirim langsung ke rumah.
+            {tr("Si kecil bebas memilih karakter, mewarnai, dan menambahkan namanya — selalu gratis. Setelah selesai, wujudkan kreasinya menjadi poster, papercraft 3D, alas makan, celengan, puzzle, growth chart atau kaos yang dikirim langsung ke rumah.")}
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <button
@@ -485,20 +505,20 @@ function Home({
               onClick={onStart}
               className="rounded-full bg-tang px-7 py-3 font-display text-base font-semibold text-ink shadow-sm transition hover:bg-tang-deep"
             >
-              Mulai Mewarnai
+              {tr("Mulai Mewarnai")}
             </button>
             <button
               type="button"
               onClick={scrollToSteps}
               className="rounded-full bg-[var(--surface)] px-7 py-3 font-display text-base font-semibold text-[var(--text)] ring-1 ring-[var(--border)] transition hover:bg-[var(--surface-alt)]"
             >
-              Lihat Cara Kerjanya
+              {tr("Lihat Cara Kerjanya")}
             </button>
           </div>
           <ul className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[var(--dim)]">
-            <li>Custom Nama</li>
+            <li>{tr("Custom Nama")}</li>
             <li>Preview 3D</li>
-            <li>Dicetak &amp; Dikirim</li>
+            <li>{tr("Dicetak & Dikirim")}</li>
           </ul>
         </div>
         <div className="relative mx-auto w-full max-w-md lg:max-w-none" aria-label="Contoh transformasi dari gambar warna menjadi model 3D">
@@ -527,7 +547,7 @@ function Home({
               nameFont="baloo"
               nameColor="#E4572E"
             />
-            <p className="pb-1 pt-2 text-center font-display text-sm font-semibold text-[var(--dim)]">Hasil warnai anak (contoh)</p>
+            <p className="pb-1 pt-2 text-center font-display text-sm font-semibold text-[var(--dim)]">{tr("Hasil warnai anak (contoh)")}</p>
           </div>
           <p className="relative mt-3 text-center text-xs font-semibold text-[var(--dim)]">
             Atas: model digital Bantal Kertas dari karya contoh di bawah — kedua sisinya
@@ -541,8 +561,8 @@ function Home({
 
       {/* CARA KERJA — linimasa empat langkah di panel sage pucat #EDF2E6 */}
       <section id="cara-kerja" className="band-sage mt-20 scroll-mt-24 rounded-[2.5rem] px-6 py-10 sm:px-10" aria-label="Cara kerjanya">
-        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Cara Kerjanya</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Dari Imajinasi, <span className="band-accent">Jadi Kreasi.</span></h2>
+        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">{tr("Cara Kerjanya")}</p>
+        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">{tr("Dari Imajinasi,")} <span className="band-accent">{tr("Jadi Kreasi.")}</span></h2>
         <div className="relative mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div aria-hidden className="absolute left-0 right-0 top-5 hidden border-t-2 border-dashed border-[#3B2A22]/30 lg:block" />
           {[
@@ -555,8 +575,8 @@ function Home({
               <span className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-olive font-display text-sm font-semibold text-white">
                 {s.n}
               </span>
-              <h3 className="mt-3 font-display text-xl font-semibold">{s.title}</h3>
-              <p className="band-dim mt-1 leading-relaxed">{s.body}</p>
+              <h3 className="mt-3 font-display text-xl font-semibold">{tr(s.title)}</h3>
+              <p className="band-dim mt-1 leading-relaxed">{tr(s.body)}</p>
             </article>
           ))}
         </div>
@@ -564,21 +584,21 @@ function Home({
 
       {/* Etalase: tujuh produk aktif; karya demo diberi label sebagai contoh. */}
       <section className="mt-20" aria-label="Tujuh bentuk kreasi fisik">
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Tujuh Cara Mewujudkan Karya</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Satu Karya, Banyak Cara <span className="hero-word-sky">untuk Jadi Nyata.</span></h2>
-        <p className="mt-3 max-w-2xl leading-relaxed text-[var(--dim)]">Mewarnai selalu gratis. Pilih produk setelah mewarnai dan lihat bagaimana karya serta nama si kecil tampil pada produk pilihanmu. Gratis ongkir untuk belanja minimal Rp100.000 setelah diskon; di bawahnya ongkir Rp10.000 per pesanan.</p>
+        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">{tr("Tujuh Cara Mewujudkan Karya")}</p>
+        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">{tr("Satu Karya, Banyak Cara")} <span className="hero-word-sky">{tr("untuk Jadi Nyata.")}</span></h2>
+        <p className="mt-3 max-w-2xl leading-relaxed text-[var(--dim)]">{tr("Mewarnai selalu gratis. Pilih produk setelah mewarnai dan lihat bagaimana karya serta nama si kecil tampil pada produk pilihanmu. Gratis ongkir untuk belanja minimal Rp100.000 setelah diskon; di bawahnya ongkir Rp10.000 per pesanan.")}</p>
         <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {ACTIVE_PRODUCT_IDS.map((id) => (
             <article key={id} className="flex flex-col overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]">
               <div className="bg-[#EEF4E4] p-4">
                 <DeferredPreview><CatalogProductPreview key={id} product={id} project={demoProject} /></DeferredPreview>
-                <p className="pt-2 text-center text-xs font-semibold text-[var(--dim)]">Contoh personalisasi</p>
+                <p className="pt-2 text-center text-xs font-semibold text-[var(--dim)]">{tr("Contoh personalisasi")}</p>
               </div>
               <div className="flex flex-1 flex-col p-6">
-                <h3 className="font-display text-2xl font-extrabold">{PRODUCT_META[id].title}</h3>
-                <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META[id].description}</p>
+                <h3 className="font-display text-2xl font-extrabold">{tr(PRODUCT_META[id].title)}</h3>
+                <p className="mt-2 leading-relaxed text-[var(--dim)]">{tr(PRODUCT_META[id].description)}</p>
                 <p className="mt-3 font-display text-xl font-extrabold text-olive-deep">{formatIDR(catalogPrices[id] ?? PRODUCT_DEFAULT_PRICES[id])}</p>
-                <button type="button" onClick={onStart} className="mt-5 rounded-full bg-olive px-5 py-2.5 font-display text-base font-semibold text-white transition hover:bg-olive-deep">{PRODUCT_META[id].cta}</button>
+                <button type="button" onClick={onStart} className="mt-5 rounded-full bg-olive px-5 py-2.5 font-display text-base font-semibold text-white transition hover:bg-olive-deep">{tr(PRODUCT_META[id].cta)}</button>
               </div>
             </article>
           ))}
@@ -590,14 +610,14 @@ function Home({
       <section className="mt-20 rounded-[2.5rem] bg-white px-6 py-10 ring-1 ring-[var(--border)] sm:px-10">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Jelajahi Koleksi</p>
-            <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Petualangan Dimulai <span className="hero-word-olive">dari Satu Warna.</span></h2>
+            <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">{tr("Jelajahi Koleksi")}</p>
+            <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">{tr("Petualangan Dimulai")} <span className="hero-word-olive">{tr("dari Satu Warna.")}</span></h2>
           </div>
           <button type="button" onClick={() => go({ view: "explore" })} className="font-display text-sm font-semibold text-sky-deep underline underline-offset-4">
-            Lihat semua karakter
+            {tr("Lihat semua karakter")}
           </button>
         </div>
-        <p className="mt-2 max-w-xl leading-relaxed text-[var(--dim)]">Setiap halaman mulai hitam putih — bidang putih kosong bergaris hitam, siap diwarnai anakmu sendiri.</p>
+        <p className="mt-2 max-w-xl leading-relaxed text-[var(--dim)]">{tr("Setiap halaman mulai hitam putih — bidang putih kosong bergaris hitam, siap diwarnai anakmu sendiri.")}</p>
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
           {COLLECTIONS.map((c) => {
             const first = TEMPLATES.find((t) => t.collection === c.id)!;
@@ -613,15 +633,15 @@ function Home({
                 <div className="rounded-3xl bg-white p-2.5">
                   <ArtworkSvg template={first} colors={{}} strokes={[]} name="" nameFont="baloo" nameColor="#E4572E" />
                 </div>
-                <p className="mt-3 font-display text-lg font-semibold leading-tight text-ink">{c.name}</p>
-                <p className="text-sm font-semibold text-ink-soft">{c.tagline}</p>
+                <p className="mt-3 font-display text-lg font-semibold leading-tight text-ink">{tr(c.name)}</p>
+                <p className="text-sm font-semibold text-ink-soft">{tr(c.tagline)}</p>
                 <p className="mt-1.5 font-display text-sm font-semibold text-olive-deep">{count} karakter →</p>
               </button>
             );
           })}
         </div>
         <div className="mt-6 flex flex-wrap items-center gap-2" aria-label="Belanja berdasarkan umur">
-          <span className="font-display text-sm font-semibold text-[var(--dim)]">Berdasarkan umur:</span>
+          <span className="font-display text-sm font-semibold text-[var(--dim)]">{tr("Berdasarkan umur:")}</span>
           {AGE_BANDS.map((b) => {
             const count = TEMPLATES.filter((t) => t.ageBand === b.id).length;
             return (
@@ -632,7 +652,7 @@ function Home({
                 className="rounded-full px-4 py-2 font-display text-sm font-semibold text-ink ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:shadow-sm"
                 style={{ background: b.soft }}
               >
-                {b.label} <span className="font-body font-bold text-ink">· {count}</span>
+                {tr(b.label)} <span className="font-body font-bold text-ink">· {count}</span>
               </button>
             );
           })}
@@ -640,13 +660,11 @@ function Home({
       </section>
 
       {/* KOLEKSI BUKU MEWARNAI — cuplikan dari semua tahap usia */}
-      <section className="mt-20" aria-label="Koleksi Buku Mewarnai">
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Koleksi Buku Mewarnai</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Dua ratus halaman mewarnai, <span className="hero-word-olive">lima tahap usia.</span></h2>
+      <section className="mt-20" aria-label={tr("Koleksi Buku Mewarnai")}>
+        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">{tr("Koleksi Buku Mewarnai")}</p>
+        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">{tr("Dua ratus halaman mewarnai,")} <span className="hero-word-olive">{tr("lima tahap usia.")}</span></h2>
         <p className="mt-3 max-w-2xl leading-relaxed text-[var(--dim)]">
-          Setiap ilustrasi bergaya buku cerita yang sama — siluet bulat yang lembut, wajah ramah, dan garis yang bersih.
-          Empat puluh untuk setiap tahap: bidang raksasa bergaris tebal untuk bayi 9–18 bulan yang ditemani orang tua, sampai adegan
-          penuh cerita untuk anak 4–5 tahun. Semuanya halaman hitam putih yang siap diwarnai, dijadikan 3D, dan dicetak.
+          {tr("Setiap ilustrasi bergaya buku cerita yang sama — siluet bulat yang lembut, wajah ramah, dan garis yang bersih. Empat puluh untuk setiap tahap: bidang raksasa bergaris tebal untuk bayi 9–18 bulan yang ditemani orang tua, sampai adegan penuh cerita untuk anak 4–5 tahun. Semuanya halaman hitam putih yang siap diwarnai, dijadikan 3D, dan dicetak.")}
         </p>
         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {AGE_BANDS.flatMap((b) => TEMPLATES.filter((t) => t.ageBand === b.id).slice(0, 2)).map((t) => {
@@ -660,14 +678,14 @@ function Home({
                 <p className="text-sm font-semibold text-[var(--dim)]">{t.blurb}</p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] font-bold">
                   <span className="rounded-full px-2 py-0.5 text-ink" style={{ background: ageBandOf(t.ageBand).soft }}>Usia {t.age}</span>
-                  <span className="rounded-full px-2 py-0.5 text-ink" style={{ background: tier.soft }}>{tier.label}</span>
+                  <span className="rounded-full px-2 py-0.5 text-ink" style={{ background: tier.soft }}>{tr(tier.label)}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => startTemplate(t.id)}
                   className="mt-auto pt-3 text-left font-display text-sm font-semibold text-sky-deep"
                 >
-                  <span className="block rounded-full bg-sky-deep px-4 py-2 text-center text-white shadow transition hover:opacity-90">Mulai Mewarnai</span>
+                  <span className="block rounded-full bg-sky-deep px-4 py-2 text-center text-white shadow transition hover:opacity-90">{tr("Mulai Mewarnai")}</span>
                 </button>
               </article>
             );
@@ -679,24 +697,24 @@ function Home({
             onClick={() => go({ view: "explore" })}
             className="rounded-full bg-olive px-8 py-3.5 font-display text-lg font-extrabold text-white shadow-lg transition hover:bg-olive-deep"
           >
-            Lihat Semua Karakter
+            {tr("Lihat Semua Karakter")}
           </button>
         </div>
       </section>
 
       {/* DARI LAYAR MENJADI NYATA — perbandingan empat tahap di panel biru langit logo */}
       <section className="band-sky mt-20 rounded-[2.5rem] px-6 py-10 sm:px-10" aria-label="Dari layar menjadi nyata">
-        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Dari Layar Menjadi Nyata</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Perjalanan satu <span className="band-accent">karya kecil</span></h2>
+        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">{tr("Dari Layar Menjadi Nyata")}</p>
+        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">{tr("Perjalanan satu")} <span className="band-accent">{tr("karya kecil")}</span></h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <figure className="rounded-[1.75rem] bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
             <div className="rounded-3xl bg-white p-2 ring-1 ring-black/5">
               <ArtworkSvg template={dino} colors={{}} strokes={[]} name="" nameFont="baloo" nameColor="#E4572E" />
             </div>
             <figcaption className="pt-3">
-              <span className="font-display text-sm font-semibold text-olive">Tahap 1</span>
-              <p className="font-display text-base font-semibold">Ilustrasi asli</p>
-              <p className="text-sm leading-relaxed text-[var(--dim)]">Halaman hitam putih kosong — titik awal setiap kreasi.</p>
+              <span className="font-display text-sm font-semibold text-olive">{tr("Tahap 1")}</span>
+              <p className="font-display text-base font-semibold">{tr("Ilustrasi asli")}</p>
+              <p className="text-sm leading-relaxed text-[var(--dim)]">{tr("Halaman hitam putih kosong — titik awal setiap kreasi.")}</p>
             </figcaption>
           </figure>
           <figure className="rounded-[1.75rem] bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
@@ -704,9 +722,9 @@ function Home({
               <ArtworkSvg template={dino} colors={demo} strokes={[]} name="Adam" nameFont="baloo" nameColor="#E4572E" />
             </div>
             <figcaption className="pt-3">
-              <span className="font-display text-sm font-semibold text-olive">Tahap 2</span>
-              <p className="font-display text-base font-semibold">Hasil warnai anak</p>
-              <p className="text-sm leading-relaxed text-[var(--dim)]">Warna dan nama pilihan si kecil (gambar contoh berlabel).</p>
+              <span className="font-display text-sm font-semibold text-olive">{tr("Tahap 2")}</span>
+              <p className="font-display text-base font-semibold">{tr("Hasil warnai anak")}</p>
+              <p className="text-sm leading-relaxed text-[var(--dim)]">{tr("Warna dan nama pilihan si kecil (gambar contoh berlabel).")}</p>
             </figcaption>
           </figure>
           <figure className="rounded-[1.75rem] bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
@@ -714,9 +732,9 @@ function Home({
               <PillowViewer template={dino} colors={demo} strokes={[]} name="Adam" nameFontFamily={fontFamilyOf("baloo")} nameColor="#E4572E" height={190} showControls={false} autoRotate={false} restYaw={Math.PI + 0.6} />
             </div>
             <figcaption className="pt-3">
-              <span className="font-display text-sm font-semibold text-olive">Tahap 3</span>
-              <p className="font-display text-base font-semibold">Model digital Bantal Kertas</p>
-              <p className="text-sm leading-relaxed text-[var(--dim)]">Bentuk yang akan kamu terima — dibangun dari garis bentuk dan warna yang sama dengan lembar cetak tahap berikutnya.</p>
+              <span className="font-display text-sm font-semibold text-olive">{tr("Tahap 3")}</span>
+              <p className="font-display text-base font-semibold">{tr("Model digital Bantal Kertas")}</p>
+              <p className="text-sm leading-relaxed text-[var(--dim)]">{tr("Bentuk yang akan kamu terima — dibangun dari garis bentuk dan warna yang sama dengan lembar cetak tahap berikutnya.")}</p>
             </figcaption>
           </figure>
           <figure className="rounded-[1.75rem] bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
@@ -724,9 +742,9 @@ function Home({
               <PillowPreview net={dinoPillowNet} template={dino} colors={demo} strokes={[]} name="Adam" nameFont="baloo" nameColor="#E4572E" />
             </div>
             <figcaption className="pt-3">
-              <span className="font-display text-sm font-semibold text-olive">Tahap 4</span>
-              <p className="font-display text-base font-semibold">Lembar kit-nya</p>
-              <p className="text-sm leading-relaxed text-[var(--dim)]">Lembar cetak asli Bantal Kertas dari file produksinya — panel depan, panel belakang, strip gusset, dan alas lipat yang terlipat menjadi model di tahap 3. Bukan foto produk manufaktur.</p>
+              <span className="font-display text-sm font-semibold text-olive">{tr("Tahap 4")}</span>
+              <p className="font-display text-base font-semibold">{tr("Lembar kit-nya")}</p>
+              <p className="text-sm leading-relaxed text-[var(--dim)]">{tr("Lembar cetak asli Bantal Kertas dari file produksinya — panel depan, panel belakang, strip gusset, dan alas lipat yang terlipat menjadi model di tahap 3. Bukan foto produk manufaktur.")}</p>
             </figcaption>
           </figure>
         </div>
@@ -734,21 +752,19 @@ function Home({
 
       {/* DIBUAT OLEH SENIMAN KECIL — hanya karya tersimpan nyata, panel putih */}
       <section className="mt-20 rounded-[2.5rem] bg-white px-6 py-10 ring-1 ring-[var(--border)] sm:px-10" aria-label="Dibuat oleh seniman kecil">
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Dibuat oleh Seniman Kecil</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Galeri <span className="hero-word-sky">keluargamu sendiri</span></h2>
+        <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">{tr("Dibuat oleh Seniman Kecil")}</p>
+        <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">{tr("Galeri")} <span className="hero-word-sky">{tr("keluargamu sendiri")}</span></h2>
         {madeList.length === 0 ? (
           <div className="mt-6 rounded-[1.75rem] bg-[var(--surface)] p-6 ring-1 ring-[var(--border)]">
             <p className="max-w-lg leading-relaxed text-[var(--dim)]">
-              Galeri ini hanya menampilkan karya yang benar-benar dibuat dan disimpan di
-              perangkat ini — kami tidak memasang contoh palsu. Kreasi pertama keluargamu
-              akan tampil di sini.
+              {tr("Galeri ini hanya menampilkan karya yang benar-benar dibuat dan disimpan di perangkat ini — kami tidak memasang contoh palsu. Kreasi pertama keluargamu akan tampil di sini.")}
             </p>
             <button
               type="button"
               onClick={() => go({ view: "explore" })}
               className="mt-4 rounded-full bg-tang px-6 py-2.5 font-display text-base font-semibold text-ink transition hover:bg-tang-deep"
             >
-              Buat Kreasi Pertama
+              {tr("Buat Kreasi Pertama")}
             </button>
           </div>
         ) : (
@@ -778,8 +794,8 @@ function Home({
       {/* KENAPA ORANG TUA MENYUKAINYA */}
       <section className="mt-20 grid gap-8 lg:grid-cols-[1fr_1.4fr]" aria-label="Kenapa orang tua menyukainya">
         <div>
-          <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">Untuk Orang Tua</p>
-          <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">Bukan Sekadar <span className="hero-word-olive">Mewarnai.</span></h2>
+          <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-olive">{tr("Untuk Orang Tua")}</p>
+          <h2 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">{tr("Bukan Sekadar")} <span className="hero-word-olive">{tr("Mewarnai.")}</span></h2>
           <p className="mt-3 max-w-sm leading-relaxed text-[var(--dim)]">
             {brandName} dirancang untuk anak, dan dibuat meyakinkan untuk orang tua:
             aktivitasnya nyata, hasilnya bisa dipegang, dan datanya tetap privat.
@@ -789,7 +805,7 @@ function Home({
             onClick={() => go({ view: "parents" })}
             className="mt-5 rounded-full bg-[var(--surface)] px-6 py-2.5 font-display text-base font-semibold ring-1 ring-[var(--border)] transition hover:bg-[var(--surface-alt)]"
           >
-            Baca Panduan Orang Tua
+            {tr("Baca Panduan Orang Tua")}
           </button>
         </div>
         <dl className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
@@ -799,9 +815,9 @@ function Home({
             { t: "Nama anak pada setiap karya", d: "Papan nama personal membuat setiap hasil terasa miliknya — dan mudah dikenali sebagai karyanya." },
             { t: "Kenang-kenangan yang bisa disimpan", d: "Hasil jadi yang berdiri di rak buku: gambar masa kecil yang tidak hilang di galeri foto." },
           ].map((b) => (
-            <div key={b.t} className="border-t-2 border-[var(--border)] pt-4">
-              <dt className="font-display text-lg font-semibold">{b.t}</dt>
-              <dd className="mt-1 leading-relaxed text-[var(--dim)]">{b.d}</dd>
+            <div key={tr(b.t)} className="border-t-2 border-[var(--border)] pt-4">
+              <dt className="font-display text-lg font-semibold">{tr(b.t)}</dt>
+              <dd className="mt-1 leading-relaxed text-[var(--dim)]">{tr(b.d)}</dd>
             </div>
           ))}
         </dl>
@@ -809,24 +825,24 @@ function Home({
 
       {/* CTA PENUTUP — satu-satunya panel warna pekat: olive #667C3E */}
       <section className="band-butter mt-12 rounded-[2rem] p-6 sm:p-9">
-        <p className="font-display text-xs font-bold uppercase tracking-widest text-olive-deep">Hampers Ulang Tahun</p>
-        <h2 className="mt-2 font-display text-3xl font-extrabold">Hadiah kecil, kenangan besar.</h2>
-        <p className="mt-2 max-w-xl font-semibold">Rencanakan hampers personalisasi untuk tamu ulang tahun si kecil. Pilih produk, jumlah tamu, dan tema acara. Minimum 20 paket.</p>
-        <button type="button" onClick={()=>go({view:"birthday"})} className="mt-4 rounded-full bg-olive px-6 py-3 font-bold text-white">Rencanakan Hampers</button>
+        <p className="font-display text-xs font-bold uppercase tracking-widest text-olive-deep">{tr("Hampers Ulang Tahun")}</p>
+        <h2 className="mt-2 font-display text-3xl font-extrabold">{tr("Hadiah kecil, kenangan besar.")}</h2>
+        <p className="mt-2 max-w-xl font-semibold">{tr("Rencanakan hampers personalisasi untuk tamu ulang tahun si kecil. Pilih produk, jumlah tamu, dan tema acara. Minimum 20 paket.")}</p>
+        <button type="button" onClick={()=>go({view:"birthday"})} className="mt-4 rounded-full bg-olive px-6 py-3 font-bold text-white">{tr("Rencanakan Hampers")}</button>
       </section>
       <section className="band-olive mt-20 rounded-[2.5rem] px-6 py-12 text-center sm:px-12">
         <h2 className="mx-auto max-w-xl font-display text-3xl font-semibold leading-tight sm:text-4xl">
           Little Hands. Big Creations.
         </h2>
         <p className="band-dim mx-auto mt-3 max-w-md leading-relaxed">
-          Satu karya kecil bisa menjadi kenangan yang besar.
+          {tr("Satu karya kecil bisa menjadi kenangan yang besar.")}
         </p>
         <button
           type="button"
-          onClick={() => go({ view: "explore" })}
+          onClick={onStart}
           className="mt-6 rounded-full bg-tang px-8 py-3 font-display text-lg font-semibold text-ink shadow-sm transition hover:bg-tang-deep"
         >
-          Mulai Berkreasi
+          {tr("Mulai Berkreasi")}
         </button>
       </section>
     </div>
@@ -838,6 +854,7 @@ function Home({
 const EXPLORE_PAGE = 24;
 
 function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: string) => void; initialAge?: string }) {
+  const tr = useT();
   const [filter, setFilter] = useState<string>("all");
   const [ageFilter, setAgeFilter] = useState<string>(initialAge);
   const [diffFilter, setDiffFilter] = useState<string>("all");
@@ -845,7 +862,7 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
   const [visible, setVisible] = useState(EXPLORE_PAGE);
   useEffect(() => {
     setVisible(EXPLORE_PAGE);
-  }, [filter, ageFilter, diffFilter, query]);
+  }, [filter, ageFilter, diffFilter, query, tr]);
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = TEMPLATES.filter(
@@ -853,37 +870,37 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
         (filter === "all" || t.collection === filter) &&
         (ageFilter === "all" || t.ageBand === ageFilter) &&
         (diffFilter === "all" || difficultyTierOf(t).id === diffFilter) &&
-        (q === "" || t.name.toLowerCase().includes(q)),
+        (q === "" || t.name.toLowerCase().includes(q) || tr(t.name).toLowerCase().includes(q)),
     );
     return [...list].sort((a, b) => a.name.localeCompare(b.name, "id"));
-  }, [filter, ageFilter, diffFilter, query]);
+  }, [filter, ageFilter, diffFilter, query, tr]);
   const shown = items.slice(0, visible);
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16">
       <div className="band-sky mt-4 rounded-[2rem] px-6 py-8 sm:px-8">
-        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Buku Mewarnai</p>
-        <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">Pilih <span className="band-accent">Karakter</span></h1>
-        <p className="band-dim mt-2 max-w-2xl leading-relaxed">Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 260 karakter dalam lima kategori umur — 52 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.</p>
+        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">{tr("Buku Mewarnai")}</p>
+        <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">{tr("Pilih")} <span className="band-accent">{tr("Karakter")}</span></h1>
+        <p className="band-dim mt-2 max-w-2xl leading-relaxed">{tr("Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 260 karakter dalam lima kategori umur — 52 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.")}</p>
         <div className="mt-4">
-          <label htmlFor="explore-search" className="sr-only">Cari karakter berdasarkan nama</label>
+          <label htmlFor="explore-search" className="sr-only">{tr("Cari karakter berdasarkan nama")}</label>
           <input
             id="explore-search"
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari karakter… cth. kucing, roket, kaktus"
+            placeholder={tr("Cari karakter… cth. kucing, roket, kaktus")}
             className="w-full rounded-full bg-white px-5 py-3 font-display text-base font-bold text-ink ring-1 ring-black/5 focus:outline-2 focus:outline-sky-deep sm:max-w-md"
           />
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Filter berdasarkan koleksi">
+      <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={tr("Filter berdasarkan koleksi")}>
         <button
           type="button"
           aria-pressed={filter === "all"}
           onClick={() => setFilter("all")}
           className={`rounded-full px-4 py-2 font-display text-sm font-bold ${filter === "all" ? "bg-ink text-white" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
         >
-          Semua buku
+          {tr("Semua buku")}
         </button>
         {COLLECTIONS.map((c) => (
           <button
@@ -894,19 +911,19 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
             className={`rounded-full px-4 py-2 font-display text-sm font-bold ${filter === c.id ? "bg-ink text-white" : "ring-1 ring-black/5"}`}
             style={filter === c.id ? undefined : { background: c.soft, color: "var(--text)" }}
           >
-            {c.name}
+            {tr(c.name)}
           </button>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Filter berdasarkan umur">
-        <span className="font-display text-sm font-extrabold text-olive">Umur:</span>
+      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label={tr("Filter berdasarkan umur")}>
+        <span className="font-display text-sm font-extrabold text-olive">{tr("Umur:")}</span>
         <button
           type="button"
           aria-pressed={ageFilter === "all"}
           onClick={() => setAgeFilter("all")}
           className={`rounded-full px-4 py-2 font-display text-sm font-bold ${ageFilter === "all" ? "bg-olive text-white shadow" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
         >
-          Semua umur
+          {tr("Semua umur")}
         </button>
         {AGE_BANDS.map((b) => (
           <button
@@ -921,19 +938,19 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
                 : { background: b.soft, color: b.color }
             }
           >
-            {b.label}
+            {tr(b.label)}
           </button>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Filter berdasarkan tingkat kesulitan">
-        <span className="font-display text-sm font-extrabold text-olive">Kesulitan:</span>
+      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label={tr("Filter berdasarkan tingkat kesulitan")}>
+        <span className="font-display text-sm font-extrabold text-olive">{tr("Kesulitan:")}</span>
         <button
           type="button"
           aria-pressed={diffFilter === "all"}
           onClick={() => setDiffFilter("all")}
           className={`rounded-full px-4 py-2 font-display text-sm font-bold ${diffFilter === "all" ? "bg-olive text-white shadow" : "bg-[var(--surface)] ring-1 ring-[var(--border)]"}`}
         >
-          Semua tingkat
+          {tr("Semua tingkat")}
         </button>
         {DIFFICULTY_TIERS.map((d) => (
           <button
@@ -941,7 +958,7 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
             type="button"
             aria-pressed={diffFilter === d.id}
             onClick={() => setDiffFilter(d.id)}
-            aria-label={`${d.label} — ${d.hint}`}
+            aria-label={`${tr(d.label)} — ${d.hint}`}
             className="rounded-full px-4 py-2 font-display text-sm font-bold ring-1 ring-[var(--border)]"
             style={
               diffFilter === d.id
@@ -949,18 +966,18 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
                 : { background: d.soft, color: d.color }
             }
           >
-            {d.label}
+            {tr(d.label)}
           </button>
         ))}
       </div>
       {items.length === 0 && (
         <p className="mt-8 rounded-3xl bg-[var(--surface)] p-6 text-center font-display font-bold ring-1 ring-[var(--border)]">
-          Belum ada karakter di kombinasi ini — coba koleksi, umur, atau tingkat kesulitan lain ya.
+          {tr("Belum ada karakter di kombinasi ini — coba koleksi, umur, atau tingkat kesulitan lain ya.")}
         </p>
       )}
       {items.length > 0 && (
         <p className="mt-4 text-sm font-bold text-[var(--dim)]" role="status">
-          Menampilkan {shown.length} dari {items.length} karakter
+          {tr("Menampilkan")} {shown.length} {tr("dari")} {items.length} {tr("karakter")}
         </p>
       )}
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -971,27 +988,27 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
               <div className="rounded-3xl bg-white p-2 ring-1 ring-black/5">
                 <ArtworkSvg template={t} colors={{}} strokes={[]} name="" nameFont="baloo" nameColor="#E4572E" />
               </div>
-              <h2 className="mt-2 font-display text-lg font-semibold leading-tight">{t.name}</h2>
-              <p className="text-sm font-semibold text-[var(--dim)]">{t.blurb}</p>
+              <h2 className="mt-2 font-display text-lg font-semibold leading-tight">{tr(t.name)}</h2>
+              <p className="text-sm font-semibold text-[var(--dim)]">{tr(t.blurb)}</p>
               <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-bold">
                 <span className="rounded-full bg-ink px-2.5 py-1 text-white">
-                  Hitam Putih
+                  {tr("Hitam Putih")}
                 </span>
                 <span className="rounded-full px-2.5 py-1" style={{ background: c.soft, color: "var(--text)" }}>
-                  {c.name}
+                  {tr(c.name)}
                 </span>
                 <span
                   className="rounded-full px-2.5 py-1 text-ink"
                   style={{ background: ageBandOf(t.ageBand).soft }}
                 >
-                  Umur {t.age}
+                  {tr("Umur")} {tr(t.age)}
                 </span>
                 <span
                   className="rounded-full px-2.5 py-1 text-ink"
                   style={{ background: difficultyTierOf(t).soft }}
                   title={difficultyTierOf(t).hint}
                 >
-                  {difficultyTierOf(t).label}
+                  {tr(difficultyTierOf(t).label)}
                 </span>
               </div>
               <button
@@ -999,7 +1016,7 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
                 onClick={() => startTemplate(t.id)}
                 className="mt-3 rounded-full bg-sky-deep px-4 py-2.5 font-display text-base font-semibold text-white shadow transition hover:opacity-90"
               >
-                Mulai Mewarnai
+                {tr("Mulai Mewarnai")}
               </button>
             </article>
           );
@@ -1262,6 +1279,7 @@ function Studio({
   onEditCustom: () => void;
   go: (r: Route) => void;
 }) {
+  const tr = useT();
   const template = templateForProject(project);
   const [nameError, setNameError] = useState("");
   const simpleTemplate = useMemo(() => simplifyTemplate(template), [template]);
@@ -1277,38 +1295,38 @@ function Studio({
     <div className="mx-auto max-w-4xl px-4 pb-16">
       <div className="band-sky mt-4 flex flex-wrap items-center gap-2 rounded-[1.75rem] px-5 py-4">
         <button type="button" onClick={() => go({ view: "explore" })} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
-          ← Semua buku
+          {tr("← Semua buku")}
         </button>
-        <h1 className="font-display text-3xl font-semibold">Studio Mewarnai · {template.name}</h1>
-        <span className="rounded-full bg-ink px-3 py-1.5 font-display text-xs font-extrabold text-white">Gosok bidang untuk mengisinya</span>
+        <h1 className="font-display text-3xl font-semibold">{tr("Studio Mewarnai")} · {tr(template.name)}</h1>
+        <span className="rounded-full bg-ink px-3 py-1.5 font-display text-xs font-extrabold text-white">{tr("Gosok bidang untuk mengisinya")}</span>
         {template.custom && (
           <button
             type="button"
             onClick={onEditCustom}
             className="rounded-full bg-white px-4 py-2 font-display text-sm font-extrabold text-olive-deep ring-1 ring-black/5"
           >
-            Ubah Bagian Karakter
+            {tr("Ubah Bagian Karakter")}
           </button>
         )}
-        <span className="band-dim ml-auto text-sm font-bold" role="status">{saveState}</span>
+        <span className="band-dim ml-auto text-sm font-bold" role="status">{tr(saveState)}</span>
       </div>
 
       {/* Indikator kemajuan: dihitung dari bagian yang benar-benar sudah diwarnai */}
       <div className="mt-4 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-display text-sm font-semibold">Kemajuan mewarnai</p>
-          <p className="text-sm font-bold text-[var(--dim)]">{coloredCount} dari {template.regions.length} bagian · {progressPct}%</p>
+          <p className="font-display text-sm font-semibold">{tr("Kemajuan mewarnai")}</p>
+          <p className="text-sm font-bold text-[var(--dim)]">{coloredCount} {tr("dari")} {template.regions.length} {tr("bagian")} · {progressPct}%</p>
         </div>
-        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[var(--surface-alt)] ring-1 ring-[var(--border)]" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Kemajuan mewarnai">
+        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[var(--surface-alt)] ring-1 ring-[var(--border)]" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label={tr("Kemajuan mewarnai")}>
           <div className="h-full rounded-full bg-olive transition-all duration-500" style={{ width: `${progressPct}%` }} />
         </div>
       </div>
 
       {/* Personalization */}
-      <section className="mt-4 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]" aria-label="Personalisasi">
+      <section className="mt-4 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]" aria-label={tr("Personalisasi")}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="child-name" className="font-display text-sm font-bold">Nama Si Kecil</label>
+            <label htmlFor="child-name" className="font-display text-sm font-bold">{tr("Nama Si Kecil")}</label>
             <input
               id="child-name"
               {...FIELDS.createProject.childName}
@@ -1317,24 +1335,24 @@ function Studio({
                 setProject({ ...project, childName: e.target.value });
                 setNameError("");
               }}
-              placeholder="cth. BABA"
+              placeholder={tr("cth. BABA")}
               className="mt-1 w-full rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-display text-lg font-bold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
             />
-            {nameError && <p className="mt-1 text-sm font-bold text-berry">{nameError}</p>}
-            <label htmlFor="child-message" className="mt-3 block font-display text-sm font-bold">Keterangan Kreasi</label>
+            {nameError && <p className="mt-1 text-sm font-bold text-berry">{tr(nameError)}</p>}
+            <label htmlFor="child-message" className="mt-3 block font-display text-sm font-bold">{tr("Keterangan Kreasi")}</label>
             <textarea
               id="child-message"
               {...FIELDS.createProject.message}
               value={project.message}
               onChange={(e) => setProject({ ...project, message: e.target.value })}
-              placeholder="Tuliskan cerita kecil tentang karyamu..."
+              placeholder={tr("Tuliskan cerita kecil tentang karyamu...")}
               rows={3}
               className="mt-1 w-full resize-none rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-semibold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
             />
             <p className="mt-1 text-right text-xs font-bold text-[var(--dim)]">{project.message.length}/100</p>
           </div>
           <div>
-            <p className="font-display text-sm font-bold" id="font-label">Gaya nama</p>
+            <p className="font-display text-sm font-bold" id="font-label">{tr("Gaya nama")}</p>
             <div className="mt-1 flex flex-wrap gap-2" role="radiogroup" aria-labelledby="font-label">
               {NAME_FONTS.map((f) => (
                 <button
@@ -1350,7 +1368,7 @@ function Studio({
                 </button>
               ))}
             </div>
-            <p className="mt-3 font-display text-sm font-bold" id="namecolor-label">Warna nama</p>
+            <p className="mt-3 font-display text-sm font-bold" id="namecolor-label">{tr("Warna nama")}</p>
             <div className="mt-1 flex flex-wrap gap-2" role="radiogroup" aria-labelledby="namecolor-label">
               {NAME_COLORS.map((c) => (
                 <button
@@ -1366,7 +1384,7 @@ function Studio({
                 />
               ))}
             </div>
-            <p className="mt-3 font-display text-sm font-bold" id="namealign-label">Posisi nama</p>
+            <p className="mt-3 font-display text-sm font-bold" id="namealign-label">{tr("Posisi nama")}</p>
             <div className="mt-1 flex flex-wrap gap-2" role="radiogroup" aria-labelledby="namealign-label">
               {([
                 { id: "left", label: "Kiri" },
@@ -1381,7 +1399,7 @@ function Studio({
                   onClick={() => setProject({ ...project, nameAlign: a.id })}
                   className={`rounded-full px-4 py-2 font-display text-sm font-bold ${project.nameAlign === a.id ? "bg-olive text-white shadow" : "bg-[var(--bg)] ring-1 ring-[var(--border)]"}`}
                 >
-                  {a.label}
+                  {tr(a.label)}
                 </button>
               ))}
             </div>
@@ -1391,15 +1409,15 @@ function Studio({
 
       {simpleTemplate && (
         <div className="mt-4 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Mode kesulitan mewarnai">
-            <span className="font-display text-sm font-extrabold">Mode mewarnai:</span>
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label={tr("Mode kesulitan mewarnai")}>
+            <span className="font-display text-sm font-extrabold">{tr("Mode mewarnai:")}</span>
             <button
               type="button"
               aria-pressed={mode === "mudah"}
               onClick={() => setMode("mudah")}
               className={`rounded-full px-4 py-2 font-display text-sm font-extrabold ${mode === "mudah" ? "bg-olive text-white shadow" : "bg-[var(--bg)] ring-1 ring-[var(--border)]"}`}
             >
-              Mode Mudah · {simpleTemplate.regions.length} bagian
+              {tr("Mode Mudah")} · {simpleTemplate.regions.length} {tr("bagian")}
             </button>
             <button
               type="button"
@@ -1407,7 +1425,7 @@ function Studio({
               onClick={() => setMode("lengkap")}
               className={`rounded-full px-4 py-2 font-display text-sm font-extrabold ${mode === "lengkap" ? "bg-olive text-white shadow" : "bg-[var(--bg)] ring-1 ring-[var(--border)]"}`}
             >
-              Mode Lengkap · {template.regions.length} bagian
+              {tr("Mode Lengkap")} · {template.regions.length} {tr("bagian")}
             </button>
           </div>
           <p className="mt-2 text-sm font-semibold text-[var(--dim)]">
@@ -1449,7 +1467,7 @@ function Studio({
       {/* Lembar karya personal: nama dan keterangan tampil sebagai lapisan
           teks tersendiri DI BAWAH gambar utama — persis komposisi cetak
           A4-nya (gambar ±72%, nama ±10%, keterangan ±10%, merek kecil). */}
-      <section className="mt-4 rounded-[1.75rem] bg-white px-6 py-6 text-center shadow-sm ring-1 ring-[var(--border)]" aria-label="Pratinjau lembar karya">
+      <section className="mt-4 rounded-[1.75rem] bg-white px-6 py-6 text-center shadow-sm ring-1 ring-[var(--border)]" aria-label={tr("Pratinjau lembar karya")}>
         <p
           className="font-display font-bold uppercase leading-tight"
           style={{
@@ -1480,7 +1498,7 @@ function Studio({
           onClick={onSave}
           className="rounded-full bg-[var(--surface)] px-7 py-3.5 font-display text-lg font-extrabold text-olive-deep ring-2 ring-olive transition hover:bg-sage-soft"
         >
-          Simpan Kreasi
+          {tr("Simpan Kreasi")}
         </button>
 
         <button
@@ -1494,10 +1512,10 @@ function Studio({
           }}
           className="rounded-full bg-olive px-7 py-3.5 font-display text-lg font-extrabold text-white shadow transition hover:bg-olive-deep"
         >
-          Jadikan Nyata
+          {tr("Jadikan Nyata")}
         </button>
       </div>
-      <p className="mt-3 text-center text-sm font-semibold text-[var(--dim)]">Gambarmu juga tersimpan otomatis selagi kamu mewarnai.</p>
+      <p className="mt-3 text-center text-sm font-semibold text-[var(--dim)]">{tr("Gambarmu juga tersimpan otomatis selagi kamu mewarnai.")}</p>
     </div>
   );
 }
@@ -1960,6 +1978,7 @@ function Creations({
   onEditCustom: (p: ServerProject) => void;
   onCustomNew: () => void;
 }) {
+  const tr = useT();
   const queryClient = useQueryClient();
   const projects = useQuery({
     queryKey: ["projects"],
@@ -1971,23 +1990,23 @@ function Creations({
   });
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
-  if (projects.isPending) return <p className="px-4 py-10 text-center font-display font-bold">Memuat kreasimu…</p>;
+  if (projects.isPending) return <p className="px-4 py-10 text-center font-display font-bold">{tr("Memuat kreasimu…")}</p>;
   if (projects.error) return <p className="px-4 py-10 text-center font-display font-bold">Kami tidak bisa memuat kreasimu. Tarik untuk mencoba lagi.</p>;
   const list = projects.data.projects.filter((p) => !isOrphanProject(p));
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16">
       <div className="band-butter mt-4 rounded-[2rem] px-6 py-8 sm:px-8">
-        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Koleksi Pribadi Si Kecil</p>
-        <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">Kreasi<span className="band-accent">ku</span></h1>
+        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">{tr("Koleksi Pribadi Si Kecil")}</p>
+        <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">{tr("Kreasiku")}</h1>
         <p className="band-dim mt-2 max-w-xl leading-relaxed">Semua gambar tersimpan ada di sini — buka lagi drafnya, putar dalam 3D, atau wujudkan jadi mainan kertas lagi. Karya yang sudah selesai ditandai “Selesai”.</p>
       </div>
       {list.length === 0 ? (
         <div className="mt-8 rounded-3xl bg-[var(--surface)] p-8 text-center ring-1 ring-[var(--border)]">
-          <p className="font-display text-xl font-extrabold">Belum ada kreasi</p>
-          <p className="mt-1 font-semibold text-[var(--dim)]">Warnai karakter pertamamu dan ia akan tersimpan di sini.</p>
+          <p className="font-display text-xl font-extrabold">{tr("Belum ada kreasi")}</p>
+          <p className="mt-1 font-semibold text-[var(--dim)]">{tr("Warnai karakter pertamamu dan ia akan tersimpan di sini.")}</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
             <button type="button" onClick={onStart} className="rounded-full bg-tang px-6 py-3 font-display font-extrabold text-ink shadow">
-              Pilih Karakter
+              {tr("Pilih Karakter")}
             </button>
 
           </div>
@@ -2031,7 +2050,7 @@ function Creations({
                     onClick={() => onEditCustom(p)}
                     className="mt-1.5 rounded-full px-2 py-1.5 font-display text-xs font-extrabold text-olive ring-1 ring-[var(--border)]"
                   >
-                    Ubah Bagian Karakter
+                    {tr("Ubah Bagian Karakter")}
                   </button>
                 )}
                 <button
@@ -2060,6 +2079,7 @@ function Creations({
 /* ------------------------------ Parents ------------------------------ */
 
 function Parents() {
+  const tr = useT();
   const queryClient = useQueryClient();
   const projects = useQuery({
     queryKey: ["projects"],
@@ -2075,7 +2095,7 @@ function Parents() {
   return (
     <div className="mx-auto max-w-4xl px-4 pb-16">
       <div className="band-sage mt-4 rounded-[2rem] px-6 py-8 sm:px-8">
-        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Untuk Orang Tua</p>
+        <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">{tr("Untuk Orang Tua")}</p>
         <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">Panduan &amp; <span className="band-accent">Dasbor Orang Tua</span></h1>
         <p className="band-dim mt-2 max-w-2xl leading-relaxed">Cara platform ini bekerja, produk fisiknya, bahan dan batasannya — plus pengelolaan proyek tersimpan. Tanpa akun, tanpa daftar — proyek tersimpan secara privat di aplikasi ini.</p>
       </div>
@@ -2211,6 +2231,9 @@ function loadCart():SavedCart|null{
  }catch{return null;}
 }
 export function App() {
+  const [language, setLanguage] = useState<Language>(loadLanguage);
+  const tr = (text: string) => translate(language, text);
+  useEffect(() => { document.documentElement.lang = language; try { localStorage.setItem("bfk-language", language); } catch { /* storage unavailable */ } }, [language]);
   const queryClient = useQueryClient();
   const settings = useQuery({
     queryKey: ["settings"],
@@ -2530,14 +2553,14 @@ export function App() {
   };
 
   return (
+    <LanguageContext.Provider value={language}>
     <div className="min-h-screen bg-[var(--bg)] font-body text-[var(--text)]">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:z-50 focus:rounded-xl focus:bg-white focus:p-3">Lewati ke konten utama</a>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:z-50 focus:rounded-xl focus:bg-white focus:p-3">{tr("Lewati ke konten utama")}</a>
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
-      <Header brandName={brandName} route={route} go={go} onCustom={startCustomNew} />
-      {cart.length>0&&!["aff-admin","checkout","ordered"].includes(route.view)&&!route.view.startsWith("aff-")&&<div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-2 text-sm"><button type="button" disabled={cartRestoring} onClick={()=>void resumeCart()} className="rounded-full bg-olive px-4 py-2 font-bold text-white">{cartRestoring?"Membuka…":"Lanjutkan Keranjang ("+cart.reduce((n,l)=>n+l.quantity,0)+")"}</button><button type="button" onClick={()=>{if(window.confirm("Kosongkan keranjang?"))changeCart([]);}} className="text-xs font-bold">Kosongkan</button></div>}
-      {cartError&&<p role="alert" className="mx-auto max-w-6xl px-4 text-sm text-berry">{cartError}</p>}
+      <Header brandName={brandName} route={route} go={go} onCustom={startCustomNew} language={language} onLanguage={setLanguage} cartCount={cart.reduce((n,line)=>n+line.quantity,0)} cartBusy={cartRestoring} onCart={()=>void resumeCart()} onClearCart={()=>{if(window.confirm(tr("Kosongkan keranjang?")))changeCart([]);}} onStart={startColoring} />
+      {cartError&&<p role="alert" className="mx-auto max-w-6xl px-4 text-sm text-berry">{tr(cartError)}</p>}
       <main id="main-content" style={route.view === "studio" ? { overflowAnchor: "none" } : undefined}>
-        <Suspense fallback={<p role="status" className="p-6 text-center">Memuat halaman…</p>}>
+        <Suspense fallback={<p role="status" className="p-6 text-center">{tr("Memuat halaman…")}</p>}>
         {route.view === "home" && (
           <Home
             brandName={brandName}
@@ -2672,19 +2695,20 @@ export function App() {
       </main>
       <footer className="bg-[#F1EBDD] px-4 pb-24 pt-10 text-center text-sm font-semibold lg:pb-10">
         <img src={logoUrl} alt="" className="mx-auto h-12 w-12 rounded-2xl object-cover ring-1 ring-black/10" />
-        <p className="mt-3">{brandName} · Warnai → Personalisasi → 3D → Cetak → Rakit</p>
-        <p className="mt-1 text-[var(--dim)]">Orang dewasa, mohon dampingi saat menggunting &amp; melipat.</p>
+        <p className="mt-3">{brandName} · {tr("Warnai → Personalisasi → 3D → Cetak → Rakit")}</p>
+        <p className="mt-1 text-[var(--dim)]">{tr("Orang dewasa, mohon dampingi saat menggunting & melipat.")}</p>
         <p className="mt-2 flex flex-wrap justify-center gap-x-5 gap-y-2">
           <button type="button" onClick={() => goAffiliate({ view: "aff-register" })} className="font-display font-bold text-olive-deep underline">
-            Daftar KOL &amp; Affiliate
+            {tr("Daftar KOL & Affiliate")}
           </button>
           <button type="button" onClick={() => goAffiliate({ view: "aff-login" })} className="font-display font-bold text-sky-deep underline">
-            Masuk Dasbor Mitra
+            {tr("Masuk Dasbor Mitra")}
           </button>
         </p>
       </footer>
       <MobileTabBar route={route} go={go} onCustom={startCustomNew} />
       {celebrating && <Celebration name={project.childName} />}
     </div>
+    </LanguageContext.Provider>
   );
 }

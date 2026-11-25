@@ -1,3 +1,4 @@
+import { useT } from "../lib/i18n";
 // "Free to Color, Pay to Create" — the monetization flow that starts when
 // a parent taps "Jadikan Nyata" on a finished artwork:
 //
@@ -411,6 +412,7 @@ export function Masterpiece({
   onCart: () => void;
   onMagic: () => void;
 }) {
+  const tr = useT();
   const cfg = useShopConfig();
   const template = templateForSnapshot(project);
   const [featured, setFeatured] = useState<ProductId | "artwork">("poster");
@@ -427,7 +429,7 @@ export function Masterpiece({
         </button>
         <div className="clear-both pt-2">
           <h1 className="font-display text-3xl font-semibold leading-tight sm:text-[2.6rem]">
-            Karya Si Kecil <span className="band-accent">Sudah Siap!</span>
+            {tr("Karya Si Kecil")} <span className="band-accent">{tr("Sudah Siap!")}</span>
           </h1>
           <p className="band-dim mx-auto mt-2 max-w-lg font-semibold">
             Wujudkan imajinasi si kecil menjadi barang istimewa.
@@ -436,7 +438,7 @@ export function Masterpiece({
       </div>
 
       {/* Pratinjau besar: karya asli, atau mockup produk yang sedang dilihat */}
-      <section className="mt-5 rounded-[2rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pratinjau karya">
+      <section className="mt-5 rounded-[2rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label={tr("Pratinjau karya")}>
         <div className="mx-auto max-w-md">
           {featured === "artwork" ? (
             <div>
@@ -484,10 +486,10 @@ export function Masterpiece({
 
       <div className="sticky top-2 z-20 mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[var(--surface)] p-3 shadow-md ring-1 ring-[var(--border)]">
         <div aria-live="polite" className="font-display font-bold text-olive-deep">Keranjang · {cartCount} barang</div>
-        <button type="button" disabled={!cartCount} onClick={onCart} className="rounded-full bg-olive px-5 py-2.5 font-bold text-white disabled:opacity-40">Lihat Keranjang</button>
+        <button type="button" disabled={!cartCount} onClick={onCart} className="rounded-full bg-olive px-5 py-2.5 font-bold text-white disabled:opacity-40">{tr("Lihat Keranjang")}</button>
       </div>
       {/* Seluruh pilihan produk aktif */}
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Pilih bentuk kreasimu">
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label={tr("Pilih bentuk kreasimu")}>
         {ACTIVE_PRODUCT_IDS.map((id) => {
           const meta = PRODUCT_META[id];
           return (
@@ -500,8 +502,8 @@ export function Masterpiece({
               <div className="rounded-3xl bg-sky-soft p-3">
                 <ProductPreview product={id} project={project} name={project.childName} fabric="Cream" />
               </div>
-              <h3 className="mt-3 font-display text-xl font-semibold">{meta.title}</h3>
-              <p className="mt-1 font-semibold leading-relaxed text-[var(--dim)]">{meta.description}</p>
+              <h3 className="mt-3 font-display text-xl font-semibold">{tr(meta.title)}</h3>
+              <p className="mt-1 font-semibold leading-relaxed text-[var(--dim)]">{tr(meta.description)}</p>
               <p className="mt-2 font-display text-lg font-semibold text-olive-deep">{priceLine(cfg, id)}</p>
               {id === "accessory59" && (
                 <p className="mt-1 text-xs font-bold text-olive-deep">
@@ -533,14 +535,14 @@ export function Masterpiece({
                   }}
                   className="rounded-full bg-[var(--surface-alt)] px-5 py-2.5 font-display text-sm font-bold ring-1 ring-[var(--border)]"
                 >
-                  {meta.see}
+                  {tr(meta.see)}
                 </button>
                 <button
                   type="button"
                   onClick={() => onCustomize(id)}
                   className="rounded-full bg-tang px-5 py-3 font-display text-base font-semibold text-ink shadow-sm transition hover:bg-tang-deep"
                 >
-                  Pilih &amp; Tambah ke Keranjang
+                  {tr("Pilih & Tambah ke Keranjang")}
                 </button>
               </div>
             </article>
@@ -575,6 +577,7 @@ export function Customize({
   cartCount: number;
   onCart: () => void;
 }) {
+  const tr = useT();
   const cfg = useShopConfig();
   const meta = PRODUCT_META[selection.product];
   const [error, setError] = useState("");
@@ -585,11 +588,11 @@ export function Customize({
         <button type="button" onClick={onBack} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
           ← Semua pilihan
         </button>
-        <h1 className="font-display text-2xl font-semibold">Atur {meta.tagline} Kamu</h1>
+        <h1 className="font-display text-2xl font-semibold">Atur {tr(meta.tagline)} Kamu</h1>
       </div>
 
       <div className="mt-4 grid items-start gap-4 md:grid-cols-2">
-        <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pratinjau produk">
+        <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label={tr("Pratinjau produk")}>
           <ProductPreview
             product={selection.product}
             project={{...project,backgroundId:selection.backgroundId}}
@@ -602,9 +605,9 @@ export function Customize({
           </p>
         </section>
 
-        <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Pengaturan produk">
-          <h2 className="font-display text-xl font-semibold">{meta.title}</h2>
-          <p className="mt-1 font-semibold text-[var(--dim)]">{meta.description}</p>
+        <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label={tr("Pengaturan produk")}>
+          <h2 className="font-display text-xl font-semibold">{tr(meta.title)}</h2>
+          <p className="mt-1 font-semibold text-[var(--dim)]">{tr(meta.description)}</p>
 
           <div className="mt-4">
             <label htmlFor="order-child-name" className="font-display text-sm font-bold">
@@ -616,10 +619,10 @@ export function Customize({
               value={selection.childName}
               disabled={nameLocked}
               onChange={(e) => setSelection({ ...selection, childName: e.target.value })}
-              placeholder="Kosongkan jika tidak ingin nama"
+              placeholder={tr("Kosongkan jika tidak ingin nama")}
               className="mt-1 w-full rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-display text-lg font-bold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
             />
-            {nameLocked && <p className="mt-1 text-xs font-bold text-olive-deep">Nama dan karya yang sama digunakan untuk semua barang di keranjang ini. Kosongkan keranjang untuk memilih nama lain.</p>}
+            {nameLocked && <p className="mt-1 text-xs font-bold text-olive-deep">{tr("Nama dan karya yang sama digunakan untuk semua barang di keranjang ini. Kosongkan keranjang untuk memilih nama lain.")}</p>}
             <p className="mt-1 text-xs font-semibold text-[var(--dim)]">
               {selection.product === "poster"
                 ? "Nama tampil di bawah karya pada poster, dengan gaya huruf & warna dari Studio Mewarnai."
@@ -635,14 +638,14 @@ export function Customize({
             </p>
           </div>
 
-          <fieldset className="mt-5" disabled={nameLocked}><legend className="font-display text-sm font-bold">Pilih background (opsional)</legend>
-            <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Pilihan background">
+          <fieldset className="mt-5" disabled={nameLocked}><legend className="font-display text-sm font-bold">{tr("Pilih background (opsional)")}</legend>
+            <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label={tr("Pilihan background")}>
               {[{id:"",label:"Tanpa background"},...BACKGROUNDS].map(b=><button key={b.id} type="button" role="radio" aria-checked={(selection.backgroundId??"")===b.id} onClick={()=>setSelection({...selection,backgroundId:b.id})} className={`overflow-hidden rounded-xl border p-1 text-xs font-bold ${(selection.backgroundId??"")===b.id?"border-olive ring-2 ring-olive":"border-[var(--border)]"}`}>
                 {b.id?<img src={backgroundUrl(b.id)} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-lg object-cover"/>:<div className="aspect-[4/3] rounded-lg bg-white ring-1 ring-black/5"/>}<span className="block py-1">{b.label}</span>
               </button>)}
             </div><p className="mt-2 text-xs text-[var(--dim)]">{nameLocked?"Background sama untuk seluruh isi keranjang. Kosongkan keranjang untuk menggantinya.":"Gratis. Pilihan background tidak mengubah warna karya."}</p>
           </fieldset>
-          {selection.product==="kidswatch"&&<section className="mt-4 rounded-2xl bg-[#EEF4E4] p-3 text-sm"><p className="font-bold text-olive-deep">Garansi 1 tahun ganti baru</p><p>Untuk kerusakan mesin, layar, tombol atau cacat produksi dalam 12 bulan sejak produk diterima. Hubungi admin dengan nomor pesanan dan bukti foto/video. Tidak termasuk kehilangan, benturan, salah penggunaan, atau baterai habis normal.</p></section>}
+          {selection.product==="kidswatch"&&<section className="mt-4 rounded-2xl bg-[#EEF4E4] p-3 text-sm"><p className="font-bold text-olive-deep">{tr("Garansi 1 tahun ganti baru")}</p><p>Untuk kerusakan mesin, layar, tombol atau cacat produksi dalam 12 bulan sejak produk diterima. Hubungi admin dengan nomor pesanan dan bukti foto/video. Tidak termasuk kehilangan, benturan, salah penggunaan, atau baterai habis normal.</p></section>}
           {selection.product === "tshirt" && (
             <>
               <div className="mt-4">
@@ -746,11 +749,11 @@ export function Customize({
 
           <dl className="mt-5 space-y-1.5 border-t-2 border-dashed border-[var(--border)] pt-4 text-sm font-semibold">
             <div className="flex justify-between gap-3">
-              <dt className="text-[var(--dim)]">Harga produk</dt>
+              <dt className="text-[var(--dim)]">{tr("Harga produk")}</dt>
               <dd className="font-display">{formatIDR(price)}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-[var(--dim)]">Ongkos kirim</dt>
+              <dt className="text-[var(--dim)]">{tr("Ongkos kirim")}</dt>
               <dd className="text-right">Gratis mulai {formatIDR(cfg.shippingPolicy.freeFrom)} setelah diskon; di bawahnya {formatIDR(cfg.shippingPolicy.flatRate)} per pesanan.</dd>
             </div>
           </dl>
@@ -766,7 +769,7 @@ export function Customize({
             }}
             className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink shadow transition hover:bg-tang-deep"
           >
-            Tambah ke Keranjang
+            {tr("Tambah ke Keranjang")}
           </button>
           {cartCount > 0 && <button type="button" onClick={onCart} className="mt-2 w-full rounded-full border border-olive px-5 py-3 font-bold text-olive-deep">Lihat Keranjang ({cartCount})</button>}
         </section>
@@ -794,6 +797,7 @@ export function Checkout({
   onBack: () => void;
   onPlaced: (o: OrderOut) => void;
 }) {
+  const tr = useT();
   const cfg = useShopConfig();
   const queryClient = useQueryClient();
   const price = cart.reduce((n, line) => n + basePrice(cfg,line.product)*line.quantity, 0);
@@ -912,7 +916,7 @@ export function Checkout({
     if (address.trim().length < 10) return setError("Isi alamat pengiriman lengkap (jalan, kota, kode pos) ya.");
     create.mutate();
   };
-  if (!cart.length) return <div className="mx-auto max-w-xl p-6 text-center"><h1 className="font-display text-2xl font-bold">Keranjang kosong</h1><button type="button" onClick={onBack} className="mt-4 rounded-full bg-olive px-5 py-3 text-white">Pilih Produk</button></div>;
+  if (!cart.length) return <div className="mx-auto max-w-xl p-6 text-center"><h1 className="font-display text-2xl font-bold">{tr("Keranjang kosong")}</h1><button type="button" onClick={onBack} className="mt-4 rounded-full bg-olive px-5 py-3 text-white">{tr("Pilih Produk")}</button></div>;
   return (
     <div className="mx-auto max-w-4xl px-4 pb-16">
       <div className="band-sky mt-4 flex flex-wrap items-center gap-2 rounded-[1.75rem] px-5 py-4">
@@ -921,12 +925,12 @@ export function Checkout({
         </button>
         <h1 className="font-display text-2xl font-semibold">Keranjang &amp; Pemesanan ({quantity})</h1>
       </div>
-      <section className="mt-4 space-y-3 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]" aria-label="Isi keranjang">
-        <h2 className="font-display text-lg font-bold">Isi keranjang</h2>
+      <section className="mt-4 space-y-3 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]" aria-label={tr("Isi keranjang")}>
+        <h2 className="font-display text-lg font-bold">{tr("Isi keranjang")}</h2>
         <p className="text-xs font-semibold text-[var(--dim)]">Seluruh barang menggunakan karya dan nama yang sama. {childName && "Nama: " + childName}</p>
         {cart.map((line,i) => <article key={line.product + "|" + line.tshirtColor + "|" + line.tshirtSize} className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-3">
           <div className="w-24 shrink-0"><ProductPreview product={line.product} project={project} name={childName} fabric={line.tshirtColor || "Cream"} /></div>
-          <div className="min-w-32 flex-1"><p className="font-bold">{PRODUCT_META[line.product].title}</p>
+          <div className="min-w-32 flex-1"><p className="font-bold">{tr(PRODUCT_META[line.product].title)}</p>
             {line.product === "tshirt" && <p className="text-xs">{FABRIC_LABELS[line.tshirtColor] ?? line.tshirtColor} · {line.tshirtSize}</p>}
             <p className="text-sm font-bold">{formatIDR(basePrice(cfg,line.product))} / unit</p>
             {appliedCoupon && <p className="text-xs text-olive-deep">Diskon {appliedCoupon.rates[line.product] ?? 0}%</p>}
@@ -936,15 +940,15 @@ export function Checkout({
             <span className="min-w-5 text-center font-bold">{line.quantity}</span>
             <button type="button" aria-label={"Tambah jumlah " + PRODUCT_META[line.product].title} disabled={create.isPending || line.quantity >= 20 || quantity >= 140} onClick={() => changeCart(cart.map((x,j)=>j===i?{...x,quantity:x.quantity+1}:x))} className="h-9 w-9 rounded-full border font-bold disabled:opacity-40">+</button>
           </div>
-          <div className="text-right"><p className="font-bold">{formatIDR(basePrice(cfg,line.product)*line.quantity)}</p><button type="button" disabled={create.isPending || validate.isPending} onClick={() => changeCart(cart.filter((_,j)=>j!==i))} className="text-xs font-bold text-berry">Hapus</button></div>
+          <div className="text-right"><p className="font-bold">{formatIDR(basePrice(cfg,line.product)*line.quantity)}</p><button type="button" disabled={create.isPending || validate.isPending} onClick={() => changeCart(cart.filter((_,j)=>j!==i))} className="text-xs font-bold text-berry">{tr("Hapus")}</button></div>
         </article>)}
         <div className="flex justify-between border-t border-[var(--border)] pt-3 font-bold"><span>Subtotal</span><span>{formatIDR(price)}</span></div>
         <div className="rounded-2xl bg-[#EEF4E4] p-3 text-sm font-bold text-olive-deep" role="status">{remaining === 0 ? "Selamat! Pesananmu mendapatkan gratis ongkir." : "Tambah belanja " + formatIDR(remaining) + " setelah diskon untuk mendapatkan gratis ongkir."}<div className="mt-2 h-2 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-olive transition-all" style={{width: Math.min(100, netSubtotal / cfg.shippingPolicy.freeFrom * 100) + "%"}} /></div><p className="mt-1 text-xs">Ongkir {formatIDR(cfg.shippingPolicy.flatRate)} per pesanan di bawah {formatIDR(cfg.shippingPolicy.freeFrom)}.</p></div>
       </section>
 
       <section className="mt-4 space-y-3 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]">
-        <h2 className="font-display text-lg font-bold">Paket hemat &amp; lengkapi karyamu</h2>
-        <p className="text-xs text-[var(--dim)]">Satu diskon paket terbaik per transaksi, tidak digabung dengan kupon affiliate. Ongkir dihitung setelah diskon.</p>
+        <h2 className="font-display text-lg font-bold">{tr("Paket hemat & lengkapi karyamu")}</h2>
+        <p className="text-xs text-[var(--dim)]">{tr("Satu diskon paket terbaik per transaksi, tidak digabung dengan kupon affiliate. Ongkir dihitung setelah diskon.")}</p>
         {bundle&&<p className="rounded-xl bg-[#EEF4E4] p-3 font-bold text-olive-deep">Paket {bundle.name} aktif · hemat {formatIDR(bundle.savings)}</p>}
         {cfg.bundles.filter(b=>b.productIds.reduce((n,id)=>n+basePrice(cfg,id),0)>b.price).map(b=>{
           const normal=b.productIds.reduce((n,id)=>n+basePrice(cfg,id),0);
@@ -952,21 +956,21 @@ export function Checkout({
           return <article key={b.id} className="flex flex-wrap items-center gap-2 rounded-xl border p-3"><div className="min-w-0 flex-1"><p className="font-bold">{b.name}</p><p className="text-xs">{b.productIds.map(id=>PRODUCT_META[id].title).join(" + ")}</p><p className="text-sm"><del>{formatIDR(normal)}</del> <strong>{formatIDR(b.price)}</strong></p></div><button type="button" disabled={create.isPending||validate.isPending||!missing.length} onClick={()=>addSuggested(b.productIds)} className="rounded-full bg-olive px-4 py-2 text-sm font-bold text-white disabled:opacity-40">{missing.length?"Lengkapi paket":"Sudah di keranjang"}</button></article>;
         })}
         {missingProducts.includes("tshirt")&&<div className="grid gap-2 sm:grid-cols-2"><label className="text-xs font-bold">Warna kaos tambahan<select className="block w-full rounded-xl border p-2" value={extraColor} onChange={e=>setExtraColor(e.target.value)}>{cfg.tshirtColors.map(c=><option key={c} value={c}>{FABRIC_LABELS[c]??c}</option>)}</select></label><label className="text-xs font-bold">Ukuran kaos tambahan<select className="block w-full rounded-xl border p-2" value={extraSize} onChange={e=>setExtraSize(e.target.value)}><option value="">Pilih ukuran</option>{cfg.tshirtSizes.map(v=><option key={v}>{v}</option>)}</select></label></div>}
-        {suggestions.length>0&&<><h3 className="font-bold">{remaining>0?"Produk tambahan untuk mengejar gratis ongkir":"Produk lain dari karya si kecil"}</h3>{suggestions.map(id=><div key={id} className="flex items-center gap-3 border-t pt-2"><div className="w-20 shrink-0"><ProductPreview product={id} project={project} name={childName} fabric={extraColor}/></div><div className="flex-1"><p className="font-bold">{PRODUCT_META[id].title}</p><p className="text-sm">{formatIDR(basePrice(cfg,id))}</p></div><button type="button" disabled={create.isPending||validate.isPending} onClick={()=>addSuggested([id])} className="rounded-full border border-olive px-3 py-2 text-xs font-bold text-olive-deep">+ Tambah</button></div>)}</>}
+        {suggestions.length>0&&<><h3 className="font-bold">{remaining>0?"Produk tambahan untuk mengejar gratis ongkir":"Produk lain dari karya si kecil"}</h3>{suggestions.map(id=><div key={id} className="flex items-center gap-3 border-t pt-2"><div className="w-20 shrink-0"><ProductPreview product={id} project={project} name={childName} fabric={extraColor}/></div><div className="flex-1"><p className="font-bold">{tr(PRODUCT_META[id].title)}</p><p className="text-sm">{formatIDR(basePrice(cfg,id))}</p></div><button type="button" disabled={create.isPending||validate.isPending} onClick={()=>addSuggested([id])} className="rounded-full border border-olive px-3 py-2 text-xs font-bold text-olive-deep">+ Tambah</button></div>)}</>}
       </section>
       <div className="mt-4 grid items-start gap-4 md:grid-cols-[1fr_360px]">
         <form
           className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]"
-          aria-label="Data pemesan"
+          aria-label={tr("Data pemesan")}
           onSubmit={(e) => {
             e.preventDefault();
             submit();
           }}
         >
-          <h2 className="font-display text-lg font-semibold">Data pemesan & pengiriman</h2>
+          <h2 className="font-display text-lg font-semibold">{tr("Data pemesan & pengiriman")}</h2>
           <div className="mt-3 space-y-3">
             <div>
-              <label htmlFor="co-name" className="font-display text-sm font-bold">Nama pemesan</label>
+              <label htmlFor="co-name" className="font-display text-sm font-bold">{tr("Nama pemesan")}</label>
               <input
                 id="co-name"
                 {...FIELDS.createOrder.customerName}
@@ -977,7 +981,7 @@ export function Checkout({
               />
             </div>
             <div>
-              <label htmlFor="co-wa" className="font-display text-sm font-bold">Nomor WhatsApp</label>
+              <label htmlFor="co-wa" className="font-display text-sm font-bold">{tr("Nomor WhatsApp")}</label>
               <input
                 id="co-wa"
                 {...FIELDS.createOrder.whatsapp}
@@ -986,10 +990,10 @@ export function Checkout({
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
                 autoComplete="tel"
-                placeholder="cth. 0812 3456 7890"
+                placeholder={tr("cth. 0812 3456 7890")}
                 className="mt-1 w-full rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-semibold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
               />
-              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Tim kami menghubungimu di nomor ini untuk pembayaran dan info pengiriman.</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">{tr("Tim kami menghubungimu di nomor ini untuk pembayaran dan info pengiriman.")}</p>
             </div>
             <div>
               <label htmlFor="co-email" className="font-display text-sm font-bold">Email</label>
@@ -1004,7 +1008,7 @@ export function Checkout({
               />
             </div>
             <div>
-              <label htmlFor="co-address" className="font-display text-sm font-bold">Alamat pengiriman lengkap</label>
+              <label htmlFor="co-address" className="font-display text-sm font-bold">{tr("Alamat pengiriman lengkap")}</label>
               <textarea
                 id="co-address"
                 {...FIELDS.createOrder.address}
@@ -1012,21 +1016,21 @@ export function Checkout({
                 onChange={(e) => setAddress(e.target.value)}
                 rows={3}
                 autoComplete="street-address"
-                placeholder="Jalan, nomor rumah, RT/RW, kelurahan, kecamatan, kota, kode pos"
+                placeholder={tr("Jalan, nomor rumah, RT/RW, kelurahan, kecamatan, kota, kode pos")}
                 className="mt-1 w-full resize-none rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-semibold ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
               />
             </div>
             <div>
               <fieldset className="mb-4 space-y-2 rounded-2xl border border-[var(--border)] p-3">
-                <legend className="font-display font-bold">Pesanan hadiah</legend>
-                <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={isGift} onChange={e=>setIsGift(e.target.checked)}/> Jadikan hadiah</label>
+                <legend className="font-display font-bold">{tr("Pesanan hadiah")}</legend>
+                <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={isGift} onChange={e=>setIsGift(e.target.checked)}/> {tr("Jadikan hadiah")}</label>
                 {isGift&&<><p className="text-xs text-[var(--dim)]">Isi alamat pengiriman di atas dengan alamat penerima. Harga tidak dicantumkan di dalam paket.</p>
-                <label className="block text-sm font-bold">Nama pengirim<input required maxLength={80} className="block w-full rounded-xl border p-2" value={giftSender} onChange={e=>setGiftSender(e.target.value)}/></label>
-                <label className="block text-sm font-bold">Nama penerima<input required maxLength={80} className="block w-full rounded-xl border p-2" value={giftRecipient} onChange={e=>setGiftRecipient(e.target.value)}/></label>
-                <label className="block text-sm font-bold">Kartu ucapan<textarea maxLength={250} className="block w-full rounded-xl border p-2" value={giftMessage} onChange={e=>setGiftMessage(e.target.value)}/></label>
-                <div className="rounded-xl bg-[#FCF3DE] p-4 text-center text-[#53682F]"><p className="font-bold">Hadiah kecil, kenangan besar.</p><p className="mt-2">Untuk {giftRecipient||"Si Kecil"}</p><p className="my-2 whitespace-pre-wrap break-words italic">{giftMessage||"Sebuah hadiah istimewa untukmu."}</p><p>Dari {giftSender||"Pengirim"}</p><p className="mt-3 text-xs font-bold">Bun &amp; Fleur Kids</p></div></>}
+                <label className="block text-sm font-bold">{tr("Nama pengirim")}<input required maxLength={80} className="block w-full rounded-xl border p-2" value={giftSender} onChange={e=>setGiftSender(e.target.value)}/></label>
+                <label className="block text-sm font-bold">{tr("Nama penerima")}<input required maxLength={80} className="block w-full rounded-xl border p-2" value={giftRecipient} onChange={e=>setGiftRecipient(e.target.value)}/></label>
+                <label className="block text-sm font-bold">{tr("Kartu ucapan")}<textarea maxLength={250} className="block w-full rounded-xl border p-2" value={giftMessage} onChange={e=>setGiftMessage(e.target.value)}/></label>
+                <div className="rounded-xl bg-[#FCF3DE] p-4 text-center text-[#53682F]"><p className="font-bold">{tr("Hadiah kecil, kenangan besar.")}</p><p className="mt-2">Untuk {giftRecipient||"Si Kecil"}</p><p className="my-2 whitespace-pre-wrap break-words italic">{giftMessage||"Sebuah hadiah istimewa untukmu."}</p><p>Dari {giftSender||"Pengirim"}</p><p className="mt-3 text-xs font-bold">Bun &amp; Fleur Kids</p></div></>}
               </fieldset>
-              <label htmlFor="co-notes" className="font-display text-sm font-bold">Catatan untuk tim kami (opsional)</label>
+              <label htmlFor="co-notes" className="font-display text-sm font-bold">{tr("Catatan untuk tim kami (opsional)")}</label>
               <input
                 id="co-notes"
                 {...FIELDS.createOrder.notes}
@@ -1036,7 +1040,7 @@ export function Checkout({
               />
             </div>
             <div>
-              <label htmlFor="co-coupon" className="font-display text-sm font-bold">Kode kupon afiliasi (opsional)</label>
+              <label htmlFor="co-coupon" className="font-display text-sm font-bold">{tr("Kode kupon afiliasi (opsional)")}</label>
               <div className="mt-1 flex gap-2">
                 <input
                   id="co-coupon"
@@ -1048,7 +1052,7 @@ export function Checkout({
                     setAppliedCoupon(null);
                     setCouponMsg("");
                   }}
-                  placeholder="cth. MAYA10"
+                  placeholder={tr("cth. MAYA10")}
                   className="min-w-0 flex-1 rounded-2xl bg-[var(--bg)] px-4 py-2.5 font-display font-bold uppercase ring-1 ring-[var(--border)] focus:outline-2 focus:outline-sky"
                 />
                 <button
@@ -1065,7 +1069,7 @@ export function Checkout({
                   {couponMsg}
                 </p>
               )}
-              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">Satu kupon per pesanan. Diskon dihitung dari harga produk (tidak termasuk ongkir & kode unik) dan divalidasi ulang oleh server saat pesanan dibuat.</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--dim)]">{tr("Satu kupon per pesanan. Diskon dihitung dari harga produk (tidak termasuk ongkir & kode unik) dan divalidasi ulang oleh server saat pesanan dibuat.")}</p>
             </div>
           </div>
           {error && <p className="mt-3 text-sm font-bold text-berry" role="alert">{error}</p>}
@@ -1079,12 +1083,12 @@ export function Checkout({
         </form>
 
         <aside className="space-y-4">
-          <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Ringkasan pesanan">
-            <h2 className="font-display text-lg font-semibold">Ringkasan pesanan</h2>
+          <section className="rounded-[1.75rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label={tr("Ringkasan pesanan")}>
+            <h2 className="font-display text-lg font-semibold">{tr("Ringkasan pesanan")}</h2>
             <dl className="mt-3 space-y-1.5 text-sm font-semibold">
-              {cart.map((line,i) => <div key={i} className="flex justify-between gap-3"><dt>{PRODUCT_META[line.product].title} × {line.quantity}</dt><dd>{formatIDR(basePrice(cfg,line.product)*line.quantity)}</dd></div>)}
+              {cart.map((line,i) => <div key={i} className="flex justify-between gap-3"><dt>{tr(PRODUCT_META[line.product].title)} × {line.quantity}</dt><dd>{formatIDR(basePrice(cfg,line.product)*line.quantity)}</dd></div>)}
               <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2">
-                <dt className="text-[var(--dim)]">Harga produk</dt>
+                <dt className="text-[var(--dim)]">{tr("Harga produk")}</dt>
                 <dd className="font-display">{formatIDR(price)}</dd>
               </div>
               {bundle&&<div className="flex justify-between gap-3"><dt>Diskon paket {bundle.name}</dt><dd className="font-bold text-olive-deep">−{formatIDR(bundle.savings)}</dd></div>}
@@ -1095,11 +1099,11 @@ export function Checkout({
                 </div>
               )}
               <div className="flex justify-between gap-3">
-                <dt className="text-[var(--dim)]">Ongkos kirim</dt>
+                <dt className="text-[var(--dim)]">{tr("Ongkos kirim")}</dt>
                 <dd className="text-right">{shipping === 0 ? "GRATIS" : formatIDR(shipping)}</dd>
               </div>
               <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2 text-base">
-                <dt>Total pesanan</dt>
+                <dt>{tr("Total pesanan")}</dt>
                 <dd className="font-display text-olive-deep">{formatIDR(netSubtotal + shipping)}</dd>
               </div>
             </dl>
@@ -1112,7 +1116,7 @@ export function Checkout({
 
           <section className="overflow-hidden rounded-[1.75rem] bg-[var(--surface)] ring-1 ring-[var(--border)]" aria-label="Preview metode pembayaran">
             <div className="band-sage px-5 py-4">
-              <p className="font-display text-xs font-bold uppercase tracking-[0.14em] text-olive-deep">Pembayaran resmi</p>
+              <p className="font-display text-xs font-bold uppercase tracking-[0.14em] text-olive-deep">{tr("Pembayaran resmi")}</p>
               <h2 className="mt-1 font-display text-lg font-extrabold text-ink">QRIS GoPay Merchant</h2>
               <p className="mt-1 text-xs font-semibold text-[var(--dim)]">{QRIS_MERCHANT}</p>
             </div>
@@ -1120,7 +1124,7 @@ export function Checkout({
               <div className="mx-auto max-w-[190px] rounded-2xl bg-white p-3 ring-1 ring-[#E6DFD0]">
                 <img src={officialQrisUrl} alt="Pratinjau QRIS resmi Bun and Fleur" className="w-full" />
               </div>
-              <p className="mt-3 font-display text-sm font-bold text-olive-deep">Bayar setelah pesanan dibuat</p>
+              <p className="mt-3 font-display text-sm font-bold text-olive-deep">{tr("Bayar setelah pesanan dibuat")}</p>
               <p className="mt-1 text-xs font-semibold leading-relaxed text-[var(--dim)]">
                 Nominal pembayaran dan kode unik baru akan muncul setelah kamu menekan tombol
                 Buat Pesanan. Bayar hanya sesuai nominal akhir yang ditampilkan.
@@ -1187,6 +1191,7 @@ function encodeBase64(bytes: Uint8Array): string {
 }
 
 export function PaymentPanel({ order }: { order: OrderOut }) {
+  const tr = useT();
   const [payState, setPayState] = useState<OrderOut["payState"]>(order.payState);
   const [copied, setCopied] = useState(false);
   const [proofFile, setProofFile] = useState<File | null>(null);
@@ -1256,12 +1261,12 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
       aria-label="Pembayaran QRIS resmi Bun & Fleur">
       <div className="band-sage flex flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-7">
         <div>
-          <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-olive-deep">Metode pembayaran</p>
-          <h2 className="mt-1 font-display text-2xl font-extrabold text-ink">Scan &amp; Bayar QRIS</h2>
-          <p className="mt-1 text-sm font-semibold text-[var(--dim)]">Praktis melalui aplikasi bank atau e-wallet.</p>
+          <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-olive-deep">{tr("Metode pembayaran")}</p>
+          <h2 className="mt-1 font-display text-2xl font-extrabold text-ink">{tr("Scan & Bayar QRIS")}</h2>
+          <p className="mt-1 text-sm font-semibold text-[var(--dim)]">{tr("Praktis melalui aplikasi bank atau e-wallet.")}</p>
         </div>
         <span className={`rounded-full px-4 py-2 font-display text-xs font-bold ring-1 ring-black/5 ${statusTone}`}>
-          {PAY_STATE_LABELS[payState]}
+          {tr(PAY_STATE_LABELS[payState])}
         </span>
       </div>
       {payState === "awaiting" && order.orderStatus !== "cancelled" && <div className="mx-4 mt-4 rounded-2xl border border-[#F4D1C1] bg-[#FFF6EE] p-4 sm:mx-6">
@@ -1288,7 +1293,7 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
                   <p className="text-[10px] font-bold text-[var(--dim)]">GoPay Merchant</p>
                 </div>
               </div>
-              <span className="rounded-full bg-[#EEF4E4] px-2.5 py-1 font-display text-[10px] font-bold text-olive-deep">QRIS RESMI</span>
+              <span className="rounded-full bg-[#EEF4E4] px-2.5 py-1 font-display text-[10px] font-bold text-olive-deep">{tr("QRIS RESMI")}</span>
             </div>
             <img src={officialQrisUrl}
               alt="Kode QRIS asli GoPay Merchant BUN AND FLEUR, PAKAIAN untuk pembayaran"
@@ -1306,7 +1311,7 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
         </div>
         <div className="min-w-0">
           <div className="rounded-3xl bg-[#F4F0E7] p-4 sm:p-5">
-            <p className="font-display text-xs font-bold uppercase tracking-[0.16em] text-[var(--dim)]">Total Pembayaran</p>
+            <p className="font-display text-xs font-bold uppercase tracking-[0.16em] text-[var(--dim)]">{tr("Total Pembayaran")}</p>
             <p className="mt-1 break-words font-display text-3xl font-extrabold tracking-tight text-olive-deep">
               {formatIDR(payable)}
             </p>
@@ -1318,8 +1323,8 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
           </div>
 
           <dl className="mt-4 space-y-2 px-1 text-sm font-semibold">
-            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Produk</dt><dd className="text-right font-display">{order.quantity} barang · {orderTitle(order)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Subtotal Produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">{tr("Produk")}</dt><dd className="text-right font-display">{order.quantity} barang · {orderTitle(order)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">{tr("Subtotal Produk")}</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
             {order.discountAmount > 0 && (
               <div className="flex justify-between gap-3">
                 <dt className="text-[var(--dim)]">Diskon {order.bundleName||order.couponCode}</dt>
@@ -1327,17 +1332,17 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
               </div>
             )}
             <div className="flex justify-between gap-3">
-              <dt className="text-[var(--dim)]">Ongkos Kirim</dt>
+              <dt className="text-[var(--dim)]">{tr("Ongkos Kirim")}</dt>
               <dd className="text-right">{order.shippingCost == null ? "Menunggu konfirmasi" : order.shippingCost === 0 ? "GRATIS" : formatIDR(order.shippingCost)}</dd>
             </div>
             <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2">
-              <dt className="text-[var(--dim)]">Kode Unik</dt>
+              <dt className="text-[var(--dim)]">{tr("Kode Unik")}</dt>
               <dd className="font-display">{formatIDR(order.uniqueCode)}</dd>
             </div>
           </dl>
 
           <div className="mt-4 rounded-2xl bg-[#EEF4E4] p-4 text-sm font-semibold text-olive-deep">
-            <p className="font-display text-sm font-extrabold">Cara pembayaran</p>
+            <p className="font-display text-sm font-extrabold">{tr("Cara pembayaran")}</p>
             <ol className="mt-2 space-y-2">
               <li><strong>01.</strong> Scan QRIS menggunakan aplikasi bank atau e-wallet.</li>
               <li><strong>02.</strong> Masukkan nominal <strong>{formatIDR(payable)}</strong> secara manual, tepat sesuai total.</li>
@@ -1356,24 +1361,24 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
 
           {["awaiting", "waiting_verification", "unmatched"].includes(payState) && (
             <div className="mt-4">
-              <label htmlFor={`proof-${order.id}`} className="block text-sm font-bold">Bukti pembayaran (opsional)</label>
+              <label htmlFor={`proof-${order.id}`} className="block text-sm font-bold">{tr("Bukti pembayaran (opsional)")}</label>
               <input key={payState} id={`proof-${order.id}`} type="file" accept="image/jpeg,image/png"
                 onChange={(event) => setProofFile(event.target.files?.[0] ?? null)} disabled={confirm.isPending}
                 className="mt-2 block w-full text-sm" aria-describedby={`proof-help-${order.id}`} />
-              <p id={`proof-help-${order.id}`} className="mt-1 text-xs text-[var(--dim)]">JPG atau PNG, maksimal 750 KB.</p>
+              <p id={`proof-help-${order.id}`} className="mt-1 text-xs text-[var(--dim)]">{tr("JPG atau PNG, maksimal 750 KB.")}</p>
               {payState === "waiting_verification" && proofFile && (
                 <button type="button" disabled={confirm.isPending} onClick={() => confirm.mutate()}
-                  className="mt-2 rounded-full bg-olive px-4 py-2 text-sm font-bold text-white">Kirim bukti</button>
+                  className="mt-2 rounded-full bg-olive px-4 py-2 text-sm font-bold text-white">{tr("Kirim bukti")}</button>
               )}
             </div>
           )}
           {payState === "verified" ? (
             <p className="mt-4 rounded-2xl bg-sage-soft px-4 py-3 font-display text-sm font-bold text-olive-deep ring-1 ring-[var(--border)]">
-              Pembayaran sudah terverifikasi. Pesanan akan dilanjutkan ke tahap berikutnya.
+              {tr("Pembayaran sudah terverifikasi. Pesanan akan dilanjutkan ke tahap berikutnya.")}
             </p>
           ) : payState === "rejected" ? (
             <p className="mt-4 rounded-2xl bg-[#FDECEA] px-4 py-3 font-display text-sm font-bold text-berry ring-1 ring-[var(--border)]">
-              Pembayaran belum bisa diverifikasi. Hubungi tim via WhatsApp untuk mencocokkan transaksi. Jangan transfer ulang dulu.
+              {tr("Pembayaran belum bisa diverifikasi. Hubungi tim via WhatsApp untuk mencocokkan transaksi. Jangan transfer ulang dulu.")}
             </p>
           ) : payState === "refunded" ? (
             <p className="mt-4 rounded-2xl bg-[var(--surface-alt)] px-4 py-3 font-display text-sm font-bold ring-1 ring-[var(--border)]">Pesanan ini sudah direfund.</p>
@@ -1384,12 +1389,12 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
                 onClick={() => confirm.mutate()}
                 className="mt-4 min-h-12 w-full rounded-full bg-tang px-5 py-3 font-display text-base font-extrabold text-ink shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50">
                 {payState === "waiting_verification"
-                  ? "Menunggu Verifikasi Tim"
-                  : confirm.isPending ? "Mencatat Pembayaran…" : "Saya Sudah Transfer"}
+                  ? tr("Menunggu Verifikasi Tim")
+                  : confirm.isPending ? tr("Mencatat Pembayaran…") : tr("Saya Sudah Transfer")}
               </button>
               {payState === "waiting_verification" && (
                 <p className="mt-3 text-sm font-semibold text-[var(--dim)]" role="status">
-                  Konfirmasi berhasil dicatat. Tim sedang mencocokkan transaksi sesuai nominal unik. Status tidak otomatis berubah menjadi lunas.
+                  {tr("Konfirmasi berhasil dicatat. Tim sedang mencocokkan transaksi sesuai nominal unik. Status tidak otomatis berubah menjadi lunas.")}
                 </p>
               )}
               {payState === "unmatched" && (
@@ -1415,6 +1420,7 @@ export function OrderConfirmation({
   onCreations: () => void;
   onHome: () => void;
 }) {
+  const tr = useT();
   const snap: ShopProject = useMemo(
     () => ({
       id: order.projectId,
@@ -1445,7 +1451,7 @@ export function OrderConfirmation({
         </p>
         <p className="mt-3">
           <span className="rounded-full bg-butter px-3.5 py-1.5 font-display text-sm font-semibold text-ink">
-            Status: {ORDER_STATUS_LABELS[order.orderStatus]}
+            Status: {tr(ORDER_STATUS_LABELS[order.orderStatus])}
           </span>
         </p>
       </section>
@@ -1455,19 +1461,19 @@ export function OrderConfirmation({
           {linesOf(order).map((item,i) => <div key={i} className="min-w-0">
             <ProductPreview product={item.productType} project={snap} name={order.childName}
               fabric={item.variant.startsWith("Kaos ") ? item.variant.slice(5).split(" · ")[0]! : "Cream"} />
-            <p className="text-center text-xs font-bold">{PRODUCT_META[item.productType].title} × {item.quantity}</p>
+            <p className="text-center text-xs font-bold">{tr(PRODUCT_META[item.productType].title)} × {item.quantity}</p>
           </div>)}
         </div>
         <OrderedItems order={order} />
         <dl className="mx-auto mt-4 max-w-md space-y-1.5 text-sm font-semibold">
-          {order.childName.trim() && <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Nama anak</dt><dd className="text-right">{order.childName.trim()}</dd></div>}
+          {order.childName.trim() && <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">{tr("Nama anak")}</dt><dd className="text-right">{order.childName.trim()}</dd></div>}
           <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Pemesan</dt><dd className="text-right">{order.customerName}</dd></div>
           {order.gift&&<div className="rounded-xl bg-[#EEF4E4] p-3 text-olive-deep">Pesanan hadiah · Untuk {order.gift.recipient} · Dari {order.gift.sender}</div>}
-          <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2"><dt className="text-[var(--dim)]">Harga produk</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
+          <div className="flex justify-between gap-3 border-t border-dashed border-[var(--border)] pt-2"><dt className="text-[var(--dim)]">{tr("Harga produk")}</dt><dd className="font-display">{formatIDR(order.productPrice)}</dd></div>
           {order.discountAmount > 0 && (
             <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Diskon {order.bundleName||order.couponCode}</dt><dd className="font-display text-olive-deep">−{formatIDR(order.discountAmount)}</dd></div>
           )}
-          <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">Ongkos kirim</dt><dd className="text-right">{order.shippingCost == null ? "Dikonfirmasi via WhatsApp" : order.shippingCost === 0 ? "GRATIS" : formatIDR(order.shippingCost)}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-[var(--dim)]">{tr("Ongkos kirim")}</dt><dd className="text-right">{order.shippingCost == null ? "Dikonfirmasi via WhatsApp" : order.shippingCost === 0 ? "GRATIS" : formatIDR(order.shippingCost)}</dd></div>
           <div className="flex justify-between gap-3"><dt>Total pesanan (sebelum kode unik)</dt><dd className="font-display text-olive-deep">{formatIDR(order.total)}</dd></div>
         </dl>
       </section>
@@ -1556,6 +1562,7 @@ const TRACK_STEPS: { id: OrderOut["orderStatus"]; label: string }[] = [
 ];
 
 export function OrderTracking() {
+  const tr = useT();
   const [code, setCode] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [searched, setSearched] = useState(false);
@@ -1649,7 +1656,7 @@ export function OrderTracking() {
                 {order.code} · {orderTitle(order)}
               </p>
               <p className="text-sm font-semibold text-[var(--dim)]">
-                {order.variant} · Total {formatIDR(order.total)} · Pembayaran: {PAY_STATE_LABELS[order.payState]}
+                {order.variant} · Total {formatIDR(order.total)} · Pembayaran: {tr(PAY_STATE_LABELS[order.payState])}
               </p>
               <OrderedItems order={order} />
               {order.orderStatus === "cancelled" ? (
