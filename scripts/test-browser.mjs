@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import postgres from "postgres";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.BFK_PLAYWRIGHT_PATH);
@@ -131,6 +134,35 @@ try {
   await page.getByLabel("Password admin",{exact:true}).fill(process.env.BFK_BROWSER_PASSWORD);
   await page.getByRole("button",{name:"Masuk Admin",exact:true}).click();
   await page.getByRole("heading",{name:"Bun & Fleur Kids — Admin Center"}).waitFor();
+  // Synthetic fixture in the disposable browser database, not production.
+  const testDbUrl=new URL(process.env.DATABASE_URL);
+  assert.ok(["localhost","127.0.0.1","[::1]"].includes(testDbUrl.hostname));
+  assert.equal(testDbUrl.pathname,"/bfk_audit_browser");
+  const fixtureDb=postgres(testDbUrl.href);
+  let selfCode;
+  try {
+    selfCode="BFK-QA-"+randomUUID();
+    await fixtureDb`INSERT INTO orders(code,template_id,product_type,product_price,total,customer_name,whatsapp,email,address,child_name,colors,background_id,affiliate_self_order,created_at,updated_at) SELECT ${selfCode},template_id,'poster',29900,29900,'QA Self Order','081299990002','qa-self@example.test','Test only','QA SVG',colors,'02_Taman',true,now(),now() FROM orders WHERE id=${order.id}`;
+  } finally { await fixtureDb.end(); }
+  await page.getByRole("button",{name:"Pesanan & Penjualan",exact:true}).click();
+  const selfCard=page.locator("article").filter({hasText:selfCode});
+  const regularCard=page.locator("article").filter({hasText:order.code});
+  const svgButton=selfCard.getByRole("button",{name:"Unduh SVG langsung",exact:true});
+  await svgButton.waitFor();
+  assert.equal(await svgButton.isEnabled(),true);
+  assert.equal(await regularCard.getByRole("button",{name:"Unduh artwork SVG pesanan",exact:true}).isDisabled(),true);
+  const pendingDownload=page.waitForEvent("download");
+  await svgButton.click();
+  const svgFile=await pendingDownload;
+  assert.equal(svgFile.suggestedFilename(),"artwork-"+selfCode+".svg");
+  const xml=await readFile(await svgFile.path(),"utf8");
+  assert.match(xml,/<svg[\\s>]/);
+  assert.match(xml,/viewBox="0 0 1200 900"/);
+  assert.match(xml,/QA SVG/);
+  assert.match(xml,/#AB57CC/i);
+  assert.match(xml,/data:image\\/png;base64,/);
+  assert.equal(await svgFile.failure(),null);
+  console.log("PASS admin self-order SVG before payment; regular unpaid download stays locked");
   await page.getByRole("button",{name:"Hampers Ulang Tahun",exact:true}).click();
   await page.getByRole("heading",{name:"QA Browser Birthday",exact:true}).waitFor();
   await page.getByRole("button",{name:"Paket Hemat & Promo",exact:true}).click();
