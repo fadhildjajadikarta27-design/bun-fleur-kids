@@ -412,7 +412,7 @@ export function Masterpiece({
           onClick={onBack}
           className="float-left rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5"
         >
-          ← Lanjut mewarnai
+          {tr("← Lanjut mewarnai")}
         </button>
         <div className="clear-both pt-2">
           <h1 className="font-display text-3xl font-semibold leading-tight sm:text-[2.6rem]">
@@ -573,7 +573,7 @@ export function Customize({
     <div className="mx-auto max-w-4xl px-4 pb-16">
       <div className="band-butter mt-4 flex flex-wrap items-center gap-2 rounded-[1.75rem] px-5 py-4">
         <button type="button" onClick={onBack} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
-          ← Semua pilihan
+          {tr("← Semua pilihan")}
         </button>
         <h1 className="font-display text-2xl font-semibold">Atur {tr(meta.tagline)} Kamu</h1>
       </div>
@@ -598,7 +598,7 @@ export function Customize({
 
           <div className="mt-4">
             <label htmlFor="order-child-name" className="font-display text-sm font-bold">
-              Nama anak untuk personalisasi (opsional)
+              {tr("Nama anak untuk personalisasi (opsional)")}
             </label>
             <input
               id="order-child-name"
@@ -903,9 +903,9 @@ export function Checkout({
     <div className="mx-auto max-w-4xl px-4 pb-16">
       <div className="band-sky mt-4 flex flex-wrap items-center gap-2 rounded-[1.75rem] px-5 py-4">
         <button type="button" disabled={create.isPending} onClick={onBack} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
-          ← Tambah produk lain
+          {tr("← Tambah produk lain")}
         </button>
-        <h1 className="font-display text-2xl font-semibold">Keranjang &amp; Pemesanan ({quantity})</h1>
+        <h1 className="font-display text-2xl font-semibold">{tr("Keranjang & Pemesanan")} ({quantity})</h1>
       </div>
       <section className="mt-4 space-y-3 rounded-3xl bg-[var(--surface)] p-4 ring-1 ring-[var(--border)]" aria-label={tr("Isi keranjang")}>
         <h2 className="font-display text-lg font-bold">{tr("Isi keranjang")}</h2>
@@ -1043,7 +1043,7 @@ export function Checkout({
                   onClick={() => validate.mutate(couponInput.trim())}
                   className="rounded-full bg-olive px-5 py-2.5 font-display text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  {validate.isPending ? "Memeriksa…" : "Pakai"}
+                  {validate.isPending ? tr("Memeriksa…") : tr("Pakai")}
                 </button>
               </div>
               {couponMsg && (
@@ -1060,7 +1060,7 @@ export function Checkout({
             disabled={create.isPending || validate.isPending}
             className="mt-4 w-full rounded-full bg-tang px-6 py-3.5 font-display text-lg font-semibold text-ink shadow transition hover:bg-tang-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {create.isPending ? "Membuat pesanan…" : "Buat Pesanan"}
+            {create.isPending ? tr("Membuat pesanan…") : tr("Buat Pesanan")}
           </button>
         </form>
 
@@ -1232,10 +1232,10 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
   if (reportedShopee) return (
     <section className="rounded-[2rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Konfirmasi checkout Shopee">
       <p className="font-display text-xs font-bold uppercase tracking-wider text-[#E85828]">Shopee</p>
-      <h2 className="mt-2 font-display text-2xl font-extrabold text-olive-deep">{payState === "verified" ? "Checkout Shopee Terverifikasi" : "Checkout Shopee Dilaporkan"}</h2>
-      <p className="mt-2 text-sm font-semibold">Nama akun Shopee: <strong>{reportedShopee}</strong></p>
+      <h2 className="mt-2 font-display text-2xl font-extrabold text-olive-deep">{tr(payState === "verified" ? "Checkout Shopee Terverifikasi" : "Checkout Shopee Dilaporkan")}</h2>
+      <p className="mt-2 text-sm font-semibold">{tr("Nama akun Shopee:")} <strong>{reportedShopee}</strong></p>
       <p className="mt-2 text-sm font-bold">{PAY_STATE_LABELS[payState]}</p>
-      <p className="mt-2 text-sm text-[var(--dim)]">Tim kami akan mencocokkan pesanan di Shopee. Jangan melakukan pembayaran ulang melalui QRIS.</p>
+      <p className="mt-2 text-sm text-[var(--dim)]">{tr("Tim kami akan mencocokkan pesanan di Shopee. Jangan melakukan pembayaran ulang melalui QRIS.")}</p>
     </section>
   );
   return (
@@ -1253,14 +1253,14 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
       </div>
       {payState === "awaiting" && order.orderStatus !== "cancelled" && <div className="mx-4 mt-4 rounded-2xl border border-[#F4D1C1] bg-[#FFF6EE] p-4 sm:mx-6">
         <button type="button" aria-expanded={showShopee} aria-controls={`shopee-form-${order.id}`} disabled={confirm.isPending || shopeeConfirm.isPending} onClick={() => {setShowShopee(v => !v);setError("");}} className="flex w-full items-center justify-between gap-2 rounded-xl bg-[#EE4D2D] px-4 py-3 font-display font-bold text-white disabled:opacity-50">
-          Sudah Checkout di Shopee <span aria-hidden>{showShopee ? "▴" : "▾"}</span>
+          {tr("Sudah Checkout di Shopee")} <span aria-hidden>{showShopee ? "▴" : "▾"}</span>
         </button>
         {showShopee && <form id={`shopee-form-${order.id}`} className="mt-4 space-y-3" onSubmit={e => {e.preventDefault();if(shopeeUsername.trim() && !shopeeConfirm.isPending && !confirm.isPending)shopeeConfirm.mutate();}}>
-          <p className="text-sm text-[var(--dim)]">Jika sudah checkout di Shopee, masukkan nama akun yang digunakan agar tim kami dapat mencocokkan pesanan.</p>
-          <label htmlFor={`shopee-username-${order.id}`} className="block text-sm font-bold">Nama akun Shopee <span className="text-[#B93820]">*</span></label>
-          <input id={`shopee-username-${order.id}`} type="text" value={shopeeUsername} onChange={e => setShopeeUsername(e.target.value)} required maxLength={80} autoComplete="off" placeholder="Masukkan nama akun Shopee" className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-3" />
-          <button type="submit" disabled={!shopeeUsername.trim() || shopeeConfirm.isPending || confirm.isPending} className="w-full rounded-full bg-olive px-4 py-3 font-display font-bold text-white disabled:opacity-40">{shopeeConfirm.isPending ? "Mengirim…" : "Submit Konfirmasi"}</button>
-          <p className="text-xs text-[var(--dim)]">Konfirmasi tidak otomatis menandai pesanan lunas.</p>
+          <p className="text-sm text-[var(--dim)]">{tr("Jika sudah checkout di Shopee, masukkan nama akun yang digunakan agar tim kami dapat mencocokkan pesanan.")}</p>
+          <label htmlFor={`shopee-username-${order.id}`} className="block text-sm font-bold">{tr("Nama akun Shopee")} <span className="text-[#B93820]">*</span></label>
+          <input id={`shopee-username-${order.id}`} type="text" value={shopeeUsername} onChange={e => setShopeeUsername(e.target.value)} required maxLength={80} autoComplete="off" placeholder={tr("Masukkan nama akun Shopee")} className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-3" />
+          <button type="submit" disabled={!shopeeUsername.trim() || shopeeConfirm.isPending || confirm.isPending} className="w-full rounded-full bg-olive px-4 py-3 font-display font-bold text-white disabled:opacity-40">{tr(shopeeConfirm.isPending ? "Mengirim…" : "Submit Konfirmasi")}</button>
+          <p className="text-xs text-[var(--dim)]">{tr("Konfirmasi tidak otomatis menandai pesanan lunas.")}</p>
           {error && <p role="alert" className="text-sm font-bold text-berry">{error}</p>}
         </form>}
       </div>}

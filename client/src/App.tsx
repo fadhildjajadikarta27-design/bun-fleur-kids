@@ -1128,7 +1128,7 @@ function CustomBuilder({
       <div className="band-tang mt-4 rounded-[2rem] px-6 py-7 sm:px-8">
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => go({ view: editing ? "creations" : "explore" })} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
-            ← Kembali
+            {tr("← Kembali")}
           </button>
           <h1 className="font-display text-3xl font-extrabold sm:text-4xl">Buat Karakter <span className="band-accent">Sendiri</span></h1>
         </div>
@@ -1552,7 +1552,7 @@ function Magic({
     <div className="mx-auto max-w-4xl px-4 pb-16">
       <div className="band-butter mt-4 flex flex-wrap items-center gap-2 rounded-[1.75rem] px-5 py-4">
         <button type="button" onClick={() => go({ view: "studio" })} className="rounded-full bg-white px-4 py-2 font-display text-sm font-bold text-ink ring-1 ring-black/5">
-          ← Lanjut mewarnai
+          {tr("← Lanjut mewarnai")}
         </button>
         <h1 className="font-display text-2xl font-semibold">{template.custom ? "Pratinjau Karakter" : "Studio Kreasi 3D"}</h1>
         {!template.custom && (
@@ -2605,17 +2605,17 @@ export function App() {
         )}
         {route.view === "choose-background" && (
           <section className="mx-auto max-w-3xl px-4 py-6">
-            <button type="button" onClick={() => go({view:"studio"})} className="rounded-full bg-white px-4 py-2 font-bold">← Kembali</button>
-            <h1 className="mt-4 text-center font-display text-3xl font-bold">Pilih latar karyamu</h1>
-            <p className="mt-2 text-center">Pilih tema untuk desain pesananmu, atau tanpa background.</p>
+            <button type="button" onClick={() => go({view:"studio"})} className="rounded-full bg-white px-4 py-2 font-bold">{tr("← Kembali")}</button>
+            <h1 className="mt-4 text-center font-display text-3xl font-bold">{tr("Pilih latar karyamu")}</h1>
+            <p className="mt-2 text-center">{tr("Pilih tema untuk desain pesananmu, atau tanpa background.")}</p>
             <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3" role="group" aria-label="Pilihan background">
               {[{id:"",label:"Tanpa background"},...BACKGROUNDS].map(b => <button key={b.id} type="button" disabled={cartCount>0} aria-pressed={(cartCount?cartBackground:shopSel.backgroundId??"")===b.id} onClick={()=>setShopSel(s=>({...s,backgroundId:b.id,childName:project.childName}))} className={`rounded-xl border bg-white p-2 font-bold ${(cartCount?cartBackground:shopSel.backgroundId??"")===b.id?"ring-2 ring-olive":""}`}>
                 {b.id?<img src={backgroundUrl(b.id)} alt="" className="aspect-[4/3] w-full rounded-lg object-contain"/>:<div className="aspect-[4/3] rounded-lg bg-white ring-1 ring-black/10"/>}
-                <span className="block py-2">{b.label}</span>
+                <span className="block py-2">{tr(b.label)}</span>
               </button>)}
             </div>
-            {cartCount>0&&<p className="mt-3 text-sm">Background mengikuti keranjang aktif. Kosongkan keranjang untuk mengganti tema.</p>}
-            <button type="button" onClick={()=>{setShopSel(s=>({...s,childName:cartCount?cartName:project.childName,backgroundId:cartCount?cartBackground:s.backgroundId??""}));go({view:"finish"});}} className="mt-5 w-full rounded-full bg-olive px-6 py-3 font-bold text-white">Lanjut ke pilihan produk</button>
+            {cartCount>0&&<p className="mt-3 text-sm">{tr("Background mengikuti keranjang aktif. Kosongkan keranjang untuk mengganti tema.")}</p>}
+            <button type="button" onClick={()=>{setShopSel(s=>({...s,childName:cartCount?cartName:project.childName,backgroundId:cartCount?cartBackground:s.backgroundId??""}));go({view:"finish"});}} className="mt-5 w-full rounded-full bg-olive px-6 py-3 font-bold text-white">{tr("Lanjut ke pilihan produk")}</button>
           </section>
         )}
         {route.view === "finish" && (

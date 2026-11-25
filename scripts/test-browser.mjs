@@ -40,6 +40,9 @@ try {
   console.log("PASS mobile canvas zoom and right palette");
   await page.goto(base+"/#/kreasiku");
   await artwork.getByRole("button",{name:"Jadikan Nyata — Pesan Produk"}).click();
+  await page.getByRole("heading",{name:"Pilih latar karyamu",exact:true}).waitFor();
+  await page.getByRole("button",{name:"Taman",exact:true}).click();
+  await page.getByRole("button",{name:"Lanjut ke pilihan produk",exact:true}).click();
   const productGrid=page.getByRole("region",{name:"Pilih bentuk kreasimu"});
   const productCards=productGrid.locator("article");
   await productCards.nth(13).waitFor({state:"visible"});
@@ -52,25 +55,29 @@ try {
     const input=page.locator("#order-child-name");
     await preview.waitFor({state:"visible"});
     await input.fill("");
-    assert.ok(await preview.locator('path[fill="#AB57CC"]').count()>0,name+" artwork color missing");
-    assert.equal(await preview.locator('rect[stroke-dasharray="1 7"]').count(),0,name+" blank name frame");
-    assert.doesNotMatch(await preview.textContent(),/\bADAM\b|QA BROWSER/i,name+" unexpected name");
-    const backgrounds=page.getByRole("radiogroup",{name:"Pilihan background"});
-    assert.equal(await backgrounds.getByRole("radio").count(),10);
-    await backgrounds.getByRole("radio",{name:"Luar Angkasa",exact:true}).click();
-    assert.ok(await preview.locator('image[data-background][href="/backgrounds/05_Luar_Angkasa.png"]').count()>0,name+" background missing");
-    await backgrounds.getByRole("radio",{name:"Tanpa background",exact:true}).click();
-    assert.equal(await preview.locator('image[data-background]').count(),0,name+" background removal failed");
-    await input.fill("QA PERSONA");
-    assert.match(await preview.textContent(),/QA PERSONA/i,name+" personalized name missing");
+    if(name==="Poster"){
+      assert.ok(await preview.locator('path[fill="#AB57CC"]').count()>0,"Poster artwork color missing");
+      assert.ok(await preview.locator('svg[viewBox="0 0 1200 900"]').count()>0,"Poster must be landscape");
+      assert.ok(await preview.locator('image[data-background][href="/backgrounds/02_Taman.png"]').count()>0,"Poster background missing");
+      assert.doesNotMatch(await preview.textContent(),/\bADAM\b|QA BROWSER/i,"Blank name must not show dummy name");
+      await input.fill("QA PERSONA");
+      assert.match(await preview.textContent(),/QA PERSONA/i,"Poster personalized name missing");
+    } else {
+      const photo=preview.locator('img[src^="/products/"]');
+      await photo.waitFor({state:"visible"});
+      await photo.evaluate(img=>img.decode());
+      const src=await photo.getAttribute("src");
+      await input.fill("QA PERSONA");
+      assert.equal(await photo.getAttribute("src"),src,"Original product photo must remain unchanged");
+      assert.equal(await input.inputValue(),"QA PERSONA");
+    }
     await page.getByRole("button",{name:"Semua pilihan",exact:false}).click();
     await productCards.nth(13).waitFor({state:"visible"});
   }
-  console.log("PASS all 14 product previews use artwork color, optional name, no dummy name or empty plaque");
+  console.log("PASS 14 products: landscape poster uses real artwork and selected background; original photos preserved");
   async function addProduct(name){
     const card=page.locator("article").filter({has:page.getByRole("heading",{name,exact:true})});
     await card.getByRole("button",{name:"Pilih & Tambah ke Keranjang"}).click();
-    if(name==="Poster")await page.getByRole("radio",{name:"Taman",exact:true}).click();
     await page.getByRole("button",{name:"Tambah ke Keranjang",exact:true}).click();
   }
   await addProduct("Poster");

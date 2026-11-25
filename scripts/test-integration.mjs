@@ -127,7 +127,7 @@ try {
   // Regression fixtures preserve legacy checkout prices; new defaults tested separately.
   for(const [productId,price] of [["poster",24900],["papercraft",36900],["placemat",54900],["growthchart",69000]])await call("adminSetProductPrice",{productId,price},admin);
   await call("adminSaveBundle",{id:"little-artist",name:"Little Artist",productIds:["poster","papercraft"],price:54900,active:true},admin);
-  const customerPhone = "0817" + phone.slice(-8);
+  const customerPhone = "08" + (phone[2] === "7" ? "6" : "7") + phone.slice(3);
   const customerDigits = customerPhone.slice(1);
   const orderArgs = {
     checkoutId: randomUUID(), quantity: 7, projectId: project.id, productType: "papercraft", childName: "",
@@ -340,8 +340,9 @@ try {
   assert.equal(restored.bundles.find(b=>b.id==="little-artist").price,64900);
   console.log("PASS revised catalog restored for browser QA");
   // New checkout channels and purchaser classification.
-  const self=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,whatsapp:phone},owner)).body.order;
-  const selfNoCoupon=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,whatsapp:"+62"+digits,couponCode:""},owner)).body.order;
+  const selfOwner={...owner,ip:"127.10.1.2"};
+  const self=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,whatsapp:phone},selfOwner)).body.order;
+  const selfNoCoupon=(await call("createOrder",{...orderArgs,checkoutId:randomUUID(),quantity:1,whatsapp:"+62"+digits,couponCode:""},selfOwner)).body.order;
   assert.equal(self.affiliateSelfOrder,true);assert.equal(selfNoCoupon.affiliateSelfOrder,true);
   assert.equal(order.affiliateSelfOrder,false);
   await call("confirmTransfer",{code:self.code,whatsapp:phone,shopeeUsername:"   "},{expected:400});
