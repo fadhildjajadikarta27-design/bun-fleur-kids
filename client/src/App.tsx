@@ -416,12 +416,14 @@ function Home({
   brandName,
   catalogPrices,
   startTemplate,
+  onStart,
   go,
   onAge,
 }: {
   brandName: string;
   catalogPrices: Partial<Record<ProductId, number>>;
   startTemplate: (id: string) => void;
+  onStart: () => void;
   go: (r: Route) => void;
   onAge: (bandId: string) => void;
   onCustom: () => void;
@@ -480,7 +482,7 @@ function Home({
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => startTemplate("pb-dino")}
+              onClick={onStart}
               className="rounded-full bg-tang px-7 py-3 font-display text-base font-semibold text-ink shadow-sm transition hover:bg-tang-deep"
             >
               Mulai Mewarnai
@@ -576,7 +578,7 @@ function Home({
                 <h3 className="font-display text-2xl font-extrabold">{PRODUCT_META[id].title}</h3>
                 <p className="mt-2 leading-relaxed text-[var(--dim)]">{PRODUCT_META[id].description}</p>
                 <p className="mt-3 font-display text-xl font-extrabold text-olive-deep">{formatIDR(catalogPrices[id] ?? PRODUCT_DEFAULT_PRICES[id])}</p>
-                <button type="button" onClick={() => startTemplate("pb-dino")} className="mt-5 rounded-full bg-olive px-5 py-2.5 font-display text-base font-semibold text-white transition hover:bg-olive-deep">{PRODUCT_META[id].cta}</button>
+                <button type="button" onClick={onStart} className="mt-5 rounded-full bg-olive px-5 py-2.5 font-display text-base font-semibold text-white transition hover:bg-olive-deep">{PRODUCT_META[id].cta}</button>
               </div>
             </article>
           ))}
@@ -860,7 +862,7 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
     <div className="mx-auto max-w-6xl px-4 pb-16">
       <div className="band-sky mt-4 rounded-[2rem] px-6 py-8 sm:px-8">
         <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">Buku Mewarnai</p>
-        <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">Jelajahi <span className="band-accent">Buku</span></h1>
+        <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">Pilih <span className="band-accent">Karakter</span></h1>
         <p className="band-dim mt-2 max-w-2xl leading-relaxed">Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 260 karakter dalam lima kategori umur — 52 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.</p>
         <div className="mt-4">
           <label htmlFor="explore-search" className="sr-only">Cari karakter berdasarkan nama</label>
@@ -1950,11 +1952,11 @@ function PrintStudio({
 
 function Creations({
   openProject,
-  startTemplate,
+  onStart,
   onEditCustom,
 }: {
   openProject: (p: ServerProject, view: "studio" | "magic" | "print" | "finish") => void;
-  startTemplate: (id: string) => void;
+  onStart: () => void;
   onEditCustom: (p: ServerProject) => void;
   onCustomNew: () => void;
 }) {
@@ -1984,8 +1986,8 @@ function Creations({
           <p className="font-display text-xl font-extrabold">Belum ada kreasi</p>
           <p className="mt-1 font-semibold text-[var(--dim)]">Warnai karakter pertamamu dan ia akan tersimpan di sini.</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <button type="button" onClick={() => startTemplate("pb-dino")} className="rounded-full bg-tang px-6 py-3 font-display font-extrabold text-ink shadow">
-              Warnai Dino
+            <button type="button" onClick={onStart} className="rounded-full bg-tang px-6 py-3 font-display font-extrabold text-ink shadow">
+              Pilih Karakter
             </button>
 
           </div>
@@ -2341,6 +2343,11 @@ export function App() {
     window.scrollTo({ top: 0 });
   };
 
+  const startColoring = () => {
+    setExploreAge("all");
+    go({ view: "explore" });
+  };
+
   const startTemplate = (id: string) => {
     switchDraft(newWork(id));
     go({ view: "studio" });
@@ -2536,6 +2543,7 @@ export function App() {
             brandName={brandName}
             catalogPrices={settings.data?.catalogPrices ?? {}}
             startTemplate={startTemplate}
+            onStart={startColoring}
             go={go}
             onCustom={startCustomNew}
             onAge={(bandId) => {
@@ -2633,7 +2641,7 @@ export function App() {
         {route.view === "creations" && (
           <Creations
             openProject={openProject}
-            startTemplate={startTemplate}
+            onStart={startColoring}
             onEditCustom={(p) => editCustomWork(toWork(p))}
             onCustomNew={startCustomNew}
           />
