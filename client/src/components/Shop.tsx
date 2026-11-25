@@ -1782,7 +1782,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
   });
   const verify = useMutation({
     mutationFn: async (decision: "verify" | "reject" | "unmatched" | "refund") =>
-      await api.verifyOrderPayment({ id: order.id, decision, paymentReference }),
+      await api.verifyOrderPayment({ id: order.id, decision, paymentReference: order.shopeeUsername ? "" : paymentReference }),
     onError: (e) => setError(e.message),
     onSuccess: (res) => {
       setError("");
@@ -1882,12 +1882,12 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
             <span className="font-display text-xs font-bold text-[var(--dim)]">{order.shopeeUsername ? "Verifikasi Shopee:" : "Verifikasi QRIS:"}</span>
             {["awaiting", "waiting_verification", "unmatched", "rejected"].includes(order.payState) && order.orderStatus !== "cancelled" && (
               <>
-                <label className="text-xs font-semibold">
-                  {order.shopeeUsername ? "Nomor pesanan Shopee" : "Referensi mutasi QRIS"}
+                {order.shopeeUsername ? <p className="text-xs font-semibold">Cocokkan nama akun, produk, jumlah, dan pembayaran di Shopee sebelum verifikasi.</p> : <label className="text-xs font-semibold">
+                  Referensi mutasi QRIS
                   <input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)}
                     maxLength={80} autoComplete="off" className="ml-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2" />
-                </label>
-                <button type="button" disabled={verify.isPending || paymentReference.trim().length < 4} onClick={() => verify.mutate("verify")} className="rounded-full bg-olive px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
+                </label>}
+                <button type="button" disabled={verify.isPending || (order.shopeeUsername ? !["waiting_verification","unmatched"].includes(order.payState) : paymentReference.trim().length < 4)} onClick={() => {if (!order.shopeeUsername || window.confirm("Sudah cocok dan pembayaran di Shopee terverifikasi?")) verify.mutate("verify");}} className="rounded-full bg-olive px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">
                   Verifikasi Pembayaran
                 </button>
                 <button type="button" disabled={verify.isPending} onClick={() => verify.mutate("reject")} className="rounded-full bg-berry px-4 py-2 font-display text-xs font-semibold text-white disabled:opacity-50">

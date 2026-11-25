@@ -1548,12 +1548,17 @@ export const Actions = {
           if (row.payState === "refunded" || row.orderStatus === "cancelled") {
             throw new Error("Pesanan ini sudah dibatalkan atau direfund.");
           }
-          const reference = args.paymentReference.toUpperCase();
-          if (!/^[A-Z0-9-]{4,80}$/.test(reference)) throw new Error(row.shopeeUsername ? "Masukkan nomor pesanan Shopee yang valid." : "Masukkan nomor referensi dari mutasi QRIS.");
-          const [used] = await db.select({ id: schema.orders.id }).from(schema.orders)
-            .where(eq(schema.orders.paymentReference, reference)).limit(1);
-          const [birthdayUsed] = await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,reference)).limit(1);
-          if (used || birthdayUsed) throw new Error("Nomor referensi pembayaran sudah dipakai untuk pesanan lain.");
+          // Shopee orders are manually matched by account name; no marketplace order number is required.
+          const reference = row.shopeeUsername ? null : args.paymentReference.toUpperCase();
+          if (reference !== null) {
+            if (!/^[A-Z0-9-]{4,80}$/.test(reference)) throw new Error("Masukkan nomor referensi dari mutasi QRIS.");
+            const [used] = await db.select({ id: schema.orders.id }).from(schema.orders)
+              .where(eq(schema.orders.paymentReference, reference)).limit(1);
+            const [birthdayUsed] = await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,reference)).limit(1);
+            if (used || birthdayUsed) throw new Error("Nomor referensi pembayaran sudah dipakai untuk pesanan lain.");
+          } else if (!["waiting_verification", "unmatched"].includes(row.payState)) {
+            throw new Error("Checkout Shopee belum menunggu verifikasi.");
+          }
           const result = await db
             .update(schema.orders)
             .set({
