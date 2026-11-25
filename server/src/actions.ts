@@ -1825,7 +1825,8 @@ export const Actions = {
         netSales: sql<number>`sum(${commissions.netSubtotal})`.mapWith(Number).as("net_sales"),
         totalCommission: sql<number>`sum(${commissions.amount})`.mapWith(Number).as("total_commission"),
       }).from(commissions)
-        .where(inArray(commissions.status, ["confirmed", "payable", "paid"]))
+        .innerJoin(schema.orders, eq(schema.orders.id, commissions.orderId))
+        .where(and(inArray(commissions.status, ["confirmed", "payable", "paid"]), eq(schema.orders.affiliateSelfOrder, false)))
         .groupBy(commissions.affiliateId)
         .as("commission_totals");
       const payoutTotals = db.select({
@@ -2612,7 +2613,12 @@ export const Actions = {
           .from(schema.orders).where(inArray(schema.orders.id, recentOrderIds))
         : [];
       const orderById = new Map(orderRows.map((o) => [o.id, o]));
-      const counted = comms.filter((c) => c.status === "confirmed" || c.status === "payable" || c.status === "paid");
+      // Preserve historical payouts in the wallet, but exclude self orders from sales and KPI.
+      const selfOrders = await db.select({ id: schema.orders.id }).from(schema.orders)
+        .innerJoin(schema.commissions, eq(schema.commissions.orderId, schema.orders.id))
+        .where(and(eq(schema.commissions.affiliateId, affiliate.id), eq(schema.orders.affiliateSelfOrder, true)));
+      const selfOrderIds = new Set(selfOrders.map(o => o.id));
+      const counted = comms.filter((c) => !selfOrderIds.has(c.orderId) && (c.status === "confirmed" || c.status === "payable" || c.status === "paid"));
       const sum = (list: typeof comms, key: "amount" | "netSubtotal") => list.reduce((s, c) => s + c[key], 0);
       const wallet = {
         pending: sum(comms.filter((c) => c.status === "pending"), "amount"),
