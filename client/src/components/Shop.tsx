@@ -1191,7 +1191,19 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
   const [copied, setCopied] = useState(false);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => setPayState(order.payState), [order.payState]);
+  const [showShopee, setShowShopee] = useState(false);
+  const [shopeeUsername, setShopeeUsername] = useState(order.shopeeUsername);
+  const [reportedShopee, setReportedShopee] = useState(order.shopeeUsername);
+  useEffect(() => { setPayState(order.payState); setReportedShopee(order.shopeeUsername); setShopeeUsername(order.shopeeUsername); setShowShopee(false); }, [order.id, order.payState, order.shopeeUsername]);
+  const shopeeConfirm = useMutation({
+    mutationFn: () => api.confirmTransfer({ code: order.code, whatsapp: order.whatsapp, shopeeUsername: shopeeUsername.trim() }),
+    onError: (e) => setError(e.message),
+    onSuccess: (res) => {
+      if (!res.ok) { setError("Konfirmasi Shopee belum berhasil dicatat. Hubungi tim kami."); return; }
+      setReportedShopee(shopeeUsername.trim()); setShowShopee(false); setError("");
+      if (res.payState !== "not_found") setPayState(res.payState);
+    },
+  });
   const confirm = useMutation({
     mutationFn: async () => {
       let proof;
@@ -1230,6 +1242,15 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
       ? "bg-[#FCEBE5] text-berry"
       : "bg-white text-olive-deep";
 
+  if (reportedShopee) return (
+    <section className="rounded-[2rem] bg-[var(--surface)] p-5 ring-1 ring-[var(--border)]" aria-label="Konfirmasi checkout Shopee">
+      <p className="font-display text-xs font-bold uppercase tracking-wider text-[#E85828]">Shopee</p>
+      <h2 className="mt-2 font-display text-2xl font-extrabold text-olive-deep">{payState === "verified" ? "Checkout Shopee Terverifikasi" : "Checkout Shopee Dilaporkan"}</h2>
+      <p className="mt-2 text-sm font-semibold">Nama akun Shopee: <strong>{reportedShopee}</strong></p>
+      <p className="mt-2 text-sm font-bold">{PAY_STATE_LABELS[payState]}</p>
+      <p className="mt-2 text-sm text-[var(--dim)]">Tim kami akan mencocokkan pesanan di Shopee. Jangan melakukan pembayaran ulang melalui QRIS.</p>
+    </section>
+  );
   return (
     <section className="overflow-hidden rounded-[2rem] bg-[var(--surface)] ring-1 ring-[var(--border)]"
       aria-label="Pembayaran QRIS resmi Bun & Fleur">
@@ -1243,7 +1264,20 @@ export function PaymentPanel({ order }: { order: OrderOut }) {
           {PAY_STATE_LABELS[payState]}
         </span>
       </div>
-      <div className="grid items-start gap-5 px-4 py-5 sm:grid-cols-[minmax(0,280px)_minmax(0,1fr)] sm:gap-6 sm:px-6 sm:py-6">
+      {payState === "awaiting" && order.orderStatus !== "cancelled" && <div className="mx-4 mt-4 rounded-2xl border border-[#F4D1C1] bg-[#FFF6EE] p-4 sm:mx-6">
+        <button type="button" aria-expanded={showShopee} aria-controls={`shopee-form-${order.id}`} disabled={confirm.isPending || shopeeConfirm.isPending} onClick={() => {setShowShopee(v => !v);setError("");}} className="flex w-full items-center justify-between gap-2 rounded-xl bg-[#EE4D2D] px-4 py-3 font-display font-bold text-white disabled:opacity-50">
+          Sudah Checkout di Shopee <span aria-hidden>{showShopee ? "▴" : "▾"}</span>
+        </button>
+        {showShopee && <form id={`shopee-form-${order.id}`} className="mt-4 space-y-3" onSubmit={e => {e.preventDefault();if(shopeeUsername.trim() && !shopeeConfirm.isPending && !confirm.isPending)shopeeConfirm.mutate();}}>
+          <p className="text-sm text-[var(--dim)]">Jika sudah checkout di Shopee, masukkan nama akun yang digunakan agar tim kami dapat mencocokkan pesanan.</p>
+          <label htmlFor={`shopee-username-${order.id}`} className="block text-sm font-bold">Nama akun Shopee <span className="text-[#B93820]">*</span></label>
+          <input id={`shopee-username-${order.id}`} type="text" value={shopeeUsername} onChange={e => setShopeeUsername(e.target.value)} required maxLength={80} autoComplete="off" placeholder="Masukkan nama akun Shopee" className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-3" />
+          <button type="submit" disabled={!shopeeUsername.trim() || shopeeConfirm.isPending || confirm.isPending} className="w-full rounded-full bg-olive px-4 py-3 font-display font-bold text-white disabled:opacity-40">{shopeeConfirm.isPending ? "Mengirim…" : "Submit Konfirmasi"}</button>
+          <p className="text-xs text-[var(--dim)]">Konfirmasi tidak otomatis menandai pesanan lunas.</p>
+          {error && <p role="alert" className="text-sm font-bold text-berry">{error}</p>}
+        </form>}
+      </div>}
+      <div hidden={showShopee} className={`${showShopee ? "hidden" : "grid"} items-start gap-5 px-4 py-5 sm:grid-cols-[minmax(0,280px)_minmax(0,1fr)] sm:gap-6 sm:px-6 sm:py-6`}>
         <div className="mx-auto w-full max-w-[340px]">
           <div className="rounded-[1.75rem] border border-[#E6DFD0] bg-white p-4 shadow-[0_8px_30px_rgba(59,55,43,0.05)] sm:p-5">
             <div className="flex items-center justify-between gap-2 border-b border-[#F0E9DE] pb-3">
@@ -1807,6 +1841,7 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
           <OrderedItems order={order} />
           <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm font-semibold sm:grid-cols-2">
             <div><dt className="inline text-[var(--dim)]">Pemesan: </dt><dd className="inline">{order.customerName}</dd></div>
+            {order.shopeeUsername && <div className="sm:col-span-2 rounded-xl bg-[#FFF0E5] p-3"><dt className="font-bold text-[#B93820]">Checkout Shopee</dt><dd className="break-all">Nama akun: {order.shopeeUsername}</dd></div>}
             <div><dt className="inline text-[var(--dim)]">WhatsApp: </dt><dd className="inline">{order.whatsapp}</dd></div>
             <div><dt className="inline text-[var(--dim)]">Email: </dt><dd className="inline">{order.email}</dd></div>
             <div><dt className="inline text-[var(--dim)]">Nama anak: </dt><dd className="inline">{order.childName.trim() || "—"}</dd></div>
@@ -1820,9 +1855,9 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
             <div><dt className="inline text-[var(--dim)]">Ongkir: </dt><dd className="inline">{order.shippingCost == null ? "belum dikonfirmasi" : formatIDR(order.shippingCost)}</dd></div>
             <div><dt className="inline text-[var(--dim)]">Total: </dt><dd className="inline font-display text-olive-deep">{formatIDR(order.total)}</dd></div>
             <div className="sm:col-span-2">
-              <dt className="inline text-[var(--dim)]">QRIS: </dt>
+              <dt className="inline text-[var(--dim)]">{order.shopeeUsername ? "Shopee: " : "QRIS: "}</dt>
               <dd className="inline">
-                kode unik {formatIDR(order.uniqueCode)} · total bayar <span className="font-display text-olive-deep">{formatIDR(order.payableTotal)}</span> ·{" "}
+                {!order.shopeeUsername && <>kode unik {formatIDR(order.uniqueCode)} · total bayar <span className="font-display text-olive-deep">{formatIDR(order.payableTotal)}</span> ·{" "}</>}
                 <span className="font-display">{PAY_STATE_LABELS[order.payState]}</span>
                 {order.paymentConfirmedAt && ` · konfirmasi pelanggan ${new Date(order.paymentConfirmedAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}`}
               </dd>
@@ -1843,12 +1878,12 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
               </button>
             </div>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Verifikasi pembayaran QRIS">
-            <span className="font-display text-xs font-bold text-[var(--dim)]">Verifikasi QRIS:</span>
+          <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Verifikasi pembayaran">
+            <span className="font-display text-xs font-bold text-[var(--dim)]">{order.shopeeUsername ? "Verifikasi Shopee:" : "Verifikasi QRIS:"}</span>
             {["awaiting", "waiting_verification", "unmatched", "rejected"].includes(order.payState) && order.orderStatus !== "cancelled" && (
               <>
                 <label className="text-xs font-semibold">
-                  Referensi mutasi QRIS
+                  {order.shopeeUsername ? "Nomor pesanan Shopee" : "Referensi mutasi QRIS"}
                   <input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)}
                     maxLength={80} autoComplete="off" className="ml-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2" />
                 </label>

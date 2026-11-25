@@ -178,6 +178,7 @@ const orderOut = z.object({
   uniqueCode: z.number(),
   payState: z.enum(["awaiting", "waiting_verification", "verified", "rejected", "unmatched", "refunded"]),
   payableTotal: z.number(),
+  shopeeUsername: z.string(),
   paymentConfirmedAt: z.string().nullable(),
   shippingCost: z.number().nullable(),
   total: z.number(),
@@ -247,6 +248,7 @@ function orderToOut(row: OrderRow): z.infer<typeof orderOut> {
     uniqueCode: row.uniqueCode,
     payState: row.payState,
     payableTotal: row.total + row.uniqueCode,
+    shopeeUsername: row.shopeeUsername,
     paymentConfirmedAt: row.paymentConfirmedAt ? row.paymentConfirmedAt.toISOString() : null,
     shippingCost: row.shippingCost,
     total: row.total,
@@ -1449,6 +1451,7 @@ export const Actions = {
     request: z.object({
       code: z.string().trim().min(4).max(24),
       whatsapp: z.string().trim().min(9).max(20),
+      shopeeUsername: z.string().trim().min(1, "Nama akun Shopee wajib diisi.").max(80).regex(/^[^\p{Cc}]+$/u, "Nama akun Shopee tidak valid.").optional(),
       proof: z.object({
         mime: z.enum(["image/jpeg", "image/png"]),
         data: z.base64().min(32).max(1000000),
@@ -1471,6 +1474,18 @@ export const Actions = {
         if (normalizeWa(row.whatsapp) !== normalizeWa(args.whatsapp)) return { ok: false, payState: "not_found" as const };
         if (row.payState === "verified") return { ok: true, payState: "verified" as const };
         if (row.orderStatus === "cancelled" || row.payState === "rejected" || row.payState === "refunded") return { ok: false, payState: row.payState };
+        if (args.shopeeUsername !== undefined) {
+          if (args.proof) throw new Error("Pilih satu metode pembayaran.");
+          if (row.shopeeUsername && row.shopeeUsername !== args.shopeeUsername) throw new Error("Nama akun Shopee sudah tercatat. Hubungi admin untuk koreksi.");
+          if (!row.shopeeUsername && row.payState !== "awaiting") throw new Error("Pembayaran sudah dilaporkan melalui metode lain. Hubungi admin.");
+          if (row.payState === "waiting_verification") return { ok: true, payState: "waiting_verification" as const };
+          const now = new Date();
+          await db.update(schema.orders).set({ shopeeUsername: args.shopeeUsername, payState: "waiting_verification", paymentStatus: "waiting_verification", paymentConfirmedAt: now, updatedAt: now }).where(eq(schema.orders.id, row.id));
+          await audit(db, row.affiliateId, "payment.shopee_reported", `Pesanan ${row.code} — pelanggan melaporkan checkout Shopee.`);
+          ctx.invalidateQueries();
+          return { ok: true, payState: "waiting_verification" as const };
+        }
+        if (row.shopeeUsername) throw new Error("Checkout Shopee sudah dilaporkan. Jangan bayar ulang melalui QRIS.");
         if (row.checkoutKey && row.shippingCost === null) throw new Error("Tunggu ongkir dikonfirmasi sebelum melakukan pembayaran.");
         if (args.proof) {
           const { mime, data } = args.proof;
@@ -1534,11 +1549,11 @@ export const Actions = {
             throw new Error("Pesanan ini sudah dibatalkan atau direfund.");
           }
           const reference = args.paymentReference.toUpperCase();
-          if (!/^[A-Z0-9-]{4,80}$/.test(reference)) throw new Error("Masukkan nomor referensi dari mutasi QRIS.");
+          if (!/^[A-Z0-9-]{4,80}$/.test(reference)) throw new Error(row.shopeeUsername ? "Masukkan nomor pesanan Shopee yang valid." : "Masukkan nomor referensi dari mutasi QRIS.");
           const [used] = await db.select({ id: schema.orders.id }).from(schema.orders)
             .where(eq(schema.orders.paymentReference, reference)).limit(1);
           const [birthdayUsed] = await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,reference)).limit(1);
-          if (used || birthdayUsed) throw new Error("Nomor referensi QRIS sudah dipakai untuk pesanan lain.");
+          if (used || birthdayUsed) throw new Error("Nomor referensi pembayaran sudah dipakai untuk pesanan lain.");
           const result = await db
             .update(schema.orders)
             .set({

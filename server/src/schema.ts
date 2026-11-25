@@ -122,6 +122,7 @@ export const orders = pgTable("orders", {
   })
     .notNull()
     .default("awaiting"),
+  shopeeUsername: text("shopee_username").notNull().default(""),
   paymentConfirmedAt: timestamp("payment_confirmed_at", { withTimezone: true, mode: "date" }),
   // Null until the team confirms the real courier cost with the customer;
   // the app never invents a shipping price.
