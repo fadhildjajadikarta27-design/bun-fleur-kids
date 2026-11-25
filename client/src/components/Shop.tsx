@@ -1835,6 +1835,10 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
           <p className="font-display text-base font-semibold">
             {order.code} · {orderTitle(order)}
           </p>
+          <div className="my-1 flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${order.affiliateSelfOrder ? "bg-[#FFE4C7] text-[#964509]" : order.affiliateId ? "bg-sage-soft text-olive-deep" : "bg-[#E5F2FA] text-[#205E80]"}`}>{order.affiliateSelfOrder ? "Affiliate Self Order" : order.affiliateId ? "Affiliate Customer Order" : "Organic Order"}</span>
+            {order.affiliateSelfOrder && <span className="text-xs font-semibold text-[#964509]">Pesanan pribadi · tanpa komisi & KPI</span>}
+          </div>
           <p className="text-sm font-semibold text-[var(--dim)]">
             {order.variant || "—"} · {new Date(order.createdAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}
           </p>
@@ -1974,9 +1978,10 @@ function AdminOrderCard({ order }: { order: OrderOut }) {
 
 export function AdminOrders({ scope = "all" }: { scope?: "all" | "payment" | "fulfillment" }) {
   const [page, setPage] = useState(0);
+  const [buyerType, setBuyerType] = useState<"all" | "self" | "referral" | "organic">("all");
   const orders = useQuery({
-    queryKey: ["orders", scope, page],
-    queryFn: () => api.listOrders({ limit: 20, offset: page * 20, scope }),
+    queryKey: ["orders", scope, buyerType, page],
+    queryFn: () => api.listOrders({ limit: 20, offset: page * 20, scope, buyerType }),
     refetchOnWindowFocus: true,
   });
   if (orders.isPending) return <p className="font-display font-bold">Memuat pesanan…</p>;
@@ -1997,7 +2002,7 @@ export function AdminOrders({ scope = "all" }: { scope?: "all" | "payment" | "fu
           </div>
         ))}
       </dl>
-      <div className="flex justify-end"><button type="button" disabled={orders.isFetching} onClick={() => void orders.refetch()} className="rounded-full border px-4 py-2 text-sm font-bold">Muat ulang pesanan</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><label className="flex flex-wrap items-center gap-2 text-sm font-bold">Jenis pesanan <select value={buyerType} onChange={e => {setBuyerType(e.target.value as typeof buyerType);setPage(0);}} className="rounded-xl border bg-white px-3 py-2"><option value="all">Semua pesanan</option><option value="self">Affiliate Self Order</option><option value="referral">Affiliate Customer Order</option><option value="organic">Organic Order</option></select></label><button type="button" disabled={orders.isFetching} onClick={() => void orders.refetch()} className="rounded-full border px-4 py-2 text-sm font-bold">Muat ulang pesanan</button></div>
       {list.length === 0 && <p className="text-sm text-[var(--dim)]">Belum ada pesanan pada halaman ini.</p>}
       {list.map((order) => <AdminOrderCard key={order.id} order={order} />)}
       {orderCount > 20 && (

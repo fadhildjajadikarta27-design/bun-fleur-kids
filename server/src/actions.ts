@@ -174,6 +174,7 @@ const orderOut = z.object({
   gift:giftOut.nullable(),
   couponCode: z.string(),
   affiliateId: z.number().nullable(),
+  affiliateSelfOrder: z.boolean(),
   discountAmount: z.number(),
   uniqueCode: z.number(),
   payState: z.enum(["awaiting", "waiting_verification", "verified", "rejected", "unmatched", "refunded"]),
@@ -244,6 +245,7 @@ function orderToOut(row: OrderRow): z.infer<typeof orderOut> {
     gift:row.gift,
     couponCode: row.couponCode,
     affiliateId: row.affiliateId,
+    affiliateSelfOrder: row.affiliateSelfOrder,
     discountAmount: row.discountAmount,
     uniqueCode: row.uniqueCode,
     payState: row.payState,
@@ -430,7 +432,7 @@ async function syncCommission(
   order: OrderRow,
   event: "created" | "verified" | "completed" | "reversed",
 ): Promise<void> {
-  if (!order.affiliateId) return;
+  if (order.affiliateSelfOrder || !order.affiliateId) return;
   await db.select({ id: schema.affiliates.id }).from(schema.affiliates).where(eq(schema.affiliates.id, order.affiliateId)).for("update");
   const rows = await db.select().from(schema.commissions).where(eq(schema.commissions.orderId, order.id)).limit(1);
   const existing = rows[0];
@@ -1042,6 +1044,10 @@ export const Actions = {
         const totalQuantity = requested.reduce((n, item) => n + item.quantity, 0);
         if (totalQuantity > 140) throw new Error("Maksimal 140 unit per pesanan.");
         const prices = await catalogPrices(db);
+        const normalizedBuyer = normalizeWa(digits);
+        const [buyerAffiliate] = await db.select({ id: schema.affiliates.id }).from(schema.affiliates)
+          .where(sql`regexp_replace(regexp_replace(${schema.affiliates.whatsapp}, '[^0-9]', '', 'g'), '^62', '0') = ${normalizedBuyer}`).limit(1);
+        const affiliateSelfOrder = Boolean(buyerAffiliate);
         let affiliate: AffiliateRow | null = null;
         const couponInput = args.couponCode.trim().toUpperCase();
         if (couponInput) {
@@ -1123,6 +1129,7 @@ export const Actions = {
             productPrice: price,
             couponCode: affiliate ? affiliate.couponCode : "",
             affiliateId: affiliate ? affiliate.id : null,
+            affiliateSelfOrder,
             discountAmount,
             uniqueCode,
             payState: "awaiting",
@@ -1190,6 +1197,7 @@ export const Actions = {
       limit: z.number().int().positive().max(100).default(20),
       offset: z.number().int().min(0).max(100000).default(0),
       scope: z.enum(["all", "payment", "fulfillment"]).default("all"),
+      buyerType: z.enum(["all", "self", "referral", "organic"]).default("all"),
     }),
     response: z.object({
       orders: z.array(orderOut), orderCount: z.number(), paidCount: z.number(),
@@ -1202,7 +1210,11 @@ export const Actions = {
         : args.scope === "fulfillment"
           ? and(eq(schema.orders.paymentStatus, "paid"), inArray(schema.orders.orderStatus, ["paid", "confirmed", "design_review", "production", "ready_to_ship", "shipped"]))
           : undefined;
-      const scope=and(sql`${schema.orders.archivedAt} IS NULL`,scopeFilter);
+      const buyerFilter = args.buyerType === "self" ? eq(schema.orders.affiliateSelfOrder, true)
+        : args.buyerType === "referral" ? and(eq(schema.orders.affiliateSelfOrder, false), sql`${schema.orders.affiliateId} IS NOT NULL`)
+        : args.buyerType === "organic" ? and(eq(schema.orders.affiliateSelfOrder, false), sql`${schema.orders.affiliateId} IS NULL`)
+        : undefined;
+      const scope=and(sql`${schema.orders.archivedAt} IS NULL`,scopeFilter,buyerFilter);
       const rows = await db
         .select()
         .from(schema.orders)
@@ -1404,7 +1416,7 @@ export const Actions = {
       const row = rows[0];
       if (!row) return { order: null };
       if (normalizeWa(row.whatsapp) !== normalizeWa(args.whatsapp)) return { order: null };
-      return { order: orderToOut({ ...row, customerName: "", email: "", address: "", notes: "", gift:null, affiliateId: null }) };
+      return { order: orderToOut({ ...row, customerName: "", email: "", address: "", notes: "", gift:null, affiliateId: null, affiliateSelfOrder: false }) };
     },
   }),
 
