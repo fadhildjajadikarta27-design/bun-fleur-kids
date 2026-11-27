@@ -350,27 +350,6 @@ export const birthdayEvents = pgTable("birthday_events", {
 export const shopBundles=pgTable("shop_bundles",{
  id:text("id").primaryKey(),name:text("name").notNull(),productIds:jsonb("product_ids").$type<string[]>().notNull(),price:integer("price").notNull(),active:integer("active").notNull().default(1),
 });
-
-export const gameTrials=pgTable("game_trials",{
- key:text("key").primaryKey(),ownerId:text("owner_id").notNull(),gameId:text("game_id").notNull(),expiresAt:timestamp("expires_at",{withTimezone:true,mode:"date"}).notNull()
-});
-export const gamePurchases=pgTable("game_purchases",{
- code:text("code").primaryKey(),ownerId:text("owner_id").notNull(),target:text("target").notNull(),amount:integer("amount").notNull(),
- status:text("status",{enum:["pending","reported","paid","cancelled","refunded"]}).notNull().default("pending"),
- paymentReference:text("payment_reference"),
- createdAt:timestamp("created_at",{withTimezone:true,mode:"date"}).notNull(),updatedAt:timestamp("updated_at",{withTimezone:true,mode:"date"}).notNull()
-});
-
-export const coinWallets=pgTable("coin_wallets",{
- ownerId:text("owner_id").primaryKey(),balance:integer("balance").notNull().default(0),lastCheckIn:text("last_check_in").notNull().default(""),checkInDay:integer("check_in_day").notNull().default(0),
-});
-export const coinPlaySessions=pgTable("coin_play_sessions",{
- ownerId:text("owner_id").primaryKey(),token:text("token").notNull(),gameId:text("game_id").notNull(),startedAt:timestamp("started_at",{withTimezone:true,mode:"date"}).notNull(),minute:integer("minute").notNull().default(0),valid:boolean("valid").notNull().default(true)
-});
-export const coinLedger=pgTable("coin_ledger",{
- key:text("key").primaryKey(),ownerId:text("owner_id").notNull(),source:text("source").notNull(),amount:integer("amount").notNull(),createdAt:timestamp("created_at",{withTimezone:true,mode:"date"}).notNull()
-});
-
 export const hollyAccounts=pgTable("holly_accounts",{
  id:text("id").primaryKey(),name:text("name").notNull(),email:text("email").notNull().unique(),salt:text("salt").notNull(),passwordHash:text("password_hash").notNull(),referralCode:text("referral_code").notNull().unique(),invitedBy:text("invited_by"),pendingBonus:integer("pending_bonus").notNull().default(0),progress:jsonb("progress"),revision:integer("revision").notNull().default(0)
 });

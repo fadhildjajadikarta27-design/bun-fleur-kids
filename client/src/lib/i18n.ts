@@ -371,9 +371,7 @@ const english: Record<string,string> = {
   "Jeda slideshow": "Pause slideshow",
   "Putar slideshow": "Play slideshow",
   "14 Pilihan Produk": "14 Product Options",
-  "Foto produk belum tersedia": "Product photo unavailable",
-  "Main dengan Karakterku": "Play with My Character",
-  "Main": "Play"
+  "Foto produk belum tersedia": "Product photo unavailable"
 };
 export function translate(language: Language, text: string): string { return language === "en" && Object.prototype.hasOwnProperty.call(english,text) ? english[text]! : text; }
 export function useT() { const language = useContext(LanguageContext); return useCallback((text: string) => translate(language,text),[language]); }

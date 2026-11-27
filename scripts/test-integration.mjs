@@ -359,71 +359,14 @@ try {
   assert.ok(filtered.some(o=>o.id===self.id)&&filtered.some(o=>o.id===selfNoCoupon.id));assert.ok(filtered.every(o=>o.affiliateSelfOrder));
   assert.ok((await call("listOrders",{buyerType:"referral",limit:100},admin)).body.orders.some(o=>o.id===order.id));
   console.log("PASS Shopee required username, manual verification without order number, self order labels and zero commissions");
-  const trial=(await call("startGameTrial",{gameId:"bubbles"},owner)).body;
-  assert.equal(trial.unlocked,false);assert.ok(trial.remainingSeconds>890&&trial.remainingSeconds<=900);
-  const initial=(await call("getGameAccess",{},owner)).body;
-  assert.equal(initial.games.length,25);assert.equal(initial.games.find(g=>g.gameId==="peek").started,false);
-  await sql`UPDATE game_trials SET expires_at=now()-interval '1 second' WHERE game_id='bubbles'`;
-  assert.equal((await call("startGameTrial",{gameId:"bubbles"},owner)).body.remainingSeconds,0);
-  await call("createGamePurchase",{target:"bubbles",adultConfirmed:false},{...owner,expected:400});
-  const single=(await call("createGamePurchase",{target:"bubbles",adultConfirmed:true,amount:1},owner)).body.purchase;
-  assert.equal(single.amount,10000);
-  assert.equal((await call("createGamePurchase",{target:"bubbles",adultConfirmed:true},owner)).body.purchase.code,single.code);
-  await call("adminVerifyGamePurchase",{code:single.code,decision:"verify",paidAmount:10000,paymentReference:"PLAYQA1"},{expected:401});
-  await call("reportGamePayment",{code:single.code,paymentReference:"PLAYQA1",adultConfirmed:true},{...admin,expected:400});
-  await call("reportGamePayment",{code:single.code,paymentReference:"PLAYQA1",adultConfirmed:true},owner);
-  assert.equal((await call("startGameTrial",{gameId:"bubbles"},owner)).body.unlocked,false);
-  await call("adminVerifyGamePurchase",{code:single.code,decision:"verify",paidAmount:1,paymentReference:"PLAYQA1"},{...admin,expected:400});
-  await call("adminVerifyGamePurchase",{code:single.code,decision:"verify",paidAmount:10000,paymentReference:"PLAYQA1"},admin);
-  assert.equal((await call("startGameTrial",{gameId:"bubbles"},owner)).body.unlocked,true);
-  const pack=(await call("createGamePurchase",{target:"category-1",adultConfirmed:true},owner)).body.purchase;
-  assert.equal(pack.amount,29000);
-  await call("reportGamePayment",{code:pack.code,paymentReference:"PLAYQA2",adultConfirmed:true},owner);
-  await call("adminVerifyGamePurchase",{code:pack.code,decision:"verify",paidAmount:29000,paymentReference:"PLAYQA2"},admin);
-  const unlocked=(await call("getGameAccess",{},owner)).body.games.filter(g=>g.unlocked).map(g=>g.gameId);
-  assert.deepEqual(unlocked,["bubbles","feed","bath","dress","shape","color"]);
-  await call("adminVerifyGamePurchase",{code:pack.code,decision:"refund"},admin);
-  assert.equal((await call("getGameAccess",{},owner)).body.games.filter(g=>g.unlocked).length,1);
-  await call("adminListGamePurchases",{}, {expected:401});
-  assert.equal((await call("adminListGamePurchases",{},admin)).body.paidRevenue,10000);
-  console.log("PASS 15-minute trial persistence, server pricing, manual verification, 5-game bundle, refund and owner isolation");
-  const initialWallet=(await call("getCoinWallet",{},owner)).body;
-  assert.equal(initialWallet.balance,0);
-  await call("claimDailyCoin",{adultConfirmed:false},{...owner,expected:400});
-  const daily=(await call("claimDailyCoin",{adultConfirmed:true},owner)).body;
-  assert.equal(daily.earned,100);assert.equal(daily.checkInDay,1);
-  assert.equal((await call("claimDailyCoin",{adultConfirmed:true},owner)).body.earned,0);
-  assert.equal((await call("getCoinWallet",{},guest)).body.balance,0);
-  // Simulate a previous-day check-in on the disposable database only.
-  await sql`UPDATE coin_wallets SET last_check_in=((now() AT TIME ZONE 'Asia/Jakarta')::date-1)::text,check_in_day=6`;
-  await sql`DELETE FROM coin_ledger WHERE source='checkin'`;
-  const weekly=(await call("claimDailyCoin",{adultConfirmed:true},owner)).body;
-  assert.equal(weekly.earned,2500);assert.equal(weekly.checkInDay,7);assert.equal(weekly.balance,2600);
-  const block=(await call("startCoinPlay",{gameId:"bubbles"},owner)).body.token;
-  await call("recordCoinMinute",{token:block,minute:1,active:true},{...owner,expected:400});
-  let rewarded;
-  for(let minute=1;minute<=5;minute++){
-    await sql`UPDATE coin_play_sessions SET started_at=now()-${minute*60}*interval '1 second' WHERE token=${block}`;
-    rewarded=(await call("recordCoinMinute",{token:block,minute,active:true},owner)).body;
-    assert.equal(rewarded.earned,minute===5?50:0);
-  }
-  assert.equal(rewarded.balance,2650);
-  assert.equal((await call("recordCoinMinute",{token:block,minute:5,active:true},owner)).body.earned,0);
-  const idle=(await call("startCoinPlay",{gameId:"bubbles"},owner)).body.token;
-  for(let minute=1;minute<=5;minute++){
-    await sql`UPDATE coin_play_sessions SET started_at=now()-${minute*60}*interval '1 second' WHERE token=${idle}`;
-    assert.equal((await call("recordCoinMinute",{token:idle,minute,active:minute!==3},owner)).body.earned,0);
-  }
-  assert.equal((await call("getCoinWallet",{},owner)).body.balance,2650);
-  assert.equal((await call("recordCoinMinute",{token:idle,minute:5,active:true},guest)).body.earned,0);
-  console.log("PASS coins: server timing, 50 per fully active block, no reward for an idle minute, once-daily WIB check-in, day 7 bonus, wallet isolation");
+
   await call("hollyMe",{}, {expected:503});
   process.env.HOLLY_LUNA_PREVIEW_ENABLED="true";
   const signup=await call("hollySignup",{name:"QA Parent",email:"holly-"+token+"@example.test",password:"QA-Password-2026",adult:true},{ip:"127.10.5.1"});
   assert.equal(signup.body.sessionToken,undefined);
   const holly={cookie:signup.cookie};
-  const code=signup.body.user.referral.code;
-  const invite=await call("hollySignup",{name:"QA Guest",email:"guest-"+token+"@example.test",password:"QA-Password-2026",adult:true,referralCode:code},{ip:"127.10.5.2"});
+  const hollyCode=signup.body.user.referral.code;
+  const invite=await call("hollySignup",{name:"QA Guest",email:"guest-"+token+"@example.test",password:"QA-Password-2026",adult:true,referralCode:hollyCode},{ip:"127.10.5.2"});
   assert.equal(invite.body.user.progress.coins,10000);
   assert.equal((await call("hollyMe",{},holly)).body.user.progress.coins,5000);
   assert.equal((await call("hollyMe",{}, {cookie:invite.cookie})).body.user.progress.coins,10000);

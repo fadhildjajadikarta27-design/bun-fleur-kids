@@ -60,8 +60,6 @@ const PUBLIC_ACTIONS = new Set([
   "resetPinWithToken", "affiliateLogout", "affiliateMe", "affiliateUpdateCoupon", "affiliateRequestPayout",
   "getAffiliateConfig", "affiliateApply",
   "getBirthdayCatalog", "createBirthdayEvent", "listMyBirthdayEvents",
-  "getGameAccess", "startGameTrial", "createGamePurchase", "reportGamePayment",
-  "getCoinWallet", "claimDailyCoin", "startCoinPlay", "recordCoinMinute",
 ]);
 
 export function requiresAdmin(action: string): boolean {

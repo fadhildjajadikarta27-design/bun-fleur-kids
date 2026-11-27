@@ -13,7 +13,6 @@ import * as schema from "./schema.js";
 import { isPaymentProof } from "./payment-proof.js";
 import { bestBundle } from "./bundles.js";
 import { isBackgroundId } from "./backgrounds.js";
-import { playActions } from "./play-actions.js";
 
 const paint = z.string().regex(/^#[a-f0-9]{6}$/i, "Warna karya tidak valid.");
 const strokeSchema = z.object({
@@ -524,7 +523,6 @@ function birthdayDateMinus(date:string,days:number){
 
 export const Actions = {
   ...hollyActions,
-  ...playActions,
   listProjects: defineAction({
     description: "Lists saved coloring projects, most recently updated first.",
     request: z.object({
@@ -913,8 +911,7 @@ export const Actions = {
           if(!/^[A-Z0-9-]{4,80}$/.test(ref)||args.paidAmount!==row.total)throw new Error("Cocokkan nominal penuh dan nomor referensi pembayaran terlebih dahulu.");
           const [used]=await db.select({id:schema.orders.id}).from(schema.orders).where(eq(schema.orders.paymentReference,ref)).limit(1);
           const [other]=await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,ref)).limit(1);
-          const [gameUsed]=await db.select({code:schema.gamePurchases.code}).from(schema.gamePurchases).where(and(eq(schema.gamePurchases.paymentReference,ref),inArray(schema.gamePurchases.status,["paid","refunded"]))).limit(1);
-          if(used||other||gameUsed)throw new Error("Nomor referensi sudah digunakan.");
+          if(used||other)throw new Error("Nomor referensi sudah digunakan.");
           paymentReference=ref;
         }
         const trackingNumber=args.trackingNumber??row.trackingNumber;
@@ -1572,8 +1569,7 @@ export const Actions = {
             const [used] = await db.select({ id: schema.orders.id }).from(schema.orders)
               .where(eq(schema.orders.paymentReference, reference)).limit(1);
             const [birthdayUsed] = await db.select({id:schema.birthdayEvents.id}).from(schema.birthdayEvents).where(eq(schema.birthdayEvents.paymentReference,reference)).limit(1);
-            const [gameUsed]=await db.select({code:schema.gamePurchases.code}).from(schema.gamePurchases).where(and(eq(schema.gamePurchases.paymentReference,reference),inArray(schema.gamePurchases.status,["paid","refunded"]))).limit(1);
-            if (used || birthdayUsed || gameUsed) throw new Error("Nomor referensi pembayaran sudah dipakai untuk pesanan lain.");
+            if (used || birthdayUsed) throw new Error("Nomor referensi pembayaran sudah dipakai untuk pesanan lain.");
           } else if (!["waiting_verification", "unmatched"].includes(row.payState)) {
             throw new Error("Checkout Shopee belum menunggu verifikasi.");
           }

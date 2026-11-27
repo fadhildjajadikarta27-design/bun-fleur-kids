@@ -6,7 +6,6 @@ import { AdminOrders, AdminProductPrices } from "./Shop";
 import { AffiliateAdmin } from "./Affiliate";
 import { BirthdayAdmin } from "./Birthday";
 import { BundleAdmin } from "./BundleAdmin";
-import { GamePurchaseAdmin } from "./PlayLearn";
 
 const tabs = [
   { id: "overview", label: "Ringkasan" },
@@ -15,7 +14,6 @@ const tabs = [
   { id: "fulfillment", label: "Produksi & Pengiriman" },
   { id: "products", label: "Produk & Harga" },
   { id: "birthday", label: "Hampers Ulang Tahun" },
-  { id: "games", label: "Pembelian Game" },
   { id: "bundles", label: "Paket Hemat & Promo" },
   { id: "affiliate", label: "Affiliate & Kupon" },
   { id: "finance", label: "Laporan Keuangan" },
@@ -224,7 +222,6 @@ export function AdminCenter({ brandName }: { brandName: string }) {
         </section>}
         {tab === "products" && <AdminProductPrices />}
         {tab === "birthday" && <BirthdayAdmin />}
-        {tab === "games" && <GamePurchaseAdmin />}
         {tab === "bundles" && <BundleAdmin />}
         {tab === "affiliate" && <section className={panel}><h2 className={heading}>Manajemen affiliate</h2><AffiliateAdmin /></section>}
         {tab === "finance" && <Finance />}

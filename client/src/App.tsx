@@ -226,7 +226,7 @@ function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
 
 /* ------------------------------ Shell ------------------------------ */
 
-type NavView = "home" | "explore" | "custom" | "creations" | "parents" | "birthday" | "play";
+type NavView = "home" | "explore" | "custom" | "creations" | "parents" | "birthday";
 
 const NAV_ITEMS: { view: NavView; label: string; short: string; icon: ReactNode }[] = [
   {
@@ -353,7 +353,7 @@ function Header({
         {/* Navigasi atas hanya untuk tablet/desktop; di ponsel navigasi
             pindah ke tab bar bawah (MobileTabBar) supaya tidak ada item
             yang terpotong atau harus digeser menyamping. */}
-        <nav className="ml-auto hidden items-center gap-0 xl:flex" aria-label={tr("Utama")}>
+        <nav className="ml-auto hidden items-center gap-0 lg:flex" aria-label={tr("Utama")}>
           {NAV_ITEMS.map((n) => item(n.view, tr(n.label)))}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-0">
@@ -401,7 +401,7 @@ function MobileTabBar({
   return (
     <nav
       aria-label={tr("Navigasi bawah")}
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[#F8F4EC]/95 pb-safe backdrop-blur-md xl:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[#F8F4EC]/95 pb-safe backdrop-blur-md lg:hidden"
     >
       <div className="mx-auto grid max-w-md grid-cols-6">
         {NAV_ITEMS.map((n) => {
