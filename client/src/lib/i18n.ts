@@ -30,7 +30,7 @@ const english: Record<string,string> = {
   "Warnai & Custom Nama": "Color & Add a Name",
   "Pilih Bentuk Kreasi": "Choose a Product",
   "Kami Cetak & Kirim": "We Print & Deliver",
-  "260 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun.": "260 black-and-white characters across five age groups, from big shapes for babies to detailed scenes for five-year-olds.",
+  "270 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun.": "270 black-and-white characters across five age groups, from big shapes for babies to detailed scenes for five-year-olds.",
   "Ketuk untuk mengisi warna, gambar bebas dengan kuas, lalu tulis nama dan pesan si kecil dengan gaya huruf favoritnya.": "Color the shapes, draw freely with the brush, then add your child's name and message in a favorite font.",
   "Poster, papercraft 3D, alas makan, celengan, puzzle, growth chart, atau kaos — semuanya mengikuti warna karya anakmu.": "Choose personalized products that preserve the colors of your child's artwork.",
   "Pesan dari halaman karya, selesaikan pembayaran lewat konfirmasi tim kami, dan kami produksi lalu kirim langsung ke rumah.": "Order from the artwork page, confirm payment with our team and we will make and deliver your product.",
@@ -88,7 +88,7 @@ const english: Record<string,string> = {
   "Rencanakan Hampers": "Plan Gift Sets",
   "Satu karya kecil bisa menjadi kenangan yang besar.": "A little creation can become a big memory.",
   "Buku Mewarnai": "Coloring Books",
-  "Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 260 karakter dalam lima kategori umur — 52 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.": "Choose from 260 black-and-white characters across five age groups, from big shapes for babies aged 9–18 months to detailed scenes for ages 4–5. Your colors come to life in 3D and in print.",
+  "Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 270 karakter dalam lima kategori umur — 54 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.": "Choose from 270 black-and-white characters across five age groups, from big shapes for babies aged 9–18 months to detailed scenes for ages 4–5. Your colors come to life in 3D and in print.",
   "Cari karakter berdasarkan nama": "Search by character name",
   "Cari karakter… cth. kucing, roket, kaktus": "Search characters…",
   "Filter berdasarkan koleksi": "Filter by collection",
@@ -371,7 +371,9 @@ const english: Record<string,string> = {
   "Jeda slideshow": "Pause slideshow",
   "Putar slideshow": "Play slideshow",
   "14 Pilihan Produk": "14 Product Options",
-  "Foto produk belum tersedia": "Product photo unavailable"
+  "Foto produk belum tersedia": "Product photo unavailable",
+  "Main dengan Karakterku": "Play with My Character",
+  "Main": "Play"
 };
 export function translate(language: Language, text: string): string { return language === "en" && Object.prototype.hasOwnProperty.call(english,text) ? english[text]! : text; }
 export function useT() { const language = useContext(LanguageContext); return useCallback((text: string) => translate(language,text),[language]); }

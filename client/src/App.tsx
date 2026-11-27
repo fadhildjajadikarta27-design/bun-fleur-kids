@@ -30,6 +30,7 @@ import { isBackgroundId, BACKGROUNDS, backgroundUrl } from "../../server/src/bac
 import { logoUrl } from "./assets-inline";
 import { LanguageContext, useT, translate, loadLanguage, type Language } from "./lib/i18n";
 
+const PlayLearn = lazy(() => import("./components/PlayLearn").then(m => ({default:m.PlayLearn})));
 const BirthdayPage = lazy(() => import("./components/Birthday").then(m => ({default:m.BirthdayPage})));
 const AdminCenter = lazy(() => import("./components/AdminCenter").then((m) => ({ default: m.AdminCenter })));
 const Checkout = lazy(() => import("./components/Shop").then((m) => ({ default: m.Checkout })));
@@ -83,6 +84,7 @@ export interface WorkProject {
 type Route =
   | { view: "home" }
   | { view: "birthday" }
+  | { view: "play" }
   | { view: "explore" }
   | { view: "custom" }
   | { view: "studio" }
@@ -119,6 +121,7 @@ function parseHashRoute(): Route | null {
   // pun — admin membukanya langsung lewat potongan alamat ini.
   if (h === "#/admin" || h === "#/admin/" || h === "#/admin/affiliate" || h === "#/admin/orders" || h === "#/kelola-afiliasi-4821") return { view: "aff-admin" };
   if (h === "#/birthday") return { view: "birthday" };
+  if (h === "#/play") return { view: "play" };
   if (h === "#/orang-tua") return { view: "parents" };
   if (h === "#/koleksi") return { view: "explore" };
   if (h === "#/kreasiku") return { view: "creations" };
@@ -226,7 +229,7 @@ function downloadArtworkPng(svg: SVGSVGElement | null, filename: string) {
 
 /* ------------------------------ Shell ------------------------------ */
 
-type NavView = "home" | "explore" | "custom" | "creations" | "parents" | "birthday";
+type NavView = "home" | "explore" | "custom" | "creations" | "parents" | "birthday" | "play";
 
 const NAV_ITEMS: { view: NavView; label: string; short: string; icon: ReactNode }[] = [
   {
@@ -252,6 +255,10 @@ const NAV_ITEMS: { view: NavView; label: string; short: string; icon: ReactNode 
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="4" width="18" height="16" rx="3" /><circle cx="9" cy="10" r="1.6" /><path d="m5 19 5-5 3 3 3.5-3.5L21 18" /></svg>
     ),
+  },
+  {
+    view: "play", label: "Play & Learn", short: "Main",
+    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><rect x="3" y="6" width="18" height="12" rx="5"/><path d="M8 9v6M5 12h6M16 11h.01M19 13h.01"/></svg>,
   },
   {
     view: "birthday",
@@ -353,7 +360,7 @@ function Header({
         {/* Navigasi atas hanya untuk tablet/desktop; di ponsel navigasi
             pindah ke tab bar bawah (MobileTabBar) supaya tidak ada item
             yang terpotong atau harus digeser menyamping. */}
-        <nav className="ml-auto hidden items-center gap-0 lg:flex" aria-label={tr("Utama")}>
+        <nav className="ml-auto hidden items-center gap-0 xl:flex" aria-label={tr("Utama")}>
           {NAV_ITEMS.map((n) => item(n.view, tr(n.label)))}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-0">
@@ -401,7 +408,7 @@ function MobileTabBar({
   return (
     <nav
       aria-label={tr("Navigasi bawah")}
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[#F8F4EC]/95 pb-safe backdrop-blur-md lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[#F8F4EC]/95 pb-safe backdrop-blur-md xl:hidden"
     >
       <div className="mx-auto grid max-w-md grid-cols-6">
         {NAV_ITEMS.map((n) => {
@@ -587,7 +594,7 @@ function Home({
         <div className="relative mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div aria-hidden className="absolute left-0 right-0 top-5 hidden border-t-2 border-dashed border-[#3B2A22]/30 lg:block" />
           {[
-            { n: "01", title: "Pilih Karakter", body: "260 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun." },
+            { n: "01", title: "Pilih Karakter", body: "270 karakter hitam putih dalam lima kategori umur — dari bidang super besar untuk bayi sampai detail seru untuk anak 5 tahun." },
             { n: "02", title: "Warnai & Custom Nama", body: "Ketuk untuk mengisi warna, gambar bebas dengan kuas, lalu tulis nama dan pesan si kecil dengan gaya huruf favoritnya." },
             { n: "03", title: "Pilih Bentuk Kreasi", body: "Poster, papercraft 3D, alas makan, celengan, puzzle, growth chart, atau kaos — semuanya mengikuti warna karya anakmu." },
             { n: "04", title: "Kami Cetak & Kirim", body: "Pesan dari halaman karya, selesaikan pembayaran lewat konfirmasi tim kami, dan kami produksi lalu kirim langsung ke rumah." },
@@ -901,7 +908,7 @@ function Explore({ startTemplate, initialAge = "all" }: { startTemplate: (id: st
       <div className="band-sky mt-4 rounded-[2rem] px-6 py-8 sm:px-8">
         <p className="band-accent font-display text-xs font-semibold uppercase tracking-[0.22em]">{tr("Buku Mewarnai")}</p>
         <h1 className="mt-2 font-display text-4xl font-semibold sm:text-5xl">{tr("Pilih")} <span className="band-accent">{tr("Karakter")}</span></h1>
-        <p className="band-dim mt-2 max-w-2xl leading-relaxed">{tr("Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 260 karakter dalam lima kategori umur — 52 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.")}</p>
+        <p className="band-dim mt-2 max-w-2xl leading-relaxed">{tr("Semua karakter tampil hitam putih: bidang putih kosong bergaris hitam tebal, siap diwarnai dari nol. Ada 270 karakter dalam lima kategori umur — 54 untuk setiap tahap, dari bidang raksasa untuk bayi 9–18 bulan sampai adegan penuh cerita untuk anak 4–5 tahun. Setelah diwarnai, warnanya hidup di 3D dan hasil cetaknya.")}</p>
         <div className="mt-4">
           <label htmlFor="explore-search" className="sr-only">{tr("Cari karakter berdasarkan nama")}</label>
           <input
@@ -1536,6 +1543,7 @@ function Studio({
         >
           {tr("Jadikan Nyata")}
         </button>
+        <button type="button" disabled={!Object.keys(project.colors).length && !project.strokes.length} onClick={() => go({view:"play"})} className="rounded-full bg-tang px-7 py-3.5 font-display text-lg font-extrabold text-ink disabled:opacity-40">{tr("Main dengan Karakterku")}</button>
       </div>
       <p className="mt-3 text-center text-sm font-semibold text-[var(--dim)]">{tr("Gambarmu juga tersimpan otomatis selagi kamu mewarnai.")}</p>
     </div>
@@ -1753,6 +1761,7 @@ function Magic({
         >
           Jadikan Nyata — Pesan Poster, Figurine, atau Kaos
         </button>
+        <button type="button" onClick={() => go({view:"play"})} className="rounded-full bg-sky-deep px-7 py-3.5 font-display text-lg font-bold text-white">{tr("Main dengan Karakterku")}</button>
         <button
           type="button"
           onClick={() => go({ view: "print" })}
@@ -1996,7 +2005,7 @@ function Creations({
   onStart,
   onEditCustom,
 }: {
-  openProject: (p: ServerProject, view: "studio" | "magic" | "print" | "finish") => void;
+  openProject: (p: ServerProject, view: "studio" | "magic" | "print" | "finish" | "play") => void;
   onStart: () => void;
   onEditCustom: (p: ServerProject) => void;
   onCustomNew: () => void;
@@ -2067,6 +2076,7 @@ function Creations({
                     Jadikan Nyata — Pesan Produk
                   </button>
                 )}
+                {(Object.keys(p.colors).length > 0 || p.strokes.length > 0) && <button type="button" onClick={() => openProject(p,"play")} className="mt-1.5 rounded-full bg-tang px-3 py-2 text-xs font-bold text-ink">{tr("Main dengan Karakterku")}</button>}
                 {t.custom && (
                   <button
                     type="button"
@@ -2382,7 +2392,7 @@ export function App() {
   };
 
   const go = (r: Route) => {
-    const hash = r.view === "explore" ? "#/koleksi" : r.view === "parents" ? "#/orang-tua" : r.view === "creations" ? "#/kreasiku" : r.view === "birthday" ? "#/birthday" : "";
+    const hash = r.view === "explore" ? "#/koleksi" : r.view === "parents" ? "#/orang-tua" : r.view === "creations" ? "#/kreasiku" : r.view === "birthday" ? "#/birthday" : r.view === "play" ? "#/play" : "";
     const path = window.location.pathname + window.location.search + hash;
     if (window.location.hash !== hash) window.history.replaceState(window.history.state, "", path);
     setRoute(r);
@@ -2399,7 +2409,7 @@ export function App() {
     go({ view: "studio" });
   };
 
-  const openProject = (p: ServerProject, view: "studio" | "magic" | "print" | "finish") => {
+  const openProject = (p: ServerProject, view: "studio" | "magic" | "print" | "finish" | "play") => {
     const w = toWork(p);
     switchDraft(w);
     if (view === "finish") {
@@ -2599,6 +2609,7 @@ export function App() {
           />
         )}
         {route.view === "birthday" && <BirthdayPage />}
+        {route.view === "play" && <PlayLearn current={project} onColor={startColoring} />}
         {route.view === "explore" && <Explore key={exploreAge} initialAge={exploreAge} startTemplate={startTemplate} />}
         {route.view === "custom" && (
           <CustomBuilder

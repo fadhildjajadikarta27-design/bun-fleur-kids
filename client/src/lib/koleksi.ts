@@ -3319,9 +3319,10 @@ const L5B: TemplateDef[] = [
 
 // Human characters share the same region data and paper craft renderer.
 function humanArt(kind:string,level:number):BuiltArt {
- const baby=kind.startsWith("baby"), longHair=["girl","mother","baby-girl"].includes(kind);
+ const baby=kind.startsWith("baby"), longHair=["girl","mother","baby-girl","girl-buns"].includes(kind);
+ const hair=kind==="boy-curly"?[E(240,111,78,81),E(199,49,29,23),E(240,37,30,24),E(281,49,29,23)]:kind==="girl-buns"?[E(240,111,78,81),E(174,61,28,29),E(306,61,28,29)]:[E(240,111,78,81),...(longHair?[E(178,155,25,55),E(302,155,25,55)]:[])];
  const regions:RegionDef[]=[
-  {id:"hair",label:"Rambut",els:[E(240,111,78,81),...(longHair?[E(178,155,25,55),E(302,155,25,55)]:[])]},
+  {id:"hair",label:"Rambut",els:hair},
   {id:"clothes",label:"Baju",els:[Rc(181,175,118,83,24)]},
   {id:"skin",label:"Wajah dan tangan",els:[E(240,125,65,64),E(174,211,19,26),E(306,211,19,26)]},
   {id:"pants",label:baby?"Popok":"Celana",els:[Rc(193,244,42,44,13),Rc(245,244,42,44,13)]},
@@ -3341,5 +3342,10 @@ function humanArt(kind:string,level:number):BuiltArt {
 }
 const humanKinds=[["baby-boy","Bayi Laki-laki"],["baby-girl","Bayi Perempuan"],["boy","Anak Laki-laki"],["girl","Anak Perempuan"],["mother","Mama"],["father","Papa"],["doctor","Dokter"],["chef","Koki"],["teacher","Guru"],["pilot","Pilot"],["astronaut","Astronaut"],["police","Polisi"]];
 const humanBands:Meta["band"][]=["9-18bln","1-2th","2-3th","3-4th","4-5th"];
-const HUMAN_TEMPLATES=humanBands.flatMap((band,i)=>humanKinds.map(([kind,name])=>finish({id:"human-"+kind+"-"+(i+1),name:name!,collection:"little-people",blurb:"Warnai tokoh kecil dengan warna pilihanmu.",band,who:name!},humanArt(kind!,i+1))));
+const humanNames=[["Arka","Nara","Bima","Luna","Rafi","Mila"],["Hugo","Lila","Kai","Sofia","Reza","Kirana"],["Niko","Naya","Adam","Aisha","Damar","Alya"],["Leo","Maya","Raka","Hana","Faris","Zara"],["Ethan","Emma","Sam","Ella","Dimas","Amara"]];
+const HUMAN_TEMPLATES=humanBands.flatMap((band,i)=>[...humanKinds,["boy-curly","Anak Laki-laki"],["girl-buns","Anak Perempuan"]].map(([kind,name],j)=>{
+ const personal=j<4?humanNames[i]![j]:j>=humanKinds.length?humanNames[i]![j-humanKinds.length+4]:undefined;
+ const title=personal?personal+" — "+name:name!;
+ return finish({id:"human-"+kind+"-"+(i+1),name:title,collection:"little-people",blurb:"Warnai tokoh kecil dengan warna pilihanmu.",band,who:personal??name!},humanArt(kind!,i+1));
+}));
 export const KOLEKSI_TEMPLATES: TemplateDef[] = [...L1, ...L2, ...L3, ...L4, ...L5, ...L5B,...HUMAN_TEMPLATES];
