@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ApiResponse } from "../api";
 import { officialQrisUrl } from "../official-qris";
@@ -55,7 +55,7 @@ function Avatar({project}:{project:WorkProject}) {
   return <ArtworkSvg template={template} colors={project.colors} strokes={project.strokes} name={project.childName} nameFont={project.nameFont} nameColor={project.nameColor} nameAlign={project.nameAlign} showLabel={false}/>;
 }
 const tile="min-h-20 rounded-2xl border border-[#D9E5D2] bg-white p-3 text-center font-display font-bold text-olive-deep shadow-sm focus-visible:outline-2 focus-visible:outline-olive";
-function GameBoard({game,avatar,onBack}:{game:Game;avatar:ReactNode;onBack:()=>void}) {
+function GameBoard({game,avatar,onBack,onActivity}:{game:Game;avatar:ReactNode;onBack:()=>void;onActivity:()=>void}) {
   const [round,setRound]=useState(0),[feedback,setFeedback]=useState(""),[done,setDone]=useState(false);
   const [popped,setPopped]=useState<number[]>([]),[hidden,setHidden]=useState(true),[position,setPosition]=useState(0);
   const [opened,setOpened]=useState<number[]>([]),[matched,setMatched]=useState<number[]>([]);
@@ -79,7 +79,7 @@ function GameBoard({game,avatar,onBack}:{game:Game;avatar:ReactNode;onBack:()=>v
     <p className="text-center text-sm">{game.hint}</p>
     {game.mode!=="maze"&&game.mode!=="reveal"&&game.mode!=="tap"&&game.mode!=="move"&&<div className="mx-auto mt-3 w-28 rounded-2xl bg-white p-2">{avatar}</div>}
     {done?<div className="mt-5 rounded-2xl bg-white p-6 text-center"><h3 className="font-display text-2xl font-bold">Hebat!</h3><p>Permainan selesai. Kamu dan temanmu berhasil.</p><button type="button" onClick={reset} className="mt-4 rounded-full bg-olive px-6 py-3 font-bold text-white">Main lagi</button></div>:
-    <div className="mt-4 space-y-4">
+    <div className="mt-4 space-y-4" onClickCapture={e=>{if(e.nativeEvent.isTrusted&&e.target instanceof Element&&e.target.closest("button:not(:disabled)"))onActivity();}}>
     {game.mode==="choice"&&choice&&<><p className="text-center font-display text-xl font-bold">{choice.prompt}</p><div className="grid grid-cols-2 gap-3">{choice.items.map((item,i)=><button type="button" key={i} className={tile+" text-3xl"} onClick={()=>i===choice.answer?advance(game.rounds!.length):setFeedback("Coba lagi, tidak apa-apa.")}>{game.id==="big"?<span aria-label={item==="⚫"?"Bola besar":"Bola kecil"} style={{fontSize:item==="⚫"?72:32}}>●</span>:item}</button>)}</div></>}
     {game.mode==="pop"&&<div className="grid grid-cols-2 gap-3">{steps.map((_,i)=><button type="button" key={i} aria-label={"Gelembung "+(i+1)} disabled={popped.includes(i)} onClick={()=>{const next=[...popped,i];setPopped(next);if(next.length===steps.length)finish();}} className={tile+" h-28 text-5xl"} style={{background:popped.includes(i)?"#fff":["#B5DDF4","#F9D89F","#C8E3B2","#F5CAD7"][i]}}>{popped.includes(i)?"✓":"○"}</button>)}</div>}
     {game.mode==="reveal"&&<button type="button" className={tile+" mx-auto block w-full max-w-xs"} onClick={()=>{if(hidden){setHidden(false);advance(game.target??3);}else setHidden(true);}}>{hidden?<div className="flex h-40 items-center justify-center rounded-2xl bg-[#F6D6AF] text-xl">Buka selimut</div>:avatar}</button>}
@@ -118,6 +118,63 @@ function ParentCheckout({target,purchases,onClose}:{target:string;purchases:Purc
   {(create.isError||report.isError)&&<p role="alert" className="mt-3 text-sm text-berry">{create.error?.message??report.error?.message}</p>}
  </section>;
 }
+// Track only interactions inside the game board, not page navigation or checkout.
+// A hidden tab invalidates that minute. The server owns the timing and credits.
+function useCoinActivity(gameId:string|null){
+ const qc=useQueryClient();
+ const activity=useRef(false),visible=useRef(true);
+ useEffect(()=>{
+  if(!gameId)return;
+  let cancelled=false,timer:number|undefined;
+  activity.current=false;visible.current=!document.hidden;
+  const onVisibility=()=>{if(document.hidden)visible.current=false;};
+  document.addEventListener("visibilitychange",onVisibility);
+  async function block(){
+   if(cancelled)return;
+   activity.current=false;visible.current=!document.hidden;
+   try{
+    const {token}=await api.startCoinPlay({gameId:gameId!});
+    if(cancelled)return;
+    const started=performance.now();
+    const minute=(n:number)=>{
+     timer=window.setTimeout(async()=>{
+      if(cancelled)return;
+      const active=activity.current&&visible.current&&!document.hidden;
+      activity.current=false;visible.current=!document.hidden;
+      try{
+       const result=await api.recordCoinMinute({token,minute:n,active});
+       if(cancelled)return;
+       void qc.invalidateQueries({queryKey:["coinWallet"]});
+       if(n===5||result.complete){void block();}else minute(n+1);
+      }catch{if(!cancelled)void block();}
+     },Math.max(0,started+n*60000+500-performance.now()));
+    };
+    minute(1);
+   }catch{ /* No reward session when the server cannot authorize access. */ }
+  }
+  void block();
+  return()=>{cancelled=true;if(timer!==undefined)window.clearTimeout(timer);document.removeEventListener("visibilitychange",onVisibility);};
+ },[gameId,qc]);
+ return ()=>{if(!document.hidden)activity.current=true;};
+}
+function CoinWallet(){
+ const qc=useQueryClient();
+ const wallet=useQuery({queryKey:["coinWallet"],queryFn:()=>api.getCoinWallet({}),refetchOnWindowFocus:true});
+ const [confirmed,setConfirmed]=useState(false);
+ const claim=useMutation({mutationFn:()=>api.claimDailyCoin({adultConfirmed:true}),onSuccess:()=>qc.invalidateQueries({queryKey:["coinWallet"]})});
+ return <details className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#D9E5D2]">
+  <summary className="cursor-pointer font-bold text-olive-deep">Dompet coin orang tua · {wallet.data?.balance.toLocaleString("id-ID")??"—"} coin</summary>
+  <p className="mt-2 text-sm">50 coin untuk setiap blok 5 menit dengan interaksi nyata di setiap menit. Tidak ada bonus jika salah satu menit kosong. Beristirahat kapan saja; coin bukan target durasi layar.</p>
+  <h2 className="mt-4 font-display text-lg font-bold">Check-in harian orang tua</h2>
+  <p className="text-sm">Hari 1–6: 100 coin. Hari 7: 2.500 coin. Setelah itu siklus baru. Jika terlewat, siklus dimulai kembali tanpa mengurangi saldo.</p>
+  <div className="mt-3 grid grid-cols-7 gap-1">{Array.from({length:7},(_,i)=><div key={i} className={"rounded-lg p-2 text-center text-xs "+((wallet.data?.checkInDay??0)>i?"bg-[#C8E3B2]":"bg-[#F8EDE1]")}><p>Hari {i+1}</p><strong>{i===6?"2.500":"100"}</strong></div>)}</div>
+  <label className="mt-3 flex gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Saya orang tua/wali.</label>
+  <button type="button" disabled={!wallet.data||wallet.data.checkedInToday||!confirmed||claim.isPending} onClick={()=>claim.mutate()} className="mt-3 rounded-full bg-olive px-4 py-2 text-sm font-bold text-white disabled:opacity-40">{wallet.data?.checkedInToday?"Sudah check-in hari ini":"Klaim check-in hari ini"}</button>
+  {claim.isSuccess&&claim.data.earned>0&&<p role="status" className="mt-2 text-sm">{claim.data.earned.toLocaleString("id-ID")} coin ditambahkan.</p>}
+  {(wallet.isError||claim.isError)&&<p role="alert" className="mt-2 text-sm">{wallet.error?.message??claim.error?.message}</p>}
+  <p className="mt-3 text-xs text-[var(--dim)]">Coin tidak memiliki nilai tunai. Akses dan saldo terkait browser ini. Check-in mengikuti tanggal WIB.</p>
+ </details>;
+}
 export function PlayLearn({current,onColor}:{current:WorkProject;onColor:()=>void}) {
   const qc=useQueryClient();
   const projects=useQuery({queryKey:["projects"],queryFn:()=>api.listProjects({limit:50})});
@@ -128,6 +185,7 @@ export function PlayLearn({current,onColor}:{current:WorkProject;onColor:()=>voi
   const [selected,setSelected]=useState(0),[age,setAge]=useState(0),[game,setGame]=useState<Game|null>(null);
   const [deadline,setDeadline]=useState(0),[now,setNow]=useState(Date.now()),[paid,setPaid]=useState(false),[checkout,setCheckout]=useState<string|null>(null),[expired,setExpired]=useState<string|null>(null);
   const avatar=options[selected]??options[0];
+  const onActivity=useCoinActivity(game?.id??null);
   const launch=useMutation({mutationFn:(g:Game)=>api.startGameTrial({gameId:g.id}),onSuccess:(result,g)=>{
     setPaid(result.unlocked);setNow(Date.now());setDeadline(Date.now()+result.remainingSeconds*1000);
     if(result.unlocked||result.remainingSeconds>0){setGame(g);setExpired(null);setCheckout(null);}else{setGame(null);setExpired(g.id);}
@@ -141,6 +199,7 @@ export function PlayLearn({current,onColor}:{current:WorkProject;onColor:()=>voi
   const packageOwned=GAMES[age]!.every(g=>state(g)?.unlocked);
   return <main className="mx-auto max-w-4xl px-4 pb-24 pt-5">
     <header className="rounded-[2rem] bg-[#EDF2E6] p-5"><h1 className="font-display text-3xl font-bold text-olive-deep">Play &amp; Learn</h1><p className="mt-2">Main bersama karakter yang sudah kamu warnai.</p><p className="mt-2 text-xs">Orang tua memilih aktivitas sesuai perkembangan anak. Untuk usia di bawah 18 bulan utamakan bermain langsung tanpa layar; usia 18–24 bulan hanya bersama pendamping. Tanpa iklan. Trial 15 menit dihitung sejak pertama membuka setiap game, bukan durasi bermain yang disarankan.</p></header>
+    <CoinWallet />
     {!avatar?<div className="mt-4 rounded-2xl bg-white p-6 text-center"><p>{projects.isPending?"Memuat kreasimu…":"Warnai karakter dulu untuk mulai bermain."}</p><button type="button" onClick={onColor} className="mt-3 rounded-full bg-olive px-6 py-3 font-bold text-white">Pilih karakter</button></div>:<>
       <div className="mt-4 rounded-2xl bg-white p-4"><label className="font-bold" htmlFor="play-avatar">Pilih karakterku</label><select id="play-avatar" value={String(selected)} onChange={e=>{setSelected(Number(e.target.value));setGame(null);setExpired(null);setCheckout(null)}} className="ml-2 max-w-full rounded-xl border p-2">{options.map((p,i)=><option key={p.id??"current"} value={i}>{p.childName||getTemplate(p.templateId).name}</option>)}</select><div className="mx-auto mt-3 w-32"><Avatar project={avatar}/></div></div>
       <div className="my-4 flex flex-wrap gap-2" aria-label="Kategori umur">{AGE_BANDS.map((b,i)=><button key={b.id} type="button" disabled={launch.isPending} aria-pressed={age===i} onClick={()=>changeAge(i)} className={"rounded-full px-4 py-3 text-sm font-bold "+(age===i?"bg-olive text-white":"bg-white ring-1 ring-[#D9E5D2]")}>{b.label}</button>)}</div>
@@ -150,7 +209,7 @@ export function PlayLearn({current,onColor}:{current:WorkProject;onColor:()=>voi
       {!game&&<section className="mb-4 rounded-2xl bg-[#EDF2E6] p-4"><p className="font-bold">Paket {AGE_BANDS[age]!.label} · 5 game</p><p className="text-sm">Rp29.000 sekali bayar · hemat Rp21.000 dibanding membeli satu per satu.</p><button disabled={!access.data||packageOwned} type="button" onClick={()=>setCheckout("category-"+age)} className="mt-2 rounded-full bg-olive px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{packageOwned?"Semua game sudah terbuka":"Pilihan pembelian orang tua"}</button></section>}
       {expired&&!game&&<section className="mb-4 rounded-2xl bg-white p-5"><h2 className="font-display text-xl font-bold">Waktu istirahat</h2><p>Sesi coba gratis sudah selesai. Orang tua dapat membuka akses {targetLabel(expired)}.</p><button type="button" onClick={()=>setCheckout(expired)} className="mt-3 rounded-full border px-4 py-2 font-bold">Orang tua: akses Rp10.000</button></section>}
       {checkout&&!game&&<ParentCheckout key={checkout} target={checkout} purchases={access.data?.purchases??[]} onClose={()=>{setCheckout(null);void access.refetch()}}/>}
-      {game?<><p className="mb-2 text-xs text-[var(--dim)]">{paid?"Akses game aktif":"Sisa masa coba (orang tua): "+Math.max(0,Math.ceil((deadline-now)/1000/60))+" menit"}</p><GameBoard key={game.id+":"+selected} game={game} avatar={<Avatar project={avatar}/>} onBack={()=>setGame(null)}/></>:<div className="grid gap-3 sm:grid-cols-2">{GAMES[age]!.map(g=>{const info=state(g),locked=info?.started&&!info.unlocked&&info.remainingSeconds===0;return <article key={g.id} className="rounded-[1.75rem] bg-white p-5 ring-1 ring-[#D9E5D2]"><h2 className="font-display text-xl font-bold text-olive-deep">{g.name}</h2><p className="mt-1 text-sm">{g.hint}</p><button type="button" aria-label={g.name+" "+(locked?"Orang tua":"Mulai main")} disabled={!info||launch.isPending} onClick={()=>locked?setCheckout(g.id):launch.mutate(g)} className="mt-3 rounded-full bg-[#E7F3FB] px-4 py-2 font-bold disabled:opacity-40">{locked?"Orang tua · Rp10.000":"Mulai main"}</button><p className="mt-2 text-xs text-[var(--dim)]">{info?.unlocked?"Akses aktif":locked?"Trial selesai":"Gratis 15 menit · Rp10.000 setelah trial"}</p></article>})}</div>}
+      {game?<><p className="mb-2 text-xs text-[var(--dim)]">{paid?"Akses game aktif":"Sisa masa coba (orang tua): "+Math.max(0,Math.ceil((deadline-now)/1000/60))+" menit"}</p><GameBoard key={game.id+":"+selected} game={game} avatar={<Avatar project={avatar}/>} onBack={()=>setGame(null)} onActivity={onActivity}/></>:<div className="grid gap-3 sm:grid-cols-2">{GAMES[age]!.map(g=>{const info=state(g),locked=info?.started&&!info.unlocked&&info.remainingSeconds===0;return <article key={g.id} className="rounded-[1.75rem] bg-white p-5 ring-1 ring-[#D9E5D2]"><h2 className="font-display text-xl font-bold text-olive-deep">{g.name}</h2><p className="mt-1 text-sm">{g.hint}</p><button type="button" aria-label={g.name+" "+(locked?"Orang tua":"Mulai main")} disabled={!info||launch.isPending} onClick={()=>locked?setCheckout(g.id):launch.mutate(g)} className="mt-3 rounded-full bg-[#E7F3FB] px-4 py-2 font-bold disabled:opacity-40">{locked?"Orang tua · Rp10.000":"Mulai main"}</button><p className="mt-2 text-xs text-[var(--dim)]">{info?.unlocked?"Akses aktif":locked?"Trial selesai":"Gratis 15 menit · Rp10.000 setelah trial"}</p></article>})}</div>}
       {!!access.data?.purchases.length&&!game&&<details className="mt-4 rounded-xl bg-white p-4"><summary className="font-bold">Riwayat pembelian orang tua</summary>{access.data.purchases.map(p=><p key={p.code} className="mt-2 text-sm">{targetLabel(p.target)} · {formatIDR(p.amount)} · {p.status==="paid"?"Aktif":p.status==="reported"?"Menunggu verifikasi":p.status==="pending"?"Belum bayar":p.status==="refunded"?"Refund":"Dibatalkan"} · {p.code} {["pending","reported"].includes(p.status)&&<button className="underline" onClick={()=>setCheckout(p.target)}>Lihat tagihan</button>}</p>)}<button className="mt-2 rounded-full border px-4 py-2 font-bold" onClick={()=>void access.refetch()}>Cek status pembayaran</button></details>}
     </>}
   </main>;
