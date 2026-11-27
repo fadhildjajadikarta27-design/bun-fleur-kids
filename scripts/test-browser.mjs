@@ -28,6 +28,21 @@ try {
   await slides.getByRole("button",{name:"Produk sebelumnya",exact:true}).click();
   assert.equal(await slides.locator("img").getAttribute("src"),"/products/tumbler.png");
   console.log("PASS homepage slideshow, all 14 original photos, navigation and pause");
+  await page.getByRole("link",{name:"Main Sekarang",exact:true}).click();
+  assert.equal(new URL(page.url()).pathname,"/holly-luna/index.html");
+  await page.locator("#auth-form").waitFor({state:"visible"});
+  await page.locator("#signup-tab").click();
+  await page.locator("#parent-name").fill("QA Parent");
+  await page.locator("#email").fill("holly-"+randomUUID()+"@example.test");
+  await page.locator("#password").fill("QA-Simulator-Password-2026");
+  await page.locator("#adult").check();
+  await page.locator("#auth-submit").click();
+  await page.locator("#choose").waitFor({state:"visible"});
+  await page.reload();
+  await page.locator("#choose").waitFor({state:"visible"});
+  await page.getByRole("link",{name:/Beranda Bun & Fleur Kids/}).click();
+  await page.getByRole("link",{name:"Main Sekarang",exact:true}).waitFor();
+  console.log("PASS homepage direct Holly & Luna, signup, session reload and return home");
   await page.getByRole("combobox",{name:"Bahasa website"}).selectOption("en");
   await page.getByRole("button",{name:"Start Coloring",exact:true}).first().waitFor();
   await page.reload();
@@ -46,24 +61,6 @@ try {
   assert.equal(resp.status(),200,await resp.text());
   await page.reload();
   const artwork=page.locator("article").filter({hasText:"QA Browser"});
-  await artwork.getByRole("button",{name:"Main dengan Karakterku",exact:true}).click();
-  await page.getByRole("heading",{name:"Play & Learn",exact:true}).waitFor();
-  const ageLabels=["9–18 bulan","18–24 bulan","2–3 tahun","3–4 tahun","4–5 tahun"];
-  for(const age of ageLabels){
-    await page.getByRole("button",{name:age,exact:true}).click();
-    assert.equal(await page.getByText("Mulai main",{exact:true}).count(),5);
-  }
-  await page.getByRole("button",{name:"9–18 bulan",exact:true}).click();
-  await page.getByRole("button",{name:/Bubble Pop/}).click();
-  for(let i=1;i<=4;i++)await page.getByRole("button",{name:"Gelembung "+i,exact:true}).click();
-  await page.getByRole("heading",{name:"Hebat!",exact:true}).waitFor();
-  await page.getByRole("button",{name:"Semua game",exact:false}).click();
-  await page.getByRole("button",{name:"4–5 tahun",exact:true}).click();
-  await page.getByRole("button",{name:/My Little Adventure/}).click();
-  for(const i of [2,3,4,5,10,15,14,13,12,11,16,21,22,23,24,25])await page.getByRole("button",{name:"Kotak "+i,exact:true}).click();
-  await page.getByRole("heading",{name:"Hebat!",exact:true}).waitFor();
-  console.log("PASS 25 age-banded games, colored avatar and touch/maze gameplay");
-  await page.goto(base+"/#/kreasiku");
   await artwork.getByRole("button",{name:"Warnai",exact:true}).click();
   const canvas=page.getByRole("group",{name:"Zoom kanvas"});
   await canvas.getByRole("button",{name:"Perkecil gambar"}).click();

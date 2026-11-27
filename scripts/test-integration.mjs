@@ -417,6 +417,25 @@ try {
   assert.equal((await call("getCoinWallet",{},owner)).body.balance,2650);
   assert.equal((await call("recordCoinMinute",{token:idle,minute:5,active:true},guest)).body.earned,0);
   console.log("PASS coins: server timing, 50 per fully active block, no reward for an idle minute, once-daily WIB check-in, day 7 bonus, wallet isolation");
+  await call("hollyMe",{}, {expected:503});
+  process.env.HOLLY_LUNA_PREVIEW_ENABLED="true";
+  const signup=await call("hollySignup",{name:"QA Parent",email:"holly-"+token+"@example.test",password:"QA-Password-2026",adult:true},{ip:"127.10.5.1"});
+  assert.equal(signup.body.sessionToken,undefined);
+  const holly={cookie:signup.cookie};
+  const code=signup.body.user.referral.code;
+  const invite=await call("hollySignup",{name:"QA Guest",email:"guest-"+token+"@example.test",password:"QA-Password-2026",adult:true,referralCode:code},{ip:"127.10.5.2"});
+  assert.equal(invite.body.user.progress.coins,10000);
+  assert.equal((await call("hollyMe",{},holly)).body.user.progress.coins,5000);
+  assert.equal((await call("hollyMe",{}, {cookie:invite.cookie})).body.user.progress.coins,10000);
+  assert.equal((await call("hollyMe",{},{})).body.user,null);
+  const p=(await call("hollyMe",{},holly)).body.user;
+  const saved=(await call("hollyProgress",{progress:{...p.progress,coins:5100},revision:p.revision},holly)).body;
+  assert.equal(saved.revision,p.revision+1);
+  await call("hollyProgress",{progress:p.progress,revision:p.revision},{...holly,expected:400});
+  await call("hollySignout",{},holly);
+  assert.equal((await call("hollyMe",{},holly)).body.user,null);
+  delete process.env.HOLLY_LUNA_PREVIEW_ENABLED;
+  console.log("PASS Holly & Luna preview gate, cookie authentication, referral bonus and isolated progress");
 
 } finally {
   await sql.end();

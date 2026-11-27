@@ -30,7 +30,6 @@ import { isBackgroundId, BACKGROUNDS, backgroundUrl } from "../../server/src/bac
 import { logoUrl } from "./assets-inline";
 import { LanguageContext, useT, translate, loadLanguage, type Language } from "./lib/i18n";
 
-const PlayLearn = lazy(() => import("./components/PlayLearn").then(m => ({default:m.PlayLearn})));
 const BirthdayPage = lazy(() => import("./components/Birthday").then(m => ({default:m.BirthdayPage})));
 const AdminCenter = lazy(() => import("./components/AdminCenter").then((m) => ({ default: m.AdminCenter })));
 const Checkout = lazy(() => import("./components/Shop").then((m) => ({ default: m.Checkout })));
@@ -84,7 +83,6 @@ export interface WorkProject {
 type Route =
   | { view: "home" }
   | { view: "birthday" }
-  | { view: "play" }
   | { view: "explore" }
   | { view: "custom" }
   | { view: "studio" }
@@ -121,7 +119,6 @@ function parseHashRoute(): Route | null {
   // pun — admin membukanya langsung lewat potongan alamat ini.
   if (h === "#/admin" || h === "#/admin/" || h === "#/admin/affiliate" || h === "#/admin/orders" || h === "#/kelola-afiliasi-4821") return { view: "aff-admin" };
   if (h === "#/birthday") return { view: "birthday" };
-  if (h === "#/play") return { view: "play" };
   if (h === "#/orang-tua") return { view: "parents" };
   if (h === "#/koleksi") return { view: "explore" };
   if (h === "#/kreasiku") return { view: "creations" };
@@ -1548,7 +1545,6 @@ function Studio({
         >
           {tr("Jadikan Nyata")}
         </button>
-        <button type="button" disabled={!Object.keys(project.colors).length && !project.strokes.length} onClick={() => go({view:"play"})} className="rounded-full bg-tang px-7 py-3.5 font-display text-lg font-extrabold text-ink disabled:opacity-40">{tr("Main dengan Karakterku")}</button>
       </div>
       <p className="mt-3 text-center text-sm font-semibold text-[var(--dim)]">{tr("Gambarmu juga tersimpan otomatis selagi kamu mewarnai.")}</p>
     </div>
@@ -1766,7 +1762,6 @@ function Magic({
         >
           Jadikan Nyata — Pesan Poster, Figurine, atau Kaos
         </button>
-        <button type="button" onClick={() => go({view:"play"})} className="rounded-full bg-sky-deep px-7 py-3.5 font-display text-lg font-bold text-white">{tr("Main dengan Karakterku")}</button>
         <button
           type="button"
           onClick={() => go({ view: "print" })}
@@ -2010,7 +2005,7 @@ function Creations({
   onStart,
   onEditCustom,
 }: {
-  openProject: (p: ServerProject, view: "studio" | "magic" | "print" | "finish" | "play") => void;
+  openProject: (p: ServerProject, view: "studio" | "magic" | "print" | "finish") => void;
   onStart: () => void;
   onEditCustom: (p: ServerProject) => void;
   onCustomNew: () => void;
@@ -2081,7 +2076,6 @@ function Creations({
                     Jadikan Nyata — Pesan Produk
                   </button>
                 )}
-                {(Object.keys(p.colors).length > 0 || p.strokes.length > 0) && <button type="button" onClick={() => openProject(p,"play")} className="mt-1.5 rounded-full bg-tang px-3 py-2 text-xs font-bold text-ink">{tr("Main dengan Karakterku")}</button>}
                 {t.custom && (
                   <button
                     type="button"
@@ -2397,7 +2391,7 @@ export function App() {
   };
 
   const go = (r: Route) => {
-    const hash = r.view === "explore" ? "#/koleksi" : r.view === "parents" ? "#/orang-tua" : r.view === "creations" ? "#/kreasiku" : r.view === "birthday" ? "#/birthday" : r.view === "play" ? "#/play" : "";
+    const hash = r.view === "explore" ? "#/koleksi" : r.view === "parents" ? "#/orang-tua" : r.view === "creations" ? "#/kreasiku" : r.view === "birthday" ? "#/birthday" : "";
     const path = window.location.pathname + window.location.search + hash;
     if (window.location.hash !== hash) window.history.replaceState(window.history.state, "", path);
     setRoute(r);
@@ -2414,7 +2408,7 @@ export function App() {
     go({ view: "studio" });
   };
 
-  const openProject = (p: ServerProject, view: "studio" | "magic" | "print" | "finish" | "play") => {
+  const openProject = (p: ServerProject, view: "studio" | "magic" | "print" | "finish") => {
     const w = toWork(p);
     switchDraft(w);
     if (view === "finish") {
@@ -2614,7 +2608,6 @@ export function App() {
           />
         )}
         {route.view === "birthday" && <BirthdayPage />}
-        {route.view === "play" && <PlayLearn current={project} onColor={startColoring} />}
         {route.view === "explore" && <Explore key={exploreAge} initialAge={exploreAge} startTemplate={startTemplate} />}
         {route.view === "custom" && (
           <CustomBuilder
