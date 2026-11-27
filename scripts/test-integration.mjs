@@ -387,6 +387,36 @@ try {
   await call("adminListGamePurchases",{}, {expected:401});
   assert.equal((await call("adminListGamePurchases",{},admin)).body.paidRevenue,10000);
   console.log("PASS 15-minute trial persistence, server pricing, manual verification, 5-game bundle, refund and owner isolation");
+  const initialWallet=(await call("getCoinWallet",{},owner)).body;
+  assert.equal(initialWallet.balance,0);
+  await call("claimDailyCoin",{adultConfirmed:false},{...owner,expected:400});
+  const daily=(await call("claimDailyCoin",{adultConfirmed:true},owner)).body;
+  assert.equal(daily.earned,100);assert.equal(daily.checkInDay,1);
+  assert.equal((await call("claimDailyCoin",{adultConfirmed:true},owner)).body.earned,0);
+  assert.equal((await call("getCoinWallet",{},guest)).body.balance,0);
+  // Simulate a previous-day check-in on the disposable database only.
+  await sql`UPDATE coin_wallets SET last_check_in=((now() AT TIME ZONE 'Asia/Jakarta')::date-1)::text,check_in_day=6`;
+  await sql`DELETE FROM coin_ledger WHERE source='checkin'`;
+  const weekly=(await call("claimDailyCoin",{adultConfirmed:true},owner)).body;
+  assert.equal(weekly.earned,2500);assert.equal(weekly.checkInDay,7);assert.equal(weekly.balance,2600);
+  const block=(await call("startCoinPlay",{gameId:"bubbles"},owner)).body.token;
+  await call("recordCoinMinute",{token:block,minute:1,active:true},{...owner,expected:400});
+  let rewarded;
+  for(let minute=1;minute<=5;minute++){
+    await sql`UPDATE coin_play_sessions SET started_at=now()-${minute*60}*interval '1 second' WHERE token=${block}`;
+    rewarded=(await call("recordCoinMinute",{token:block,minute,active:true},owner)).body;
+    assert.equal(rewarded.earned,minute===5?50:0);
+  }
+  assert.equal(rewarded.balance,2650);
+  assert.equal((await call("recordCoinMinute",{token:block,minute:5,active:true},owner)).body.earned,0);
+  const idle=(await call("startCoinPlay",{gameId:"bubbles"},owner)).body.token;
+  for(let minute=1;minute<=5;minute++){
+    await sql`UPDATE coin_play_sessions SET started_at=now()-${minute*60}*interval '1 second' WHERE token=${idle}`;
+    assert.equal((await call("recordCoinMinute",{token:idle,minute,active:minute!==3},owner)).body.earned,0);
+  }
+  assert.equal((await call("getCoinWallet",{},owner)).body.balance,2650);
+  assert.equal((await call("recordCoinMinute",{token:idle,minute:5,active:true},guest)).body.earned,0);
+  console.log("PASS coins: server timing, 50 per fully active block, no reward for an idle minute, once-daily WIB check-in, day 7 bonus, wallet isolation");
 
 } finally {
   await sql.end();
