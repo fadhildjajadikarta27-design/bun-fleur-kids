@@ -359,6 +359,34 @@ try {
   assert.ok(filtered.some(o=>o.id===self.id)&&filtered.some(o=>o.id===selfNoCoupon.id));assert.ok(filtered.every(o=>o.affiliateSelfOrder));
   assert.ok((await call("listOrders",{buyerType:"referral",limit:100},admin)).body.orders.some(o=>o.id===order.id));
   console.log("PASS Shopee required username, manual verification without order number, self order labels and zero commissions");
+  const trial=(await call("startGameTrial",{gameId:"bubbles"},owner)).body;
+  assert.equal(trial.unlocked,false);assert.ok(trial.remainingSeconds>890&&trial.remainingSeconds<=900);
+  const initial=(await call("getGameAccess",{},owner)).body;
+  assert.equal(initial.games.length,25);assert.equal(initial.games.find(g=>g.gameId==="peek").started,false);
+  await sql`UPDATE game_trials SET expires_at=now()-interval '1 second' WHERE game_id='bubbles'`;
+  assert.equal((await call("startGameTrial",{gameId:"bubbles"},owner)).body.remainingSeconds,0);
+  await call("createGamePurchase",{target:"bubbles",adultConfirmed:false},{...owner,expected:400});
+  const single=(await call("createGamePurchase",{target:"bubbles",adultConfirmed:true,amount:1},owner)).body.purchase;
+  assert.equal(single.amount,10000);
+  assert.equal((await call("createGamePurchase",{target:"bubbles",adultConfirmed:true},owner)).body.purchase.code,single.code);
+  await call("adminVerifyGamePurchase",{code:single.code,decision:"verify",paidAmount:10000,paymentReference:"PLAYQA1"},{expected:401});
+  await call("reportGamePayment",{code:single.code,paymentReference:"PLAYQA1",adultConfirmed:true},{...admin,expected:400});
+  await call("reportGamePayment",{code:single.code,paymentReference:"PLAYQA1",adultConfirmed:true},owner);
+  assert.equal((await call("startGameTrial",{gameId:"bubbles"},owner)).body.unlocked,false);
+  await call("adminVerifyGamePurchase",{code:single.code,decision:"verify",paidAmount:1,paymentReference:"PLAYQA1"},{...admin,expected:400});
+  await call("adminVerifyGamePurchase",{code:single.code,decision:"verify",paidAmount:10000,paymentReference:"PLAYQA1"},admin);
+  assert.equal((await call("startGameTrial",{gameId:"bubbles"},owner)).body.unlocked,true);
+  const pack=(await call("createGamePurchase",{target:"category-1",adultConfirmed:true},owner)).body.purchase;
+  assert.equal(pack.amount,29000);
+  await call("reportGamePayment",{code:pack.code,paymentReference:"PLAYQA2",adultConfirmed:true},owner);
+  await call("adminVerifyGamePurchase",{code:pack.code,decision:"verify",paidAmount:29000,paymentReference:"PLAYQA2"},admin);
+  const unlocked=(await call("getGameAccess",{},owner)).body.games.filter(g=>g.unlocked).map(g=>g.gameId);
+  assert.deepEqual(unlocked,["bubbles","feed","bath","dress","shape","color"]);
+  await call("adminVerifyGamePurchase",{code:pack.code,decision:"refund"},admin);
+  assert.equal((await call("getGameAccess",{},owner)).body.games.filter(g=>g.unlocked).length,1);
+  await call("adminListGamePurchases",{}, {expected:401});
+  assert.equal((await call("adminListGamePurchases",{},admin)).body.paidRevenue,10000);
+  console.log("PASS 15-minute trial persistence, server pricing, manual verification, 5-game bundle, refund and owner isolation");
 
 } finally {
   await sql.end();
