@@ -87,7 +87,7 @@ export async function handleActions(request: Request, options: { local?: boolean
     }
     // Only project actions need a visitor identity. Static public reads and
     // affiliate requests must not race to overwrite the browser's first cookie.
-    const usesVisitor = ["listProjects", "createProject", "updateProject", "deleteProject", "createOrder", "createBirthdayEvent", "listMyBirthdayEvents"].includes(action);
+    const usesVisitor = ["listProjects", "createProject", "updateProject", "deleteProject", "createOrder", "createBirthdayEvent", "listMyBirthdayEvents", "getGameAccess", "startGameTrial", "createGamePurchase", "reportGamePayment", "getCoinWallet", "claimDailyCoin", "startCoinPlay", "recordCoinMinute"].includes(action);
     const visitor = usesVisitor ? visitorFromCookie(cookieHeader) : { id: "" };
     if (visitor.cookie) headers.append("set-cookie", visitor.cookie);
     if (AFFILIATE_SESSION_ACTIONS.has(action)) {

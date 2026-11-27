@@ -27,7 +27,79 @@ const accessOut=z.object({unlocked:z.boolean(),remainingSeconds:z.number().int()
 const TRIAL_SECONDS=900;
 const remaining=(expires:Date)=>Math.max(0,Math.ceil((expires.getTime()-Date.now())/1000));
 
+
+const walletOut=z.object({balance:z.number().int().nonnegative(),checkInDay:z.number().int().min(0).max(7),checkedInToday:z.boolean()});
+const wibDay=(date=new Date())=>new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Jakarta",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
+const previousDay=(day:string)=>{const d=new Date(day+"T00:00:00Z");d.setUTCDate(d.getUTCDate()-1);return d.toISOString().slice(0,10);};
+async function getWallet(db:Db|Tx,id:string){
+ const [row]=await db.select().from(schema.coinWallets).where(eq(schema.coinWallets.ownerId,id));
+ const today=wibDay();
+ return {balance:row?.balance??0,checkInDay:row&&(row.lastCheckIn===today||row.lastCheckIn===previousDay(today))?row.checkInDay:0,checkedInToday:row?.lastCheckIn===today};
+}
+async function coinLock(db:Tx,id:string){await db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"coins:"+id}))`);}
+async function credit(db:Tx,id:string,key:string,source:string,amount:number){
+ const added=await db.insert(schema.coinLedger).values({key,ownerId:id,source,amount,createdAt:new Date()}).onConflictDoNothing().returning({key:schema.coinLedger.key});
+ if(!added.length)return false;
+ await db.insert(schema.coinWallets).values({ownerId:id,balance:amount}).onConflictDoUpdate({target:schema.coinWallets.ownerId,set:{balance:sql`${schema.coinWallets.balance}+${amount}`}});
+ return true;
+}
+async function canPlay(db:Db|Tx,id:string,gid:string){
+ if((await purchases(db,id)).some(p=>covers(p,gid)))return true;
+ const [trial]=await db.select().from(schema.gameTrials).where(eq(schema.gameTrials.key,id+":"+gid));
+ return !!trial&&trial.expiresAt.getTime()>Date.now();
+}
 export const playActions={
+ getCoinWallet:defineAction({request:z.object({}),response:walletOut,async handler(ctx){return getWallet(dbOf(ctx),owner(ctx));}}),
+ claimDailyCoin:defineAction({
+  request:z.object({adultConfirmed:z.literal(true)}),response:walletOut.extend({earned:z.number().int().nonnegative()}),
+  async handler(ctx){
+   const id=owner(ctx);
+   return dbOf(ctx).transaction(async db=>{
+    await coinLock(db,id);
+    const today=wibDay(),current=await getWallet(db,id);
+    if(current.checkedInToday)return {...current,earned:0};
+    const day=current.checkInDay===7?1:current.checkInDay+1;
+    const amount=day===7?2500:100;
+    const added=await credit(db,id,"checkin:"+id+":"+today,"checkin",amount);
+    if(added)await db.update(schema.coinWallets).set({lastCheckIn:today,checkInDay:day}).where(eq(schema.coinWallets.ownerId,id));
+    return {...await getWallet(db,id),earned:added?amount:0};
+   });
+  }
+ }),
+ startCoinPlay:defineAction({
+  request:z.object({gameId}),response:z.object({token:z.string()}),
+  async handler(ctx,args){
+   const id=owner(ctx);
+   return dbOf(ctx).transaction(async db=>{
+    await coinLock(db,id);
+    if(!await canPlay(db,id,args.gameId))throw new Error("Akses game belum aktif.");
+    const token=randomBytes(20).toString("hex"),values={token,gameId:args.gameId,startedAt:new Date(),minute:0,valid:true};
+    await db.insert(schema.coinPlaySessions).values({ownerId:id,...values}).onConflictDoUpdate({target:schema.coinPlaySessions.ownerId,set:values});
+    return {token};
+   });
+  }
+ }),
+ recordCoinMinute:defineAction({
+  request:z.object({token:z.string().regex(/^[a-f0-9]{40}$/),minute:z.number().int().min(1).max(5),active:z.boolean()}),
+  response:walletOut.extend({earned:z.number().int().nonnegative(),valid:z.boolean(),complete:z.boolean()}),
+  async handler(ctx,args){
+   const id=owner(ctx);
+   return dbOf(ctx).transaction(async db=>{
+    await coinLock(db,id);
+    const [row]=await db.select().from(schema.coinPlaySessions).where(eq(schema.coinPlaySessions.ownerId,id));
+    if(!row||row.token!==args.token)return {...await getWallet(db,id),earned:0,valid:false,complete:true};
+    if(args.minute<=row.minute||row.minute>=5)return {...await getWallet(db,id),earned:0,valid:row.valid,complete:row.minute>=5};
+    const elapsed=Date.now()-row.startedAt.getTime();
+    if(elapsed<args.minute*60000)throw new Error("Menit aktivitas belum selesai.");
+    const valid=row.valid&&args.active&&args.minute===row.minute+1&&elapsed<=args.minute*60000+15000&&await canPlay(db,id,row.gameId);
+    await db.update(schema.coinPlaySessions).set({minute:args.minute,valid}).where(eq(schema.coinPlaySessions.ownerId,id));
+    const complete=args.minute===5;
+    const earned=complete&&valid&&await credit(db,id,"play:"+row.token,"play",50)?50:0;
+    return {...await getWallet(db,id),earned,valid,complete};
+   });
+  }
+ }),
+
  getGameAccess:defineAction({
   request:z.object({}),response:z.object({games:z.array(accessOut.extend({gameId:z.string()})),purchases:z.array(purchaseOut)}),
   async handler(ctx){

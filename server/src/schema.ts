@@ -360,3 +360,13 @@ export const gamePurchases=pgTable("game_purchases",{
  paymentReference:text("payment_reference"),
  createdAt:timestamp("created_at",{withTimezone:true,mode:"date"}).notNull(),updatedAt:timestamp("updated_at",{withTimezone:true,mode:"date"}).notNull()
 });
+
+export const coinWallets=pgTable("coin_wallets",{
+ ownerId:text("owner_id").primaryKey(),balance:integer("balance").notNull().default(0),lastCheckIn:text("last_check_in").notNull().default(""),checkInDay:integer("check_in_day").notNull().default(0),
+});
+export const coinPlaySessions=pgTable("coin_play_sessions",{
+ ownerId:text("owner_id").primaryKey(),token:text("token").notNull(),gameId:text("game_id").notNull(),startedAt:timestamp("started_at",{withTimezone:true,mode:"date"}).notNull(),minute:integer("minute").notNull().default(0),valid:boolean("valid").notNull().default(true)
+});
+export const coinLedger=pgTable("coin_ledger",{
+ key:text("key").primaryKey(),ownerId:text("owner_id").notNull(),source:text("source").notNull(),amount:integer("amount").notNull(),createdAt:timestamp("created_at",{withTimezone:true,mode:"date"}).notNull()
+});
