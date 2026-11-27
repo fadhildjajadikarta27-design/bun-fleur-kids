@@ -3342,10 +3342,8 @@ function humanArt(kind:string,level:number):BuiltArt {
 }
 const humanKinds=[["baby-boy","Bayi Laki-laki"],["baby-girl","Bayi Perempuan"],["boy","Anak Laki-laki"],["girl","Anak Perempuan"],["mother","Mama"],["father","Papa"],["doctor","Dokter"],["chef","Koki"],["teacher","Guru"],["pilot","Pilot"],["astronaut","Astronaut"],["police","Polisi"]];
 const humanBands:Meta["band"][]=["9-18bln","1-2th","2-3th","3-4th","4-5th"];
-const humanNames=[["Arka","Nara","Bima","Luna","Rafi","Mila"],["Hugo","Lila","Kai","Sofia","Reza","Kirana"],["Niko","Naya","Adam","Aisha","Damar","Alya"],["Leo","Maya","Raka","Hana","Faris","Zara"],["Ethan","Emma","Sam","Ella","Dimas","Amara"]];
-const HUMAN_TEMPLATES=humanBands.flatMap((band,i)=>[...humanKinds,["boy-curly","Anak Laki-laki"],["girl-buns","Anak Perempuan"]].map(([kind,name],j)=>{
- const personal=j<4?humanNames[i]![j]:j>=humanKinds.length?humanNames[i]![j-humanKinds.length+4]:undefined;
- const title=personal?personal+" — "+name:name!;
- return finish({id:"human-"+kind+"-"+(i+1),name:title,collection:"little-people",blurb:"Warnai tokoh kecil dengan warna pilihanmu.",band,who:personal??name!},humanArt(kind!,i+1));
-}));
+// Catalog labels describe the character only. Personal names belong to the saved project.
+const HUMAN_TEMPLATES=humanBands.flatMap((band,i)=>[...humanKinds,["boy-curly","Anak Laki-laki — Rambut Ikal"],["girl-buns","Anak Perempuan — Rambut Cepol"]].map(([kind,name])=>
+ finish({id:"human-"+kind+"-"+(i+1),name:name!,collection:"little-people",blurb:"Warnai tokoh kecil dan beri nama sesuai pilihanmu.",band,who:name!},humanArt(kind!,i+1))
+));
 export const KOLEKSI_TEMPLATES: TemplateDef[] = [...L1, ...L2, ...L3, ...L4, ...L5, ...L5B,...HUMAN_TEMPLATES];
