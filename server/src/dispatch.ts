@@ -109,7 +109,7 @@ export async function dispatchAction(action: string, args: unknown, visitorId = 
   try {
     if (options.local) await ensureMigrations();
     const limits = { affiliateLogin: 25, affiliateApply: 8, affiliateRequestPinReset: 8,
-      trackOrder: 35, confirmTransfer: 20, createOrder: 20, createBirthdayEvent: 8, generateCharacter: 6 };
+      trackOrder: 35, confirmTransfer: 20, createOrder: 20, createBirthdayEvent: 8, generateCharacter: 6, startGameTrial: 120, createGamePurchase: 20, reportGamePayment: 30 };
     if (Object.hasOwn(limits, action) && !await consumeRateLimit(action, options.ip, limits[action as keyof typeof limits], 900)) {
       return { status: 429, body: { error: "Terlalu banyak permintaan. Coba lagi dalam 15 menit." } };
     }

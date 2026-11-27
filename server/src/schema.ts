@@ -350,3 +350,13 @@ export const birthdayEvents = pgTable("birthday_events", {
 export const shopBundles=pgTable("shop_bundles",{
  id:text("id").primaryKey(),name:text("name").notNull(),productIds:jsonb("product_ids").$type<string[]>().notNull(),price:integer("price").notNull(),active:integer("active").notNull().default(1),
 });
+
+export const gameTrials=pgTable("game_trials",{
+ key:text("key").primaryKey(),ownerId:text("owner_id").notNull(),gameId:text("game_id").notNull(),expiresAt:timestamp("expires_at",{withTimezone:true,mode:"date"}).notNull()
+});
+export const gamePurchases=pgTable("game_purchases",{
+ code:text("code").primaryKey(),ownerId:text("owner_id").notNull(),target:text("target").notNull(),amount:integer("amount").notNull(),
+ status:text("status",{enum:["pending","reported","paid","cancelled","refunded"]}).notNull().default("pending"),
+ paymentReference:text("payment_reference"),
+ createdAt:timestamp("created_at",{withTimezone:true,mode:"date"}).notNull(),updatedAt:timestamp("updated_at",{withTimezone:true,mode:"date"}).notNull()
+});
