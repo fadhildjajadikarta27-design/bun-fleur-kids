@@ -70,6 +70,20 @@ export async function handleActions(request: Request, options: { local?: boolean
     return json(200, { authenticated: false });
   }
   try {
+    if (["hollySignup","hollySignin","hollyMe","hollyReferral","hollySignout","hollyProgress"].includes(action)) {
+      // Private QA only until email verification, recovery and authoritative gameplay exist.
+      if (!options.local && process.env.HOLLY_LUNA_PREVIEW_ENABLED !== "true") return json(503,{error:"Akun Holly & Luna belum dibuka untuk publik."});
+      const token=cookieHeader?.split(";").map(p=>p.trim()).find(p=>p.startsWith("hl_session="))?.slice(11)??"";
+      args={...(args&&typeof args==="object"?args:{}),sessionToken:/^[a-f0-9]{64}$/.test(token)?token:""};
+      const result=await dispatchAction(action,args,"",false,{local:options.local===true,ip:options.ip});
+      if(result.status===200&&["hollySignup","hollySignin"].includes(action)&&result.body&&typeof result.body==="object"&&"sessionToken" in result.body){
+        const {sessionToken,...body}=result.body;
+        headers.append("set-cookie","hl_session="+sessionToken+"; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=604800");
+        return json(200,body);
+      }
+      if(result.status===200&&action==="hollySignout")headers.append("set-cookie","hl_session=; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=0");
+      return json(result.status,result.body);
+    }
     if (action === "adminLogin") {
       const password = args && typeof args === "object" && "password" in args ? args.password : undefined;
       if (typeof password !== "string" || password.length < 1 || password.length > 256) {

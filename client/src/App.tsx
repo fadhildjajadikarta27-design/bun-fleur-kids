@@ -257,10 +257,6 @@ const NAV_ITEMS: { view: NavView; label: string; short: string; icon: ReactNode 
     ),
   },
   {
-    view: "play", label: "Play & Learn", short: "Main",
-    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><rect x="3" y="6" width="18" height="12" rx="5"/><path d="M8 9v6M5 12h6M16 11h.01M19 13h.01"/></svg>,
-  },
-  {
     view: "birthday",
     label: "Ulang Tahun",
     short: "Ultah",
@@ -585,6 +581,15 @@ function Home({
           </ul>
         </div>
         <ProductSlideshow />
+      </section>
+
+      <section aria-label="Holly & Luna" className="mt-10 flex flex-col items-start gap-5 rounded-[2rem] bg-[#EDF2E6] p-6 ring-1 ring-[#D8E4CD] sm:flex-row sm:items-center sm:justify-between sm:p-8">
+        <div>
+          <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-olive-deep">Little Village Simulator</p>
+          <h2 className="mt-1 font-display text-3xl font-semibold text-olive-deep">Holly &amp; Luna</h2>
+          <p className="mt-2 max-w-lg text-sm leading-relaxed text-ink">Rawat kebun, panen tanaman, layani pelanggan, dan bangun desamu bersama Holly &amp; Luna.</p>
+        </div>
+        <a href="/holly-luna/index.html" className="shrink-0 rounded-full bg-olive px-7 py-3 font-display font-bold text-white shadow-sm hover:bg-olive-deep">Main Sekarang</a>
       </section>
 
       {/* CARA KERJA — linimasa empat langkah di panel sage pucat #EDF2E6 */}

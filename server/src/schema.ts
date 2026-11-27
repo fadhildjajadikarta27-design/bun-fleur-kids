@@ -370,3 +370,10 @@ export const coinPlaySessions=pgTable("coin_play_sessions",{
 export const coinLedger=pgTable("coin_ledger",{
  key:text("key").primaryKey(),ownerId:text("owner_id").notNull(),source:text("source").notNull(),amount:integer("amount").notNull(),createdAt:timestamp("created_at",{withTimezone:true,mode:"date"}).notNull()
 });
+
+export const hollyAccounts=pgTable("holly_accounts",{
+ id:text("id").primaryKey(),name:text("name").notNull(),email:text("email").notNull().unique(),salt:text("salt").notNull(),passwordHash:text("password_hash").notNull(),referralCode:text("referral_code").notNull().unique(),invitedBy:text("invited_by"),pendingBonus:integer("pending_bonus").notNull().default(0),progress:jsonb("progress"),revision:integer("revision").notNull().default(0)
+});
+export const hollySessions=pgTable("holly_sessions",{
+ hash:text("hash").primaryKey(),accountId:text("account_id").notNull(),expiresAt:timestamp("expires_at",{withTimezone:true,mode:"date"}).notNull()
+});

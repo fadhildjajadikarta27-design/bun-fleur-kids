@@ -1,3 +1,4 @@
+import { hollyActions } from "./holly-actions.js";
 // Actions for Bun & Fleur Kids: saved coloring projects + brand settings.
 //
 // A project row is the unified record the brief asks for: template id,
@@ -522,6 +523,7 @@ function birthdayDateMinus(date:string,days:number){
 }
 
 export const Actions = {
+  ...hollyActions,
   ...playActions,
   listProjects: defineAction({
     description: "Lists saved coloring projects, most recently updated first.",
