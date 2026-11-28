@@ -40,6 +40,40 @@ try {
   await page.locator("#choose").waitFor({state:"visible"});
   await page.reload();
   await page.locator("#choose").waitFor({state:"visible"});
+  await page.locator("#start").click();
+  await page.locator("#game").waitFor({state:"visible"});
+  const miniCoins=await page.locator("#coins").textContent();
+  await page.locator("#mini-open").click();
+  const mini=page.locator("#mini-dialog");
+  await mini.waitFor({state:"visible"});
+  assert.equal(await mini.locator("[data-mini-game]").count(),5);
+  await mini.locator('[data-mini-game="memory"]').click();
+  assert.equal(await mini.locator("[data-card]").count(),6);
+  await mini.locator('[data-card="0"]').click();
+  await mini.locator('[data-card="0"] use').waitFor({state:"attached"});
+  await mini.locator('[data-mini-level="2"]').click();
+  assert.equal(await mini.locator("[data-card]").count(),10);
+  for(const id of ["count","sort","pattern"]){
+    await mini.locator("#mini-menu").click();
+    await mini.locator('[data-mini-game="'+id+'"]').click();
+    for(let n=0;n<3;n++){
+      const answer=id==="count"?String(await mini.locator(".mini-objects use").count()):(await mini.locator(".mini-objects use").nth(id==="pattern"?1:0).getAttribute("href")).slice(3);
+      await mini.locator('[data-answer="'+answer+'"]').click();
+    }
+    await mini.getByRole("heading",{name:"Hebat, selesai!"}).waitFor();
+  }
+  for(let lv=0;lv<3;lv++){
+    await mini.locator("#mini-menu").click();
+    await mini.locator('[data-mini-game="maze"]').click();
+    await mini.locator('[data-mini-level="'+lv+'"]').click();
+    const routes=[[1,2,5,8],[1,2,3,7,11,10,9,8,12],[1,2,3,4,9,14,13,12,11,10,15,20,21,22,23,24]];
+    for(const n of routes[lv])await mini.locator('[data-path="'+n+'"]').click();
+    await mini.getByRole("heading",{name:"Hebat, selesai!"}).waitFor();
+  }
+  await mini.locator("#mini-close").click();
+  assert.equal(await page.locator("#coins").textContent(),miniCoins);
+  await page.locator("#game").waitFor({state:"visible"});
+  console.log("PASS village mini games, selectable difficulty and unchanged coin balance");
   await page.getByRole("link",{name:/Beranda Bun & Fleur Kids/}).click();
   await page.getByRole("link",{name:"Main Sekarang",exact:true}).waitFor();
   console.log("PASS homepage direct Holly & Luna, signup, session reload and return home");
