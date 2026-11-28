@@ -70,13 +70,20 @@ export async function handleActions(request: Request, options: { local?: boolean
     return json(200, { authenticated: false });
   }
   try {
-    if (["hollySignup","hollySignin","hollyMe","hollyReferral","hollySignout","hollyProgress","hollySendVerification","hollyVerifyEmail"].includes(action)) {
+    if (["hollySignup","hollySignin","hollyMe","hollyReferral","hollySignout","hollyProgress","hollyGoogleChallenge","hollyGoogleSignin"].includes(action)) {
       // Private QA only until email verification, recovery and authoritative gameplay exist.
       if (!options.local && process.env.HOLLY_LUNA_PREVIEW_ENABLED !== "true") return json(503,{error:"Akun Holly & Luna belum dibuka untuk publik."});
       const token=cookieHeader?.split(";").map(p=>p.trim()).find(p=>p.startsWith("hl_session="))?.slice(11)??"";
       args={...(args&&typeof args==="object"?args:{}),sessionToken:/^[a-f0-9]{64}$/.test(token)?token:""};
+      if(action==="hollyGoogleSignin"){
+        const nonce=cookieHeader?.split(";").map(p=>p.trim()).find(p=>p.startsWith("hl_google="))?.slice(10)??"";
+        args={...(args as Record<string,unknown>),nonce:/^[a-f0-9]{48}$/.test(nonce)?nonce:""};
+      }
       const result=await dispatchAction(action,args,"",false,{local:options.local===true,ip:options.ip});
-      if(result.status===200&&["hollySignup","hollySignin"].includes(action)&&result.body&&typeof result.body==="object"&&"sessionToken" in result.body){
+      if(action==="hollyGoogleChallenge"&&result.status===200&&result.body&&typeof result.body==="object"&&"nonce" in result.body){
+        headers.append("set-cookie","hl_google="+result.body.nonce+"; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=600");
+      }
+      if(result.status===200&&["hollySignup","hollySignin","hollyGoogleSignin"].includes(action)&&result.body&&typeof result.body==="object"&&"sessionToken" in result.body){
         const {sessionToken,...body}=result.body;
         headers.append("set-cookie","hl_session="+sessionToken+"; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=604800");
         return json(200,body);

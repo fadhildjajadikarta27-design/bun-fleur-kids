@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes, randomUUID, scryptSync } from "node:crypto";
+import { randomBytes, randomUUID, scryptSync, generateKeyPairSync, sign } from "node:crypto";
 import postgres from "postgres";
 import { closeDatabase, ensureMigrations } from "../server/src/db.ts";
 import handler from "../netlify/functions/actions.ts";
@@ -367,46 +367,63 @@ try {
   const holly={cookie:signup.cookie};
   const hollyCode=signup.body.user.referral.code;
   const invite=await call("hollySignup",{name:"QA Guest",email:"guest-"+token+"@example.test",password:"QA-Password-2026",adult:true,referralCode:hollyCode},{ip:"127.10.5.2"});
-  const invited={cookie:invite.cookie,ip:"127.10.5.2"};
-  assert.equal(invite.body.user.progress,null);
-  assert.equal(invite.body.user.referral.awaitingVerification,true);
-  assert.equal((await call("hollyMe",{},holly)).body.user.progress,null);
-  assert.equal((await call("hollyReferral",{},holly)).body.referral.count,0);
-  await call("hollySendVerification",{}, {...invited,expected:400});
-  await call("hollyVerifyEmail",{code:"a".repeat(48)},{...invited,expected:400});
-  process.env.HOLLY_RESEND_API_KEY="qa-only";
-  process.env.HOLLY_EMAIL_FROM="qa@example.test";
-  const originalFetch=globalThis.fetch;
-  let deliveredCode="";
-  globalThis.fetch=async (url,options)=>{
-    assert.equal(url,"https://api.resend.com/emails");
-    const mail=JSON.parse(options.body);
-    assert.equal(mail.to[0],"guest-"+token+"@example.test");
-    deliveredCode=mail.text.match(/#verify=([a-f0-9]{48})/)[1];
-    return new Response(JSON.stringify({id:"qa-only"}),{status:200});
-  };
-  try{
-    await call("hollySendVerification",{},invited);
-    await call("hollySendVerification",{},{...invited,expected:400});
-    await call("hollyVerifyEmail",{code:deliveredCode},{...holly,expected:400});
-    const verified=(await call("hollyVerifyEmail",{code:deliveredCode},invited)).body.referral;
-    assert.equal(verified.emailVerified,true);
-    assert.equal(verified.signupBonus,1000);
-    await call("hollyVerifyEmail",{code:deliveredCode},invited);
-  }finally{globalThis.fetch=originalFetch;delete process.env.HOLLY_RESEND_API_KEY;delete process.env.HOLLY_EMAIL_FROM;}
-  assert.equal((await call("hollyMe",{},holly)).body.user.progress.coins,500);
-  assert.equal((await call("hollyMe",{},invited)).body.user.progress.coins,1000);
-  assert.equal((await call("hollyReferral",{},holly)).body.referral.count,1);
-  assert.equal((await call("hollyReferral",{},holly)).body.referral.earned,500);
-  assert.equal((await call("hollyMe",{},{})).body.user,null);
+  {
+    const hlInvited={cookie:invite.cookie,ip:"127.10.5.2"};
+    assert.equal(invite.body.user.progress.coins,1000);
+    assert.equal((await call("hollyMe",{},holly)).body.user.progress.coins,500);
+    assert.equal((await call("hollyMe",{},hlInvited)).body.user.progress.coins,1000);
+    assert.equal((await call("hollyReferral",{},holly)).body.referral.count,1);
+    assert.equal((await call("hollyReferral",{},holly)).body.referral.earned,500);
+    await call("hollyGoogleChallenge",{}, {expected:400});
+    process.env.HOLLY_GOOGLE_CLIENT_ID="qa.apps.googleusercontent.com";
+    const pair=generateKeyPairSync("rsa",{modulusLength:2048});
+    const jwk={...pair.publicKey.export({format:"jwk"}),kid:"qa",alg:"RS256",use:"sig"};
+    const originalFetch=globalThis.fetch;
+    globalThis.fetch=async url=>{assert.equal(url,"https://www.googleapis.com/oauth2/v3/certs");return new Response(JSON.stringify({keys:[jwk]}),{status:200});};
+    function idToken(nonce,overrides={}){
+      const now=Math.floor(Date.now()/1000);
+      const head=Buffer.from(JSON.stringify({alg:"RS256",kid:"qa"})).toString("base64url");
+      const payload=Buffer.from(JSON.stringify({iss:"https://accounts.google.com",aud:process.env.HOLLY_GOOGLE_CLIENT_ID,exp:now+300,iat:now,nonce,sub:"qa-google-"+token,email:"google-"+token+"@example.test",email_verified:true,name:"QA Google",...overrides})).toString("base64url");
+      const data=head+"."+payload;
+      return data+"."+sign("RSA-SHA256",Buffer.from(data),pair.privateKey).toString("base64url");
+    }
+    try{
+      const challenge=await call("hollyGoogleChallenge",{}, {ip:"127.10.5.3"});
+      const googleCookie={cookie:challenge.cookie,ip:"127.10.5.3"};
+      await call("hollyGoogleSignin",{adult:true,credential:idToken(challenge.body.nonce,{aud:"wrong"}),referralCode:hollyCode},{...googleCookie,expected:400});
+      await call("hollyGoogleSignin",{adult:true,credential:idToken(challenge.body.nonce,{email_verified:false}),referralCode:hollyCode},{...googleCookie,expected:400});
+      const credential=idToken(challenge.body.nonce);
+      await call("hollyGoogleSignin",{adult:true,credential,referralCode:hollyCode},{ip:"127.10.5.3",expected:400});
+      const g=await call("hollyGoogleSignin",{adult:true,credential,referralCode:hollyCode},googleCookie);
+      assert.equal(g.body.user.progress.coins,1000);
+      assert.equal(g.body.sessionToken,undefined);
+      await call("hollyGoogleSignin",{adult:true,credential,referralCode:hollyCode},{...googleCookie,expected:400});
+      const again=await call("hollyGoogleChallenge",{}, {ip:"127.10.5.3"});
+      const logged=await call("hollyGoogleSignin",{adult:true,credential:idToken(again.body.nonce),referralCode:hollyCode},{cookie:again.cookie,ip:"127.10.5.3"});
+      assert.equal(logged.body.user.progress.coins,1000);
+      const collision=await call("hollyGoogleChallenge",{}, {ip:"127.10.5.3"});
+      await call("hollyGoogleSignin",{adult:true,credential:idToken(collision.body.nonce,{sub:"collision-"+token,email:signup.body.user.email})},{cookie:collision.cookie,ip:"127.10.5.3",expected:400});
+      assert.equal((await call("hollyMe",{},holly)).body.user.progress.coins,1000);
+      assert.equal((await call("hollyReferral",{},holly)).body.referral.count,2);
+    }finally{globalThis.fetch=originalFetch;delete process.env.HOLLY_GOOGLE_CLIENT_ID;}
+    // The 10 successful-referral cap applies to all login methods.
+    for(let i=0;i<8;i++){
+      const extra=await call("hollySignup",{name:"QA Extra",email:"extra-"+i+"-"+token+"@example.test",password:"QA-Password-2026",adult:true,referralCode:hollyCode},{ip:"127.10.6."+i});
+      assert.equal(extra.body.user.progress.coins,1000);
+    }
+    assert.equal((await call("hollyReferral",{},holly)).body.referral.count,10);
+    assert.equal((await call("hollyMe",{},holly)).body.user.progress.coins,5000);
+    await call("hollySignup",{name:"QA Full",email:"full-"+token+"@example.test",password:"QA-Password-2026",adult:true,referralCode:hollyCode},{ip:"127.10.6.9",expected:400});
+    assert.equal((await call("hollyMe",{},{})).body.user,null);
+  }
   const p=(await call("hollyMe",{},holly)).body.user;
-  const saved=(await call("hollyProgress",{progress:{...p.progress,coins:600},revision:p.revision},holly)).body;
+  const saved=(await call("hollyProgress",{progress:{...p.progress,coins:5100},revision:p.revision},holly)).body;
   assert.equal(saved.revision,p.revision+1);
   await call("hollyProgress",{progress:p.progress,revision:p.revision},{...holly,expected:400});
   await call("hollySignout",{},holly);
   assert.equal((await call("hollyMe",{},holly)).body.user,null);
   delete process.env.HOLLY_LUNA_PREVIEW_ENABLED;
-  console.log("PASS Holly & Luna preview gate, cookie authentication, verified referral bonus and isolated progress");
+  console.log("PASS Holly & Luna preview gate, cookie authentication, Google signed-token validation, referral cap and isolated progress");
 
 } finally {
   await sql.end();

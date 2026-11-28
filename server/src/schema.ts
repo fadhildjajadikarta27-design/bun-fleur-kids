@@ -351,8 +351,10 @@ export const shopBundles=pgTable("shop_bundles",{
  id:text("id").primaryKey(),name:text("name").notNull(),productIds:jsonb("product_ids").$type<string[]>().notNull(),price:integer("price").notNull(),active:integer("active").notNull().default(1),
 });
 export const hollyAccounts=pgTable("holly_accounts",{
- id:text("id").primaryKey(),name:text("name").notNull(),email:text("email").notNull().unique(),salt:text("salt").notNull(),passwordHash:text("password_hash").notNull(),referralCode:text("referral_code").notNull().unique(),invitedBy:text("invited_by"),emailVerified:boolean("email_verified").notNull().default(false),inviterReward:integer("inviter_reward").notNull().default(0),signupReward:integer("signup_reward").notNull().default(0),verificationHash:text("verification_hash"),verificationExpiresAt:timestamp("verification_expires_at",{withTimezone:true,mode:"date"}),verificationSentAt:timestamp("verification_sent_at",{withTimezone:true,mode:"date"}),pendingBonus:integer("pending_bonus").notNull().default(0),progress:jsonb("progress"),revision:integer("revision").notNull().default(0)
+ id:text("id").primaryKey(),name:text("name").notNull(),email:text("email").notNull().unique(),salt:text("salt").notNull(),passwordHash:text("password_hash").notNull(),referralCode:text("referral_code").notNull().unique(),invitedBy:text("invited_by"),googleSub:text("google_sub").unique(),emailVerified:boolean("email_verified").notNull().default(false),inviterReward:integer("inviter_reward").notNull().default(0),signupReward:integer("signup_reward").notNull().default(0),verificationHash:text("verification_hash"),verificationExpiresAt:timestamp("verification_expires_at",{withTimezone:true,mode:"date"}),verificationSentAt:timestamp("verification_sent_at",{withTimezone:true,mode:"date"}),pendingBonus:integer("pending_bonus").notNull().default(0),progress:jsonb("progress"),revision:integer("revision").notNull().default(0)
 });
 export const hollySessions=pgTable("holly_sessions",{
  hash:text("hash").primaryKey(),accountId:text("account_id").notNull(),expiresAt:timestamp("expires_at",{withTimezone:true,mode:"date"}).notNull()
 });
+
+export const hollyGoogleChallenges=pgTable("holly_google_challenges",{hash:text("hash").primaryKey(),expiresAt:timestamp("expires_at",{withTimezone:true,mode:"date"}).notNull()});

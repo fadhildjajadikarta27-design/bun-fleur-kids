@@ -52,7 +52,7 @@ export function isAdminAuthorized(cookieHeader: string | undefined): boolean {
 }
 
 const PUBLIC_ACTIONS = new Set([
-  "hollySignup","hollySignin","hollyMe","hollyReferral","hollySignout","hollyProgress","hollySendVerification","hollyVerifyEmail",
+  "hollySignup","hollySignin","hollyMe","hollyReferral","hollySignout","hollyProgress","hollyGoogleChallenge","hollyGoogleSignin",
   "getSettings", "getShopConfig", "listProjects", "createProject", "updateProject",
   "deleteProject", "generateCharacter", "getTemplateQc", "listTemplateVersions",
   "createOrder", "trackOrder", "validateCoupon", "confirmTransfer",
