@@ -39,7 +39,7 @@ try{
  assert.deepEqual(applied.map(x=>x.name),files);
  await closeDatabase();await ensureMigrations();
  assert.deepEqual(await db`SELECT name FROM __port_migrations ORDER BY name`,applied);
- for(const table of ["request_limits","payment_proofs","product_prices","product_costs","monthly_operating_costs","birthday_events","birthday_prices","shop_bundles"]){
+ for(const table of ["request_limits","payment_proofs","product_prices","product_costs","monthly_operating_costs","birthday_events","birthday_prices","shop_bundles","holly_accounts","holly_sessions"]){
   assert.equal((await db`SELECT has_table_privilege('anon',${"public."+table},'SELECT') AS allowed`)[0].allowed,false);
   assert.equal((await db`SELECT has_table_privilege('authenticated',${"public."+table},'SELECT') AS allowed`)[0].allowed,false);
  }

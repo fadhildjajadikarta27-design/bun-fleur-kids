@@ -70,7 +70,7 @@ export async function handleActions(request: Request, options: { local?: boolean
     return json(200, { authenticated: false });
   }
   try {
-    if (["hollySignup","hollySignin","hollyMe","hollyReferral","hollySignout","hollyProgress"].includes(action)) {
+    if (["hollySignup","hollySignin","hollyMe","hollyReferral","hollySignout","hollyProgress","hollySendVerification","hollyVerifyEmail"].includes(action)) {
       // Private QA only until email verification, recovery and authoritative gameplay exist.
       if (!options.local && process.env.HOLLY_LUNA_PREVIEW_ENABLED !== "true") return json(503,{error:"Akun Holly & Luna belum dibuka untuk publik."});
       const token=cookieHeader?.split(";").map(p=>p.trim()).find(p=>p.startsWith("hl_session="))?.slice(11)??"";

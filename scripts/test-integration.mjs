@@ -367,18 +367,46 @@ try {
   const holly={cookie:signup.cookie};
   const hollyCode=signup.body.user.referral.code;
   const invite=await call("hollySignup",{name:"QA Guest",email:"guest-"+token+"@example.test",password:"QA-Password-2026",adult:true,referralCode:hollyCode},{ip:"127.10.5.2"});
-  assert.equal(invite.body.user.progress.coins,10000);
-  assert.equal((await call("hollyMe",{},holly)).body.user.progress.coins,5000);
-  assert.equal((await call("hollyMe",{}, {cookie:invite.cookie})).body.user.progress.coins,10000);
+  const invited={cookie:invite.cookie,ip:"127.10.5.2"};
+  assert.equal(invite.body.user.progress,null);
+  assert.equal(invite.body.user.referral.awaitingVerification,true);
+  assert.equal((await call("hollyMe",{},holly)).body.user.progress,null);
+  assert.equal((await call("hollyReferral",{},holly)).body.referral.count,0);
+  await call("hollySendVerification",{}, {...invited,expected:400});
+  await call("hollyVerifyEmail",{code:"a".repeat(48)},{...invited,expected:400});
+  process.env.HOLLY_RESEND_API_KEY="qa-only";
+  process.env.HOLLY_EMAIL_FROM="qa@example.test";
+  const originalFetch=globalThis.fetch;
+  let deliveredCode="";
+  globalThis.fetch=async (url,options)=>{
+    assert.equal(url,"https://api.resend.com/emails");
+    const mail=JSON.parse(options.body);
+    assert.equal(mail.to[0],"guest-"+token+"@example.test");
+    deliveredCode=mail.text.match(/#verify=([a-f0-9]{48})/)[1];
+    return new Response(JSON.stringify({id:"qa-only"}),{status:200});
+  };
+  try{
+    await call("hollySendVerification",{},invited);
+    await call("hollySendVerification",{},{...invited,expected:400});
+    await call("hollyVerifyEmail",{code:deliveredCode},{...holly,expected:400});
+    const verified=(await call("hollyVerifyEmail",{code:deliveredCode},invited)).body.referral;
+    assert.equal(verified.emailVerified,true);
+    assert.equal(verified.signupBonus,1000);
+    await call("hollyVerifyEmail",{code:deliveredCode},invited);
+  }finally{globalThis.fetch=originalFetch;delete process.env.HOLLY_RESEND_API_KEY;delete process.env.HOLLY_EMAIL_FROM;}
+  assert.equal((await call("hollyMe",{},holly)).body.user.progress.coins,500);
+  assert.equal((await call("hollyMe",{},invited)).body.user.progress.coins,1000);
+  assert.equal((await call("hollyReferral",{},holly)).body.referral.count,1);
+  assert.equal((await call("hollyReferral",{},holly)).body.referral.earned,500);
   assert.equal((await call("hollyMe",{},{})).body.user,null);
   const p=(await call("hollyMe",{},holly)).body.user;
-  const saved=(await call("hollyProgress",{progress:{...p.progress,coins:5100},revision:p.revision},holly)).body;
+  const saved=(await call("hollyProgress",{progress:{...p.progress,coins:600},revision:p.revision},holly)).body;
   assert.equal(saved.revision,p.revision+1);
   await call("hollyProgress",{progress:p.progress,revision:p.revision},{...holly,expected:400});
   await call("hollySignout",{},holly);
   assert.equal((await call("hollyMe",{},holly)).body.user,null);
   delete process.env.HOLLY_LUNA_PREVIEW_ENABLED;
-  console.log("PASS Holly & Luna preview gate, cookie authentication, referral bonus and isolated progress");
+  console.log("PASS Holly & Luna preview gate, cookie authentication, verified referral bonus and isolated progress");
 
 } finally {
   await sql.end();
